@@ -1,0 +1,7 @@
+
+namespace Am.Lang 
+{
+    native class Screen {
+    }
+}
+

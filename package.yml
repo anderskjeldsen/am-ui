@@ -1,0 +1,16 @@
+
+id: am-ui
+version: 0.1.0
+type: library
+dependencies:
+  - id: am-lang-core
+    realm: github
+    type: git-repo
+    tag: latest
+    url: https://github.com/anderskjeldsen/am-lang-core.git
+platforms:
+  - id: amigaos
+    gccCommand: m68k-amigaos-gcc
+#    additonalHeaders:
+#    additonalImplementations: 
+    
