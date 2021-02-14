@@ -1,0 +1,31 @@
+
+namespace Am.Ui 
+{
+    native class ScreenModeRequester {
+        import Am.Lang
+
+        private var title: String
+
+        static fun requestDisplay(title: String, min: ScreenMode, desired: ScreenMode, max: ScreenMode): ScreenMode {
+            var smr = new ScreenModeRequester()
+            smr.title = title
+            smr.setMin(min.width, min.height, min.depth)
+            smr.setDesired(desired.width, desired.height, desired.depth)
+            smr.setMax(max.width, max.height, max.depth)
+            return smr.open()
+        }
+
+        private native fun setMin(var width: Int, var height: Int, var depth: Int)
+        private native fun setDesired(var width: Int, var height: Int, var depth: Int)
+        private native fun setMax(var width: Int, var height: Int, var depth: Int)
+
+        private fun createScreenMode(var width: Int, var height: Int, var depth: Int, var displayId: Int): ScreenMode {
+            var sm = new ScreenMode(width, height, depth)
+            sm.displayId = displayId
+            return sm
+        }
+
+        private native fun open(): ScreenMode
+    }
+}
+

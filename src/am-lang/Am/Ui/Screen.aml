@@ -1,7 +1,18 @@
 
-namespace Am.Lang 
+namespace Am.Ui 
 {
     native class Screen {
+        import Am.Lang
+
+        static fun openScreen(width: Int, height: Int, depth: Int, displayId: Int): Screen {
+            var s = new Screen()
+            s.open(width, height, depth, displayId)
+            return s
+        }
+
+        private native fun open(width: Int, height: Int, depth: Int, displayId: Int)
+        native fun close()
+
     }
 }
 

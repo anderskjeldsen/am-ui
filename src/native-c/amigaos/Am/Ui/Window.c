@@ -1,0 +1,146 @@
+#ifndef native_amigaos_aclass_Am_Ui_Window_c
+#define native_amigaos_aclass_Am_Ui_Window_c
+#include <core.h>
+#include <Am/Ui/Window.h>
+#include <Am/Lang/Object.h>
+#include <Am/Ui/Screen.h>
+#include <Am/Lang/Int.h>
+
+#include <amigaos/amiga.h>
+
+#include <exec/types.h>
+#include <intuition/intuition.h>
+
+#include <proto/exec.h>
+#include <proto/intuition.h>
+
+typedef struct _Am_Ui_Window_data Am_Ui_Window_data;
+struct _Am_Ui_Window_data {
+	struct Window * window;	
+};
+
+function_result Am_Ui_Window__native_init_0(aobject * const this)
+{
+	function_result __result = { .has_return_value = false };
+	bool __returning = false;
+	// Add reference count for this in Window._native_init
+	printf("Add reference count for this in Window._native_init\n");
+	if (this != NULL) {
+		__increase_reference_count(this);
+	}
+	// TODO: implement native function Am_Ui_Window__native_init_0
+	printf("TODO: implement native function Am_Ui_Window__native_init_0\n");
+__exit: ;
+	if (this != NULL) {
+		__decrease_reference_count(this);
+	}
+	return __result;
+};
+
+function_result Am_Ui_Window__native_release_0(aobject * const this)
+{
+	function_result __result = { .has_return_value = false };
+	bool __returning = false;
+
+	Am_Ui_Window_close_0(this);
+
+	printf("TODO: implement native function Am_Ui_Window__native_release_0\n");
+__exit: ;
+	return __result;
+};
+
+function_result Am_Ui_Window_open_0(aobject * const this, int width, int height) //, aobject * screen)
+{
+	function_result __result = { .has_return_value = false };
+	bool __returning = false;
+	// Add reference count for this in Window.open
+	printf("Add reference count for this in Window.open\n");
+	if (this != NULL) {
+		__increase_reference_count(this);
+	}
+
+	SysBase = *((struct ExecBase **)4UL);
+	printf("Intuition base: %d\n", (unsigned int) IntuitionBase);
+	if (IntuitionBase == NULL) {
+		IntuitionBase = (struct IntuitionBase *) __ensure_library("intuition.library", 0L);
+	}
+
+	struct TagItem tags[] = {
+		WA_Left, 0,
+		WA_Top, 0,
+		WA_Width, width,
+		WA_Height, height,
+		WA_DetailPen, 1,
+		WA_BlockPen, 2,
+		WA_IDCMP, MENUPICK | MOUSEBUTTONS | REFRESHWINDOW | MOUSEMOVE | INTUITICKS,
+		WA_Flags, WFLG_BACKDROP | WFLG_SMART_REFRESH | WFLG_ACTIVATE | WFLG_RMBTRAP | WFLG_BORDERLESS,
+		WA_Gadgets, NULL,
+		WA_Title, "Hello",
+		WA_MinWidth, width,
+		WA_MaxWidth, width,
+		WA_MinHeight, height,
+		WA_MaxHeight, height,
+		WA_Checkmark, NULL,
+		WA_ScreenTitle, NULL,
+		WA_SuperBitMap, NULL,
+//		WA_CustomScreen, (ULONG) AmigaScreen,
+		TAG_DONE
+	};
+
+	struct Window * window = OpenWindowTagList(NULL, tags);
+
+	if ( window == NULL )
+	{
+		#ifdef DEBUG
+		printf("Unable to open window");
+		#endif
+	}
+	else 
+	{
+		Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) malloc(sizeof(Am_Ui_Window_data));
+		data->window = window;
+		this->object_data.value.custom_value = data;
+	}
+
+
+
+
+	printf("TODO: implement native function Am_Ui_Window_open_0\n");
+__exit: ;
+	if (this != NULL) {
+		__decrease_reference_count(this);
+	}
+/*	if (screen != NULL) {
+		__increase_reference_count(screen);
+	}
+	*/
+	return __result;
+};
+
+function_result Am_Ui_Window_close_0(aobject * const this)
+{
+	function_result __result = { .has_return_value = false };
+	bool __returning = false;
+	// Add reference count for this in Window.close
+	printf("Add reference count for this in Window.close\n");
+	if (this != NULL) {
+		__increase_reference_count(this);
+	}
+
+	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) this->object_data.value.custom_value;
+
+	if ( data != NULL && data->window != NULL ) {
+		CloseWindow(data->window);
+	}
+
+	free(this->object_data.value.custom_value);
+	this->object_data.value.custom_value = NULL;
+
+__exit: ;
+	if (this != NULL) {
+		__decrease_reference_count(this);
+	}
+	return __result;
+};
+
+#endif

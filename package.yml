@@ -9,8 +9,10 @@ dependencies:
     tag: latest
     url: https://github.com/anderskjeldsen/am-lang-core.git
 platforms:
+  - id: libc
+    abstract: true
   - id: amigaos
+    extends: libc
     gccCommand: m68k-amigaos-gcc
-#    additonalHeaders:
-#    additonalImplementations: 
-    
+    gccAdditionalOptions:
+      - -noixemul    

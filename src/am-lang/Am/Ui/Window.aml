@@ -1,0 +1,18 @@
+
+namespace Am.Ui 
+{
+    native class Window {
+        import Am.Lang
+
+        static fun openWindow(width: Int, height: Int): Window {
+            var w = new Window()
+            w.open(width, height)
+            return w
+        }
+
+        private native fun open(width: Int, height: Int)
+        native fun close()
+
+    }
+}
+
