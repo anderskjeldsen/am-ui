@@ -1,6 +1,6 @@
 #ifndef native_amigaos_aclass_Am_Ui_Window_c
 #define native_amigaos_aclass_Am_Ui_Window_c
-#include <core.h>
+#include <libc/core.h>
 #include <Am/Ui/Window.h>
 #include <Am/Lang/Object.h>
 #include <Am/Ui/Screen.h>
@@ -74,15 +74,15 @@ function_result Am_Ui_Window_open_0(aobject * const this, int width, int height)
 		WA_BlockPen, 2,
 		WA_IDCMP, MENUPICK | MOUSEBUTTONS | REFRESHWINDOW | MOUSEMOVE | INTUITICKS,
 		WA_Flags, WFLG_BACKDROP | WFLG_SMART_REFRESH | WFLG_ACTIVATE | WFLG_RMBTRAP | WFLG_BORDERLESS,
-		WA_Gadgets, NULL,
-		WA_Title, "Hello",
+		WA_Gadgets, (ULONG) NULL,
+		WA_Title, (ULONG) "Hello",
 		WA_MinWidth, width,
 		WA_MaxWidth, width,
 		WA_MinHeight, height,
 		WA_MaxHeight, height,
-		WA_Checkmark, NULL,
-		WA_ScreenTitle, NULL,
-		WA_SuperBitMap, NULL,
+		WA_Checkmark, (ULONG) NULL,
+		WA_ScreenTitle, (ULONG) NULL,
+		WA_SuperBitMap, (ULONG) NULL,
 //		WA_CustomScreen, (ULONG) AmigaScreen,
 		TAG_DONE
 	};
@@ -99,7 +99,7 @@ function_result Am_Ui_Window_open_0(aobject * const this, int width, int height)
 	{
 		Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) malloc(sizeof(Am_Ui_Window_data));
 		data->window = window;
-		this->object_data.value.custom_value = data;
+		this->object_properties.class_object_properties.object_data.value.custom_value = data;
 	}
 
 
@@ -127,14 +127,14 @@ function_result Am_Ui_Window_close_0(aobject * const this)
 		__increase_reference_count(this);
 	}
 
-	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) this->object_data.value.custom_value;
+	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
 
 	if ( data != NULL && data->window != NULL ) {
 		CloseWindow(data->window);
 	}
 
-	free(this->object_data.value.custom_value);
-	this->object_data.value.custom_value = NULL;
+	free(this->object_properties.class_object_properties.object_data.value.custom_value);
+	this->object_properties.class_object_properties.object_data.value.custom_value = NULL;
 
 __exit: ;
 	if (this != NULL) {

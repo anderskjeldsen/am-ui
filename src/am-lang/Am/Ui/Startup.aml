@@ -1,0 +1,14 @@
+
+namespace Am.Ui 
+{
+    native class Startup {
+        import Am.Lang
+
+        static fun main() {
+
+            "Ui started".println()
+        }        
+
+    }
+}
+

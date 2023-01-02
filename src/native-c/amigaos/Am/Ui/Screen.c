@@ -1,6 +1,6 @@
 #ifndef native_aclass_Am_Ui_Screen_c
 #define native_aclass_Am_Ui_Screen_c
-#include <core.h>
+#include <libc/core.h>
 #include <amigaos/amiga.h>
 #include <Am/Ui/Screen.h>
 #include <Am/Lang/Object.h>
@@ -108,7 +108,7 @@ function_result Am_Ui_Screen_open_0(aobject * const this, int width, int height,
 
 	Am_Ui_Screen_data * const data = (Am_Ui_Screen_data * const) malloc(sizeof(Am_Ui_Screen_data));
 	data->screen = screen;
-	this->object_data.value.custom_value = data;
+	this->object_properties.class_object_properties.object_data.value.custom_value = data;
 
 	// TODO: Implement here
 exit:
@@ -122,14 +122,14 @@ function_result Am_Ui_Screen_close_0(aobject * const this)
 	function_result __result = { .has_return_value = 0 };
 	__increase_reference_count(this);
 
-	Am_Ui_Screen_data * const data = (Am_Ui_Screen_data * const) this->object_data.value.custom_value;
+	Am_Ui_Screen_data * const data = (Am_Ui_Screen_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
 
 	if ( data != NULL && data->screen != NULL ) {
 		CloseScreen(data->screen);
 	}
 
-	free(this->object_data.value.custom_value);
-	this->object_data.value.custom_value = NULL;
+	free(this->object_properties.class_object_properties.object_data.value.custom_value);
+	this->object_properties.class_object_properties.object_data.value.custom_value = NULL;
 
 exit:
 	__decrease_reference_count(this);
