@@ -42,7 +42,14 @@ function_result Am_Ui_Window__native_release_0(aobject * const this)
 	function_result __result = { .has_return_value = false };
 	bool __returning = false;
 
-	Am_Ui_Window_close_0(this);
+	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
+
+	if ( data != NULL && data->window != NULL ) {
+		CloseWindow(data->window);
+	}
+
+	free(this->object_properties.class_object_properties.object_data.value.custom_value);
+	this->object_properties.class_object_properties.object_data.value.custom_value = NULL;
 
 	printf("TODO: implement native function Am_Ui_Window__native_release_0\n");
 __exit: ;
@@ -73,7 +80,7 @@ function_result Am_Ui_Window_open_0(aobject * const this, int width, int height)
 		WA_DetailPen, 1,
 		WA_BlockPen, 2,
 		WA_IDCMP, MENUPICK | MOUSEBUTTONS | REFRESHWINDOW | MOUSEMOVE | INTUITICKS,
-		WA_Flags, WFLG_BACKDROP | WFLG_SMART_REFRESH | WFLG_ACTIVATE | WFLG_RMBTRAP | WFLG_BORDERLESS,
+		WA_Flags, WFLG_SMART_REFRESH | WFLG_ACTIVATE | WFLG_RMBTRAP | WFLG_DRAGBAR | WFLG_DEPTHGADGET | WFLG_CLOSEGADGET, //WFLG_BORDERLESS WFLG_BACKDROP
 		WA_Gadgets, (ULONG) NULL,
 		WA_Title, (ULONG) "Hello",
 		WA_MinWidth, width,

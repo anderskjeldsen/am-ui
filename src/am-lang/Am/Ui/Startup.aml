@@ -3,10 +3,12 @@ namespace Am.Ui
 {
     native class Startup {
         import Am.Lang
+        import Am.Threading
 
-        static fun main() {
-
+        static fun main() {            
             "Ui started".println()
+            var w = Window.openWindow(150, 150)
+            Thread.sleep(2000L)            
         }        
 
     }

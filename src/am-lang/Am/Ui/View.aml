@@ -1,0 +1,58 @@
+
+namespace Am.Ui 
+{
+    interface Graphics {
+
+    }
+
+    class View {
+        import Am.Lang
+
+        fun paint(graphics: Graphics) {
+
+        }
+    }
+
+    class ViewGroup : View {
+        import Am.Lang
+        import Am.Collections
+
+        private var children: List<View> = List<View>.newList<View>()
+        
+        fun paintChildren(graphics: Graphics) {
+            var i = 0
+            var cl = this.children
+            while(i < cl.size) {
+                var c = cl.get(i)
+                c.paint(graphics)
+                i++
+            }
+        }
+
+        fun layoutChildren() {
+
+        }
+    }
+
+    class Font(private var name: String) {
+        import Am.Lang
+
+        fun getName(): String {
+            return this.name
+        }
+    }
+
+    class GadgetView : View {
+        var font: Font
+
+        import Am.Lang
+
+    }
+
+    native class Button : GadgetView {
+        import Am.Lang
+
+
+    }
+}
+
