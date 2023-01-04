@@ -5,8 +5,28 @@ namespace Am.Ui
 
     }
 
+    native class ViewContext {
+        // Keep information about Window/Screen/Gadget Context etc.
+    }
+
     class View {
         import Am.Lang
+        private var viewContext: ViewContext
+
+        fun getViewContext(): ViewContext {
+            return this.viewContext
+        }
+
+        fun onAttach(viewContext: ViewContext) {
+            if (this.viewContext != null) {
+                throw new Exception("View already attached")
+            }
+            this.viewContext = viewContext
+        }
+
+        fun onDetach() {
+            this.viewContext = null
+        }
 
         fun paint(graphics: Graphics) {
 
