@@ -1,11 +1,37 @@
 
 namespace Am.Ui 
 {
+
+    class MyBase() {
+        import Am.Lang
+
+        override fun toString(): String {
+            return "base"
+        }
+    }
+
+    class MyChild() : MyBase {
+        import Am.Lang
+
+        override fun toString(): String {
+            return "child"
+        }
+
+        fun toStringBase(): String {
+            return base.toString()
+        }
+    }
+
     native class Startup {
         import Am.Lang
         import Am.Threading
 
-        static fun main() {            
+        static fun main() {
+
+            var child = new MyChild()
+            child.toString().println()
+            child.toStringBase().println()
+
             "Ui started".println()
             var w = Window.openWindow(150, 150)
             Thread.sleep(2000L)            
