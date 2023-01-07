@@ -4,13 +4,25 @@ namespace Am.Ui
     native class Window {
         import Am.Lang
 
-        static fun openWindow(width: Int, height: Int): Window {
+        private var rootView: View
+        private var width: UShort
+        private var height: UShort
+        private var screen: Screen
+
+        fun getRootView(): View {
+            return this.rootView
+        }
+
+        static fun openWindow(width: UShort, height: UShort, screen: Screen): Window {
             var w = new Window()
-            w.open(width, height)
+            w.width = width
+            w.height = height
+            w.screen = screen
+            w.open(width, height, screen)
             return w
         }
 
-        private native fun open(width: Int, height: Int)
+        private native fun open(width: UShort, height: UShort, screen: Screen)
         native fun close()
 
     }

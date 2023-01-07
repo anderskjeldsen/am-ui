@@ -56,7 +56,7 @@ __exit: ;
 	return __result;
 };
 
-function_result Am_Ui_Window_open_0(aobject * const this, int width, int height) //, aobject * screen)
+function_result Am_Ui_Window_open_0(aobject * const this, USHORT width, USHORT height, aobject * screen) //, aobject * screen)
 {
 	function_result __result = { .has_return_value = false };
 	bool __returning = false;
@@ -70,6 +70,27 @@ function_result Am_Ui_Window_open_0(aobject * const this, int width, int height)
 	printf("Intuition base: %d\n", (unsigned int) IntuitionBase);
 	if (IntuitionBase == NULL) {
 		IntuitionBase = (struct IntuitionBase *) __ensure_library("intuition.library", 0L);
+	}
+
+	struct Screen *amiga_screen = NULL;
+	struct VisualInfo *visual_info = NULL;
+
+	if (screen != NULL) {
+		Am_Ui_Screen_data *screen_data = (Am_Ui_Screen_data *) screen->object_properties.class_object_properties.object_data.value.custom_value;
+		amiga_screen = screen_data->screen;
+	} else {
+		amiga_screen = LockPubScreen(NULL);
+
+		if (amiga_screen == NULL) {
+			__throw_simple_exception("Unable lock public screen", "Am_Ui_Window_open_0, LockPubScreen", &res);
+			goto __exit;
+		}
+	}
+
+	visual_info = GetVisualInfo(amiga_screen, TAG_DONE);
+	if (visual_info == NULL) {
+		__throw_simple_exception("Unable to get visual info", "Am_Ui_Window_open_0, GetVisualInfo", &res);
+		goto __exit;
 	}
 
 	struct TagItem tags[] = {
@@ -98,19 +119,15 @@ function_result Am_Ui_Window_open_0(aobject * const this, int width, int height)
 
 	if ( window == NULL )
 	{
-		#ifdef DEBUG
-		printf("Unable to open window");
-		#endif
-	}
-	else 
-	{
-		Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) malloc(sizeof(Am_Ui_Window_data));
-		data->window = window;
-		this->object_properties.class_object_properties.object_data.value.custom_value = data;
+		__throw_simple_exception("Unable to open window", "Am_Ui_Window_open_0, OpenWindowTagList", &res);
+		goto __exit;
 	}
 
+	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) malloc(sizeof(Am_Ui_Window_data));
+	this->object_properties.class_object_properties.object_data.value.custom_value = data;
+	data->window = window;
 
-
+	if ()
 
 	printf("TODO: implement native function Am_Ui_Window_open_0\n");
 __exit: ;
