@@ -39,6 +39,10 @@ namespace Am.Ui
 
         private var children: List<View> = List<View>.newList<View>()
         
+        fun getChildren() {
+            return this.children
+        }
+
         fun paintChildren(graphics: Graphics) {
             var i = 0
             var cl = this.children
@@ -47,6 +51,10 @@ namespace Am.Ui
                 c.paint(graphics)
                 i++
             }
+        }
+
+        override fun paint(graphics: Graphics) {
+            base.paint(graphics)
         }
 
         fun layoutChildren() {
@@ -71,8 +79,6 @@ namespace Am.Ui
 
     native class Button : GadgetView {
         import Am.Lang
-
-
     }
 }
 

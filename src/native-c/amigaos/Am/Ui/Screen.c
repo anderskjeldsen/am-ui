@@ -18,6 +18,7 @@
 typedef struct _Am_Ui_Screen_data Am_Ui_Screen_data;
 struct _Am_Ui_Screen_data {
 	struct Screen * screen;	
+	struct VisualInfo * visual_info;
 };
 
 function_result Am_Ui_Screen__native_init_0(aobject * const this)
