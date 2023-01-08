@@ -3,6 +3,7 @@
 #include <libc/core.h>
 #include <amigaos/amiga.h>
 #include <Am/Ui/Screen.h>
+#include <amigaos/Am/Ui/Screen.h>
 #include <Am/Lang/Object.h>
 #include <Am/Lang/Int.h>
 

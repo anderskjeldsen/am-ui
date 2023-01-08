@@ -7,17 +7,17 @@
 #include <Am/Lang/Int.h>
 
 #include <amigaos/amiga.h>
+#include <amigaos/Am/Ui/Window.h>
+#include <amigaos/Am/Ui/Screen.h>
 
 #include <exec/types.h>
 #include <intuition/intuition.h>
+#include <libraries/gadtools.h>
 
 #include <proto/exec.h>
 #include <proto/intuition.h>
+#include <proto/gadtools.h>
 
-typedef struct _Am_Ui_Window_data Am_Ui_Window_data;
-struct _Am_Ui_Window_data {
-	struct Window * window;	
-};
 
 function_result Am_Ui_Window__native_init_0(aobject * const this)
 {
@@ -72,6 +72,9 @@ function_result Am_Ui_Window_open_0(aobject * const this, USHORT width, USHORT h
 		IntuitionBase = (struct IntuitionBase *) __ensure_library("intuition.library", 0L);
 	}
 
+	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) malloc(sizeof(Am_Ui_Window_data));
+	this->object_properties.class_object_properties.object_data.value.custom_value = data;
+
 	struct Screen *amiga_screen = NULL;
 	struct VisualInfo *visual_info = NULL;
 
@@ -82,16 +85,20 @@ function_result Am_Ui_Window_open_0(aobject * const this, USHORT width, USHORT h
 		amiga_screen = LockPubScreen(NULL);
 
 		if (amiga_screen == NULL) {
-			__throw_simple_exception("Unable lock public screen", "Am_Ui_Window_open_0, LockPubScreen", &res);
+			__throw_simple_exception("Unable lock public screen", "Am_Ui_Window_open_0, LockPubScreen", &__result);
 			goto __exit;
 		}
 	}
 
 	visual_info = GetVisualInfo(amiga_screen, TAG_DONE);
 	if (visual_info == NULL) {
-		__throw_simple_exception("Unable to get visual info", "Am_Ui_Window_open_0, GetVisualInfo", &res);
+		__throw_simple_exception("Unable to get visual info", "Am_Ui_Window_open_0, GetVisualInfo", &__result);
 		goto __exit;
 	}
+
+	data->visual_info = visual_info;
+
+	data->last_gadget = CreateContext(&data->first_gadget);
 
 	struct TagItem tags[] = {
 		WA_Left, 0,
@@ -102,7 +109,7 @@ function_result Am_Ui_Window_open_0(aobject * const this, USHORT width, USHORT h
 		WA_BlockPen, 2,
 		WA_IDCMP, MENUPICK | MOUSEBUTTONS | REFRESHWINDOW | MOUSEMOVE | INTUITICKS,
 		WA_Flags, WFLG_SMART_REFRESH | WFLG_ACTIVATE | WFLG_RMBTRAP | WFLG_DRAGBAR | WFLG_DEPTHGADGET | WFLG_CLOSEGADGET, //WFLG_BORDERLESS WFLG_BACKDROP
-		WA_Gadgets, (ULONG) NULL,
+		WA_Gadgets, (ULONG) data->first_gadget,
 		WA_Title, (ULONG) "Hello",
 		WA_MinWidth, width,
 		WA_MaxWidth, width,
@@ -111,7 +118,7 @@ function_result Am_Ui_Window_open_0(aobject * const this, USHORT width, USHORT h
 		WA_Checkmark, (ULONG) NULL,
 		WA_ScreenTitle, (ULONG) NULL,
 		WA_SuperBitMap, (ULONG) NULL,
-//		WA_CustomScreen, (ULONG) AmigaScreen,
+		WA_CustomScreen, (ULONG) amiga_screen,
 		TAG_DONE
 	};
 
@@ -119,25 +126,19 @@ function_result Am_Ui_Window_open_0(aobject * const this, USHORT width, USHORT h
 
 	if ( window == NULL )
 	{
-		__throw_simple_exception("Unable to open window", "Am_Ui_Window_open_0, OpenWindowTagList", &res);
+		__throw_simple_exception("Unable to open window", "Am_Ui_Window_open_0, OpenWindowTagList", &__result);
 		goto __exit;
 	}
 
-	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) malloc(sizeof(Am_Ui_Window_data));
-	this->object_properties.class_object_properties.object_data.value.custom_value = data;
 	data->window = window;
 
-	if ()
-
-	printf("TODO: implement native function Am_Ui_Window_open_0\n");
 __exit: ;
 	if (this != NULL) {
 		__decrease_reference_count(this);
 	}
-/*	if (screen != NULL) {
+	if (screen != NULL) {
 		__increase_reference_count(screen);
 	}
-	*/
 	return __result;
 };
 
