@@ -8,13 +8,28 @@ namespace Am.Ui
         private var width: UShort
         private var height: UShort
         private var screen: Screen
+        private var viewContext: ViewContext
 
         fun getRootView(): View {
             return this.rootView
         }
 
+        fun setRootView(view: View) {
+            if (this.rootView == view) {
+                return
+            }
+            if(this.rootView != null) {
+                this.rootView.onDetach()
+            }
+            this.rootView = view
+            view.onAttach(this.viewContext)
+        }
+
         static fun openWindow(width: UShort, height: UShort, screen: Screen): Window {
             var w = new Window()
+            var vc = new ViewContextImpl()
+            vc.setWindow(w)
+            w.viewContext = vc
             w.width = width
             w.height = height
             w.screen = screen

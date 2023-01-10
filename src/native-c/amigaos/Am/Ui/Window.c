@@ -18,6 +18,31 @@
 #include <proto/intuition.h>
 #include <proto/gadtools.h>
 
+void close_window_native(aobject * const this) {
+	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
+
+	if ( data != NULL ) {		
+		if (data->window != NULL) {
+			CloseWindow(data->window);
+		}
+
+		if (data->first_gadget != NULL) {
+			FreeGadgets(data->first_gadget);
+		}
+
+		if (data->visual_info != NULL) {
+			FreeVisualInfo(data->visual_info);
+		}
+
+		if (data->locked_screen != NULL) {
+			UnlockPubScreen(NULL, data->locked_screen);
+		}
+	}
+
+	free(this->object_properties.class_object_properties.object_data.value.custom_value);
+	this->object_properties.class_object_properties.object_data.value.custom_value = NULL;
+
+}
 
 function_result Am_Ui_Window__native_init_0(aobject * const this)
 {
@@ -42,6 +67,8 @@ function_result Am_Ui_Window__native_release_0(aobject * const this)
 	function_result __result = { .has_return_value = false };
 	bool __returning = false;
 
+	close_window_native(this);
+/*
 	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
 
 	if ( data != NULL && data->window != NULL ) {
@@ -50,7 +77,7 @@ function_result Am_Ui_Window__native_release_0(aobject * const this)
 
 	free(this->object_properties.class_object_properties.object_data.value.custom_value);
 	this->object_properties.class_object_properties.object_data.value.custom_value = NULL;
-
+*/
 	printf("TODO: implement native function Am_Ui_Window__native_release_0\n");
 __exit: ;
 	return __result;
@@ -83,6 +110,7 @@ function_result Am_Ui_Window_open_0(aobject * const this, USHORT width, USHORT h
 		amiga_screen = screen_data->screen;
 	} else {
 		amiga_screen = LockPubScreen(NULL);
+		data->locked_screen = amiga_screen;
 
 		if (amiga_screen == NULL) {
 			__throw_simple_exception("Unable lock public screen", "Am_Ui_Window_open_0, LockPubScreen", &__result);
@@ -152,14 +180,7 @@ function_result Am_Ui_Window_close_0(aobject * const this)
 		__increase_reference_count(this);
 	}
 
-	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
-
-	if ( data != NULL && data->window != NULL ) {
-		CloseWindow(data->window);
-	}
-
-	free(this->object_properties.class_object_properties.object_data.value.custom_value);
-	this->object_properties.class_object_properties.object_data.value.custom_value = NULL;
+	close_window_native(this);
 
 __exit: ;
 	if (this != NULL) {

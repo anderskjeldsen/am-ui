@@ -32,7 +32,6 @@ namespace Am.Ui
             child.toString().println()
             child.toStringBase().println()
 
-//            var s: Screen = null
             "Ui started".println()
             var w = Window.openWindow(150US, 150US, null)
             Thread.sleep(2000L)            

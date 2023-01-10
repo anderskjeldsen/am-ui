@@ -5,8 +5,26 @@ namespace Am.Ui
 
     }
 
-    native class ViewContext {
+    interface ViewContext {
+//        private var window: Window
+//private var window: Window
+        fun getWindow(): Window
+
         // Keep information about Window/Screen/Gadget Context etc.
+    }
+
+    class ViewContextImpl {
+        import Am.Lang
+
+        private var windowRef: Weak<Window> = new Weak<Window>()
+
+        fun getWindow(): Window {
+            return this.windowRef.get()
+        }
+
+        fun setWindow(window: Window) {
+            this.windowRef.set(window)
+        }
     }
 
     class View {
@@ -39,8 +57,22 @@ namespace Am.Ui
 
         private var children: List<View> = List<View>.newList<View>()
         
+        var font: Font
+
         fun getChildren() {
             return this.children
+        }
+
+        fun addChild(view: View) {
+            this.children.add(view)
+            if (this.viewContext != null) {
+                view.onAttach(this.viewContext)
+            }
+        }
+
+        fun removeChild(view: View) {
+            this.children.remove(view)
+            view.onDetach()
         }
 
         fun paintChildren(graphics: Graphics) {
@@ -71,14 +103,24 @@ namespace Am.Ui
     }
 
     class GadgetView : View {
-        var font: Font
-
         import Am.Lang
-
     }
 
     native class Button : GadgetView {
         import Am.Lang
+
+        private native fun attachButton(window: Window)
+        private native fun detachButton(window: Window)
+
+        override fun onAttach(viewContext: ViewContext) {
+            base.onAttach(viewContext)
+            this.attachButton(viewContext.getWindow())
+        }
+
+        override fun onDetach() {
+            this.detachButton(this.viewContext.getWindow())
+            base.onDetach()
+        }
     }
 }
 
