@@ -22,6 +22,8 @@ void close_window_native(aobject * const this) {
 	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
 
 	if ( data != NULL ) {		
+		Am_Ui_Window_setRootView_0(this, NULL);
+
 		if (data->window != NULL) {
 			CloseWindow(data->window);
 		}

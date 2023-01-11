@@ -22,6 +22,7 @@ namespace Am.Ui
                 this.rootView.onDetach()
             }
             this.rootView = view
+            "onAttach...".println()
             view.onAttach(this.viewContext)
         }
 

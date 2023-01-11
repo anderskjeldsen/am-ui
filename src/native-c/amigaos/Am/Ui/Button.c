@@ -3,8 +3,17 @@
 #include <amigaos/Am/Ui/Button.h>
 #include <Am/Ui/GadgetView.h>
 
+#include <amigaos/amiga.h>
+#include <amigaos/Am/Ui/Window.h>
+
 #include <exec/types.h>
 #include <intuition/intuition.h>
+#include <libraries/gadtools.h>
+
+#include <proto/exec.h>
+#include <proto/intuition.h>
+#include <proto/gadtools.h>
+
 
 
 function_result Am_Ui_Button__native_init_0(aobject * const this)
@@ -43,8 +52,6 @@ function_result Am_Ui_Button_attachButton_0(aobject * const this, aobject * wind
 		__increase_reference_count(window);
 	}
 
-//    aobject * const viewContext = this->object_properties.class_object_properties.properties[Am_Ui_View_P_viewContext].nullable_value.value.object_value;
-//	aobject * const window = viewContext->object_properties.class_object_properties.properties[Am_Ui_ViewContext_P_window].nullable_value.value.object_value;
     Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
 
     ULONG Gadgetkinds[1] = { BUTTON_KIND };
@@ -57,7 +64,14 @@ function_result Am_Ui_Button_attachButton_0(aobject * const this, aobject * wind
        63, 26, 172, 13, (UBYTE *)"Name", &topaz8, 1, PLACETEXT_LEFT, NULL, NULL, 
     };
 
-    Gadget * const gadget = data->last_gadget = CreateGadgetA(Gadgetkinds[i], data->last_gadget, &Gadgetdata[i], (struct TagItem *)&GadgetTags[i])
+	ULONG GadgetTags[] = {
+	   	(GTST_MaxChars), 256, (TAG_DONE),
+   		(GTNM_Border), TRUE, (TAG_DONE),
+		(TAG_DONE)
+	};
+
+    struct Gadget * const gadget = data->last_gadget = CreateGadgetA(Gadgetkinds[0], data->last_gadget, &Gadgetdata[0], (struct TagItem *)&GadgetTags[0]);
+	this->object_properties.class_object_properties.object_data.value.custom_value = gadget;
 
 __exit: ;
 	if (this != NULL) {
@@ -81,6 +95,12 @@ function_result Am_Ui_Button_detachButton_0(aobject * const this, aobject * wind
 	if (window != NULL) {
 		__increase_reference_count(window);
 	}
+
+	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
+	struct Gadget * gadget = this->object_properties.class_object_properties.object_data.value.custom_value;
+	RemoveGadget(data->window, gadget);
+	this->object_properties.class_object_properties.object_data.value.custom_value = NULL;
+
 __exit: ;
 	if (this != NULL) {
 		__decrease_reference_count(this);

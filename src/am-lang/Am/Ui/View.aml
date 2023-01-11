@@ -114,7 +114,9 @@ namespace Am.Ui
 
         override fun onAttach(viewContext: ViewContext) {
             base.onAttach(viewContext)
+            "attachButton...".println()
             this.attachButton(viewContext.getWindow())
+            "attachButton...done".println()
         }
 
         override fun onDetach() {
