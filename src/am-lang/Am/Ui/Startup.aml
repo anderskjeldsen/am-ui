@@ -26,16 +26,19 @@ namespace Am.Ui
         import Am.Lang
         import Am.Threading
 
+        static var xxx: Int = 1
+
         static fun main() {
 
             var child = new MyChild()
             child.toString().println()
             child.toStringBase().println()
-
+/*
             var list = List<String>.newList<String>()
             each(list, i) {
                 i.println()
             }
+            */
 
             "Ui started".println()
             var w = Window.openWindow(150US, 150US, null)
