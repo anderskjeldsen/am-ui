@@ -2,6 +2,12 @@
 namespace Am.Ui 
 {
 
+    enum MyEnum<Int> {
+        import Am.Lang
+        val1 = 1
+        val2 = 2
+    }
+
     class MyBase() {
         import Am.Lang
 
@@ -30,9 +36,14 @@ namespace Am.Ui
 
         static fun main() {
 
-            var child = new MyChild()
-            child.toString().println()
-            child.toStringBase().println()
+            "get xxx".println()
+            var yyy = xxx
+            "got xxx".println()
+
+            yyy.toString().println()
+
+            "printed xxx".println()
+
 /*
             var list = List<String>.newList<String>()
             each(list, i) {
@@ -40,6 +51,7 @@ namespace Am.Ui
             }
             */
 
+/*
             "Ui started".println()
             var w = Window.openWindow(150US, 150US, null)
 
@@ -48,7 +60,8 @@ namespace Am.Ui
             w.setRootView(b)
             "root view set".println()
 
-            Thread.sleep(2000L)            
+            Thread.sleep(2000L)           
+            */ 
         }        
 
     }
