@@ -23,7 +23,9 @@ platforms:
 #      - c-libs/zlib/nofpu/include
     gccAdditionalOptions:
       - -noixemul     
-#      - -lm
+    gccAdditionalLibraries:
+      - socket
+
 buildTargets:
   - id: amigaos_docker_win_anders
     platform: amigaos
