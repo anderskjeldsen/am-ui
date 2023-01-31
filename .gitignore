@@ -2,3 +2,4 @@ builds/*
 *.generated.c
 src/am-lang/Prototype/*
 src/native-c/Prototype/*
+.DS_Store
