@@ -22,8 +22,10 @@ namespace Am.Ui
                 this.rootView.onDetach()
             }
             this.rootView = view
-            "onAttach...".println()
-            view.onAttach(this.viewContext)
+            if (view != null) {
+                "onAttach...".println()
+                view.onAttach(this.viewContext)
+            }
         }
 
         static fun openWindow(width: UShort, height: UShort, screen: Screen): Window {

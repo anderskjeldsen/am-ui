@@ -20,10 +20,15 @@
 
 void close_window_native(aobject * const this) {
 	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
-
 	if ( data != NULL ) {		
+		bool releasing = this->reference_count == 0; // diiiirty
+		if (releasing) {
+			this->reference_count = -100;
+		}
 		Am_Ui_Window_setRootView_0(this, NULL);
-
+		if (releasing) {
+			this->reference_count = 0;
+		}
 		if (data->window != NULL) {
 			CloseWindow(data->window);
 		}
@@ -101,7 +106,7 @@ function_result Am_Ui_Window_open_0(aobject * const this, USHORT width, USHORT h
 		IntuitionBase = (struct IntuitionBase *) __ensure_library("intuition.library", 0L);
 	}
 
-	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) malloc(sizeof(Am_Ui_Window_data));
+	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) calloc(1, sizeof(Am_Ui_Window_data));
 	this->object_properties.class_object_properties.object_data.value.custom_value = data;
 
 	struct Screen *amiga_screen = NULL;
@@ -167,7 +172,7 @@ __exit: ;
 		__decrease_reference_count(this);
 	}
 	if (screen != NULL) {
-		__increase_reference_count(screen);
+		__decrease_reference_count(screen);
 	}
 	return __result;
 };

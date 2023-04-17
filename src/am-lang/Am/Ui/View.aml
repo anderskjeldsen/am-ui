@@ -13,7 +13,7 @@ namespace Am.Ui
         // Keep information about Window/Screen/Gadget Context etc.
     }
 
-    class ViewContextImpl {
+    class ViewContextImpl : ViewContext {
         import Am.Lang
 
         private var windowRef: Weak<Window> = new Weak<Window>()

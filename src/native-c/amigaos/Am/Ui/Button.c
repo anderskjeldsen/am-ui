@@ -60,25 +60,33 @@ function_result Am_Ui_Button_attachButton_0(aobject * const this, aobject * wind
         (STRPTR)"topaz.font", 8, 0, 1
     };
 
-    struct NewGadget Gadgetdata[3] = {
-       63, 26, 172, 13, (UBYTE *)"Name", &topaz8, 1, PLACETEXT_LEFT, NULL, NULL, 
+    struct NewGadget Gadgetdata[1] = {
+       0, 0, 100, 20, (UBYTE *)"Name", &topaz8, 1, PLACETEXT_IN, NULL, NULL, 
     };
 
 	ULONG GadgetTags[] = {
+//		GA_Text, (ULONG) "My Button", (TAG_DONE),
+//	    GA_RelVerify, TRUE, (TAG_DONE),
 	   	(GTST_MaxChars), 256, (TAG_DONE),
-   		(GTNM_Border), TRUE, (TAG_DONE),
+   		(GTNM_Border), TRUE, (TAG_DONE), 
 		(TAG_DONE)
 	};
 
     struct Gadget * const gadget = data->last_gadget = CreateGadgetA(Gadgetkinds[0], data->last_gadget, &Gadgetdata[0], (struct TagItem *)&GadgetTags[0]);
 	this->object_properties.class_object_properties.object_data.value.custom_value = gadget;
 
+	AddGList(data->window, gadget, -1, 0, NULL);
+
+//	AddGadget(data->window, gadget, -1, NULL);
+//	ActivateWindow(data->window);
+	GT_RefreshWindow(data->window, NULL);
+
 __exit: ;
 	if (this != NULL) {
 		__decrease_reference_count(this);
 	}
 	if (window != NULL) {
-		__increase_reference_count(window);
+		__decrease_reference_count(window);
 	}
 	return __result;
 };
@@ -106,7 +114,7 @@ __exit: ;
 		__decrease_reference_count(this);
 	}
 	if (window != NULL) {
-		__increase_reference_count(window);
+		__decrease_reference_count(window);
 	}
 	return __result;
 };
