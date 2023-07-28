@@ -12,8 +12,8 @@ struct _Am_Ui_Window_data {
     struct Screen * locked_screen;
 	struct Window * window;
     struct VisualInfo * visual_info;
-    struct Gadget *first_gadget;
-    struct Gadget *last_gadget;
+//    struct Gadget *first_gadget;
+    struct Gadget *context_gadget;
 };
 
 #endif

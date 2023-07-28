@@ -6,6 +6,9 @@
 #include <Am/Lang/Object.h>
 #include <Am/Lang/String.h>
 
+#include <libc/core_inline_functions.h>
+
+
 function_result Am_Ui_Startup__native_init_0(aobject * const this)
 {
 	function_result __result = { .has_return_value = false };

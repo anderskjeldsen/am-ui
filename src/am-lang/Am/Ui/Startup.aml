@@ -44,7 +44,8 @@ namespace Am.Ui
             w.setRootView(b)
             "root view set".println()
 
-            Thread.sleep(2000L)     
+            "sleep".println()
+            Thread.sleep(1000L)     
             "clean up".println()      
         }
     }

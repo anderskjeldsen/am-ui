@@ -1,6 +1,7 @@
 #ifndef native_amigaos_aclass_Am_Ui_Window_c
 #define native_amigaos_aclass_Am_Ui_Window_c
 #include <libc/core.h>
+
 #include <Am/Ui/Window.h>
 #include <Am/Lang/Object.h>
 #include <Am/Ui/Screen.h>
@@ -18,6 +19,8 @@
 #include <proto/intuition.h>
 #include <proto/gadtools.h>
 
+#include <libc/core_inline_functions.h>
+
 void close_window_native(aobject * const this) {
 	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
 	if ( data != NULL ) {		
@@ -29,12 +32,13 @@ void close_window_native(aobject * const this) {
 		if (releasing) {
 			this->reference_count = 0;
 		}
-		if (data->window != NULL) {
-			CloseWindow(data->window);
-		}
-
+/* Taken care of by CloseWindow ?
 		if (data->first_gadget != NULL) {
 			FreeGadgets(data->first_gadget);
+		}
+*/
+		if (data->window != NULL) {
+			CloseWindow(data->window);
 		}
 
 		if (data->visual_info != NULL) {
@@ -133,7 +137,7 @@ function_result Am_Ui_Window_open_0(aobject * const this, USHORT width, USHORT h
 
 	data->visual_info = visual_info;
 
-	data->last_gadget = CreateContext(&data->first_gadget);
+	CreateContext(&data->context_gadget);
 
 	struct TagItem tags[] = {
 		WA_Left, 0,
@@ -144,7 +148,7 @@ function_result Am_Ui_Window_open_0(aobject * const this, USHORT width, USHORT h
 		WA_BlockPen, 2,
 		WA_IDCMP, MENUPICK | MOUSEBUTTONS | REFRESHWINDOW | MOUSEMOVE | INTUITICKS,
 		WA_Flags, WFLG_SMART_REFRESH | WFLG_ACTIVATE | WFLG_RMBTRAP | WFLG_DRAGBAR | WFLG_DEPTHGADGET | WFLG_CLOSEGADGET, //WFLG_BORDERLESS WFLG_BACKDROP
-		WA_Gadgets, (ULONG) data->first_gadget,
+		WA_Gadgets, (ULONG) data->context_gadget,
 		WA_Title, (ULONG) "Hello",
 		WA_MinWidth, width,
 		WA_MaxWidth, width,

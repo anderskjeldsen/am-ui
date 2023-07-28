@@ -1,8 +1,18 @@
 
 namespace Am.Ui 
 {
-    interface Graphics {
+    class Graphics {
+        import Am.Lang
+        var xOffset: Short
+        var yOffset: Short
 
+        fun translate(x: Short, y: Short) {
+            this.xOffset = this.xOffset + x
+            this.yOffset = this.yOffset + y
+        }
+
+        abstract fun setForegroundPen(pen: UByte)
+        abstract fun drawLine(x: Short, y: Short, x2: Short, y2: Short)
     }
 
     interface ViewContext {
@@ -12,6 +22,13 @@ namespace Am.Ui
 
         // Keep information about Window/Screen/Gadget Context etc.
     }
+
+    native class ViewContextGraphics(var viewContext: ViewContext) : Graphics {
+        import Am.Lang
+        native override fun setForegroundPen(pen: UByte)
+        native override fun drawLine(x: Short, y: Short, x2: Short, y2: Short)
+    }
+
 
     class ViewContextImpl : ViewContext {
         import Am.Lang
@@ -30,6 +47,10 @@ namespace Am.Ui
     class View {
         import Am.Lang
         private var viewContext: ViewContext
+        var x: Short
+        var y: Short
+        var width: Short
+        var height: Short
 
         fun getViewContext(): ViewContext {
             return this.viewContext
@@ -48,6 +69,10 @@ namespace Am.Ui
 
         fun paint(graphics: Graphics) {
 
+        }
+
+        fun paintAll(graphics: Graphics) {
+            this.paint(graphics)
         }
     }
 
@@ -80,13 +105,16 @@ namespace Am.Ui
             var cl = this.children
             while(i < cl.size) {
                 var c = cl.get(i)
-                c.paint(graphics)
+                c.paintAll(graphics)
                 i++
             }
         }
 
-        override fun paint(graphics: Graphics) {
-            base.paint(graphics)
+        override fun paintAll(graphics: Graphics) {
+            graphics.translate(this.x, this.y)
+            this.paint(graphics)
+            this.paintChildren(graphics)
+            graphics.translate(-this.x, -this.y)
         }
 
         fun layoutChildren() {
@@ -123,6 +151,18 @@ namespace Am.Ui
             this.detachButton(this.viewContext.getWindow())
             base.onDetach()
         }
+    }
+
+    class TestButton : View {
+        import Am.Lang
+
+        override fun paint(graphics: Graphics) {
+            base.paint(graphics)
+
+            graphics.setForegroundPen(1UB)
+            graphics.drawLine(0S, 0S, this.width, this.height)
+        }
+
     }
 }
 

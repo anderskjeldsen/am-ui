@@ -14,6 +14,9 @@
 #include <proto/intuition.h>
 #include <proto/cybergraphics.h>
 
+#include <libc/core_inline_functions.h>
+
+
 typedef struct _Am_Ui_ScreenModeRequester_data Am_Ui_ScreenModeRequester_data;
 struct _Am_Ui_ScreenModeRequester_data {
 	struct ScreenModeRequester * screenModeRequester;

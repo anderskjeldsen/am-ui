@@ -16,6 +16,8 @@
 #include <proto/intuition.h>
 #include <proto/cybergraphics.h>
 
+#include <libc/core_inline_functions.h>
+
 
 function_result Am_Ui_Screen__native_init_0(aobject * const this)
 {
