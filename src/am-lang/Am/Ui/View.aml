@@ -130,6 +130,10 @@ namespace Am.Ui
         }
     }
 
+    native class GadgetViews {
+        import Am.Lang
+    }
+
     class GadgetView : View {
         import Am.Lang
     }

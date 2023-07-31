@@ -44,9 +44,9 @@ namespace Am.Ui
             w.setRootView(b)
             "root view set".println()
 
-            "sleep".println()
-            Thread.sleep(1000L)     
-            "clean up".println()      
+            while(w.isOpen()) {
+                w.handleInput()
+            }
         }
     }
 }

@@ -40,6 +40,9 @@ namespace Am.Ui
             return w
         }
 
+        native fun handleInput()
+        native fun isOpen(): Bool
+
         private native fun open(width: UShort, height: UShort, screen: Screen)
         native fun close()
 

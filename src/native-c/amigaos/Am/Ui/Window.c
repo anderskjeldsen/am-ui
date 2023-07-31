@@ -1,5 +1,3 @@
-#ifndef native_amigaos_aclass_Am_Ui_Window_c
-#define native_amigaos_aclass_Am_Ui_Window_c
 #include <libc/core.h>
 
 #include <Am/Ui/Window.h>
@@ -146,7 +144,7 @@ function_result Am_Ui_Window_open_0(aobject * const this, USHORT width, USHORT h
 		WA_Height, height,
 		WA_DetailPen, 1,
 		WA_BlockPen, 2,
-		WA_IDCMP, MENUPICK | MOUSEBUTTONS | REFRESHWINDOW | MOUSEMOVE | INTUITICKS,
+		WA_IDCMP, IDCMP_CLOSEWINDOW | IDCMP_GADGETUP, //  | MENUPICK | MOUSEBUTTONS | REFRESHWINDOW | MOUSEMOVE | INTUITICKS
 		WA_Flags, WFLG_SMART_REFRESH | WFLG_ACTIVATE | WFLG_RMBTRAP | WFLG_DRAGBAR | WFLG_DEPTHGADGET | WFLG_CLOSEGADGET, //WFLG_BORDERLESS WFLG_BACKDROP
 		WA_Gadgets, (ULONG) data->context_gadget,
 		WA_Title, (ULONG) "Hello",
@@ -200,4 +198,58 @@ __exit: ;
 	return __result;
 };
 
-#endif
+function_result Am_Ui_Window_handleInput_0(aobject * const this)
+{
+	function_result __result = { .has_return_value = false };
+	bool __returning = false;
+	if (this != NULL) {
+		__increase_reference_count(this);
+	}
+
+	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
+	printf("Wait Win\n");
+	ULONG sig_mask = 1L << data->window->UserPort->mp_SigBit;
+	ULONG signals = Wait(sig_mask);
+	BOOL close_window = FALSE;
+	printf("Wait done %d, %d\n", sig_mask, signals & sig_mask);
+	if (signals & sig_mask)
+	{
+		struct IntuiMessage *msg;
+		while ((msg = (struct IntuiMessage *)GetMsg(data->window->UserPort)) != NULL)
+		{
+			switch (msg->Class)
+			{
+				case IDCMP_CLOSEWINDOW:
+					close_window = true;
+					break;
+			}
+			ReplyMsg((struct Message *)msg);
+		}
+	}
+
+	if (close_window) {
+		close_window_native(this);
+	}
+
+__exit: ;
+	if (this != NULL) {
+		__decrease_reference_count(this);
+	}
+	return __result;
+};
+
+function_result Am_Ui_Window_isOpen_0(aobject * const this)
+{
+	function_result __result = { .has_return_value = true };
+	bool __returning = true;
+	if (this != NULL) {
+		__increase_reference_count(this);
+	}
+
+	__result.return_value.value.bool_value = this->object_properties.class_object_properties.object_data.value.custom_value != NULL;
+__exit: ;
+	if (this != NULL) {
+		__decrease_reference_count(this);
+	}
+	return __result;
+};

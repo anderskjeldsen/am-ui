@@ -14,6 +14,8 @@
 #include <proto/intuition.h>
 #include <proto/gadtools.h>
 
+#include <amigaos/Am/Ui/GadgetViews.h>
+
 #include <libc/core_inline_functions.h>
 
 
@@ -39,6 +41,15 @@ __exit: ;
 	return __result;
 };
 
+ULONG gadget_count(struct Gadget *gadget) {
+	ULONG c = 0;
+	while(gadget != NULL) {
+		c++;
+		gadget = gadget->NextGadget;
+	}
+	return c;
+}
+
 function_result Am_Ui_Button_attachButton_0(aobject * const this, aobject * window)
 {
 	printf("Attach button\n");
@@ -52,9 +63,7 @@ function_result Am_Ui_Button_attachButton_0(aobject * const this, aobject * wind
 	}
 
     Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
-
-//    ULONG gadget_kinds[1] = { BUTTON_KIND };
-    
+  
     struct TextAttr topaz8 = {
         (STRPTR)"topaz.font", 8, 0, 1
     };
@@ -74,16 +83,24 @@ function_result Am_Ui_Button_attachButton_0(aobject * const this, aobject * wind
 	};
 //
     struct Gadget * const gadget = CreateGadgetA(BUTTON_KIND, window_data->context_gadget, &new_gadget, (struct TagItem *)&gadget_tags[0]);
-	this->object_properties.class_object_properties.object_data.value.custom_value = gadget;
+
+	gadget_view_holder *gvh = malloc(sizeof(gadget_view_holder));
+	gvh->gadget = gadget;
+	gvh->gadget_num = gadget_count(gadget);
+
+	this->object_properties.class_object_properties.object_data.value.custom_value = gvh;
 
 	printf("AddGList\n");
-	AddGadget(window_data->window, gadget, -1);
-//	AddGList(window_data->window, gadget, -1, 0, NULL);
+//	AddGadget(window_data->window, gadget, -1);
+	AddGList(window_data->window, gadget, -1, 1, NULL);
 
 //	AddGadget(data->window, gadget, -1, NULL);
 //	ActivateWindow(data->window);
+	printf("RefreshGList\n");
+	RefreshGList(gadget, window_data->window, NULL, 1);
+
 	printf("GT_RefreshWindow\n");
-	GT_RefreshWindow(window_data->window, NULL);
+	//GT_RefreshWindow(window_data->window, NULL);
 	printf("GT_RefreshWindow done\n");
 
 __exit: ;
@@ -110,12 +127,16 @@ function_result Am_Ui_Button_detachButton_0(aobject * const this, aobject * wind
 	}
 
 	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
-	struct Gadget * gadget = this->object_properties.class_object_properties.object_data.value.custom_value;
-	printf("RemoveGadget %p %p %p\n", gadget, window_data, window_data->window);
-	RemoveGadget(window_data->window, gadget);
-	printf("FreeGadgets\n");
-	FreeGadgets(gadget);
-	printf("FreeGadgets done\n");
+	gadget_view_holder *gvh = (gadget_view_holder *) this->object_properties.class_object_properties.object_data.value.custom_value;
+//	printf("RemoveGadget %p %p %p\n", gvh->gadget, window_data, window_data->window);
+	UWORD pos = RemoveGList(window_data->window, gvh->gadget, gvh->gadget_num);
+	if (pos >= 0) {
+		gvh->gadget->NextGadget = NULL;
+//		printf("FreeGadgets %p\n", gvh->gadget->NextGadget);
+		FreeGadgets(gvh->gadget);
+//		printf("FreeGadgets done\n");
+	}
+	free(gvh);
 
 	this->object_properties.class_object_properties.object_data.value.custom_value = NULL;
 
