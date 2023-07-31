@@ -30,21 +30,24 @@ void close_window_native(aobject * const this) {
 		if (releasing) {
 			this->reference_count = 0;
 		}
-/* Taken care of by CloseWindow ?
-		if (data->first_gadget != NULL) {
-			FreeGadgets(data->first_gadget);
-		}
-*/
+
 		if (data->window != NULL) {
 			CloseWindow(data->window);
+			data->window = NULL;
+		}
+
+		if (data->context_gadget != NULL) {
+			FreeGadgets(data->context_gadget);
 		}
 
 		if (data->visual_info != NULL) {
 			FreeVisualInfo(data->visual_info);
+			data->visual_info = NULL;
 		}
 
 		if (data->locked_screen != NULL) {
 			UnlockPubScreen(NULL, data->locked_screen);
+			data->locked_screen = NULL;
 		}
 	}
 
@@ -135,7 +138,9 @@ function_result Am_Ui_Window_open_0(aobject * const this, USHORT width, USHORT h
 
 	data->visual_info = visual_info;
 
+	data->context_gadget = NULL;
 	CreateContext(&data->context_gadget);
+	printf("context gadget %p\n", data->context_gadget);
 
 	struct TagItem tags[] = {
 		WA_Left, 0,
@@ -144,7 +149,7 @@ function_result Am_Ui_Window_open_0(aobject * const this, USHORT width, USHORT h
 		WA_Height, height,
 		WA_DetailPen, 1,
 		WA_BlockPen, 2,
-		WA_IDCMP, IDCMP_CLOSEWINDOW | IDCMP_GADGETUP, //  | MENUPICK | MOUSEBUTTONS | REFRESHWINDOW | MOUSEMOVE | INTUITICKS
+		WA_IDCMP, IDCMP_CLOSEWINDOW | IDCMP_GADGETUP | MENUPICK | MOUSEBUTTONS | REFRESHWINDOW | MOUSEMOVE,
 		WA_Flags, WFLG_SMART_REFRESH | WFLG_ACTIVATE | WFLG_RMBTRAP | WFLG_DRAGBAR | WFLG_DEPTHGADGET | WFLG_CLOSEGADGET, //WFLG_BORDERLESS WFLG_BACKDROP
 		WA_Gadgets, (ULONG) data->context_gadget,
 		WA_Title, (ULONG) "Hello",
@@ -156,7 +161,7 @@ function_result Am_Ui_Window_open_0(aobject * const this, USHORT width, USHORT h
 		WA_ScreenTitle, (ULONG) NULL,
 		WA_SuperBitMap, (ULONG) NULL,
 		WA_CustomScreen, (ULONG) amiga_screen,
-		TAG_DONE
+		TAG_END
 	};
 
 	struct Window * window = OpenWindowTagList(NULL, tags);
@@ -166,6 +171,8 @@ function_result Am_Ui_Window_open_0(aobject * const this, USHORT width, USHORT h
 		__throw_simple_exception("Unable to open window", "Am_Ui_Window_open_0, OpenWindowTagList", &__result);
 		goto __exit;
 	}
+
+	GT_RefreshWindow(window, NULL);
 
 	data->window = window;
 
@@ -207,23 +214,31 @@ function_result Am_Ui_Window_handleInput_0(aobject * const this)
 	}
 
 	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
-	printf("Wait Win\n");
 	ULONG sig_mask = 1L << data->window->UserPort->mp_SigBit;
+	printf("Wait %d\n", sig_mask);
 	ULONG signals = Wait(sig_mask);
+	printf("Wait done %d\n", signals);
+
 	BOOL close_window = FALSE;
-	printf("Wait done %d, %d\n", sig_mask, signals & sig_mask);
-	if (signals & sig_mask)
+//	printf("Wait done %d, %d\n", sig_mask, signals & sig_mask);
+	if (TRUE) // signals & sig_mask)
 	{
 		struct IntuiMessage *msg;
-		while ((msg = (struct IntuiMessage *)GetMsg(data->window->UserPort)) != NULL)
+		while ((msg = (struct IntuiMessage *)GT_GetIMsg(data->window->UserPort)) != NULL)
 		{
 			switch (msg->Class)
 			{
 				case IDCMP_CLOSEWINDOW:
 					close_window = true;
 					break;
+
+				case IDCMP_REFRESHWINDOW:
+					GT_BeginRefresh(data->window);
+					/* custom rendering, if any, goes here */
+					GT_EndRefresh(data->window, TRUE);
+					break;
 			}
-			ReplyMsg((struct Message *)msg);
+			GT_ReplyIMsg((struct IntuiMessage *)msg);
 		}
 	}
 

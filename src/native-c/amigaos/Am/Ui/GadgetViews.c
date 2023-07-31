@@ -25,3 +25,18 @@ function_result Am_Ui_GadgetViews__native_release_0(aobject * const this)
 __exit: ;
 	return __result;
 };
+
+function_result Am_Ui_GadgetViews_layoutNative_0(aobject * gadgetView, short x, short y, unsigned short width, unsigned short height)
+{
+	function_result __result = { .has_return_value = false };
+	bool __returning = false;
+	if (gadgetView != NULL) {
+		__increase_reference_count(gadgetView);
+	}
+__exit: ;
+	if (gadgetView != NULL) {
+		__decrease_reference_count(gadgetView);
+	}
+	return __result;
+};
+

@@ -39,6 +39,7 @@ namespace Am.Ui
             "Ui started".println()
             var w = Window.openWindow(150US, 150US, null)
 
+
             var b = new Button()
             "button created".println()
             w.setRootView(b)

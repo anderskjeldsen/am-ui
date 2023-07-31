@@ -49,8 +49,8 @@ namespace Am.Ui
         private var viewContext: ViewContext
         var x: Short
         var y: Short
-        var width: Short
-        var height: Short
+        var width: UShort
+        var height: UShort
 
         fun getViewContext(): ViewContext {
             return this.viewContext
@@ -74,6 +74,14 @@ namespace Am.Ui
         fun paintAll(graphics: Graphics) {
             this.paint(graphics)
         }
+
+        fun layout(x: Short, y: Short, width: UShort, height: UShort) {
+            this.x = x
+            this.y = y
+            this.width = width
+            this.height = height
+        }
+
     }
 
     class ViewGroup : View {
@@ -118,7 +126,9 @@ namespace Am.Ui
         }
 
         fun layoutChildren() {
-
+            each(this.children, c) {
+                // Do nothing
+            }
         }
     }
 
@@ -132,10 +142,17 @@ namespace Am.Ui
 
     native class GadgetViews {
         import Am.Lang
+
+        native static fun layoutNative(gadgetView: GadgetView, x: Short, y: Short, width: UShort, height: UShort)
     }
 
     class GadgetView : View {
         import Am.Lang
+
+        override fun layout(x: Short, y: Short, width: UShort, height: UShort) {
+            base.layout(x, y, width, height)
+            GadgetViews.layoutNative(this, x, y, width, height)
+        }
     }
 
     native class Button : GadgetView {
@@ -164,7 +181,7 @@ namespace Am.Ui
             base.paint(graphics)
 
             graphics.setForegroundPen(1UB)
-            graphics.drawLine(0S, 0S, this.width, this.height)
+            graphics.drawLine(0S, 0S, this.width.toShort(), this.height.toShort())
         }
 
     }
