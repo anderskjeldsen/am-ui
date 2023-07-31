@@ -28,7 +28,7 @@ namespace Am.Ui
         }
     }
 
-    native class Startup {
+    class Startup {
         import Am.Lang
         import Am.Threading
 
