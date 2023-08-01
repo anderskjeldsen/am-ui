@@ -149,9 +149,9 @@ function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHO
 		WA_Height, height,
 		WA_DetailPen, 1,
 		WA_BlockPen, 2,
-		WA_IDCMP, IDCMP_CLOSEWINDOW | IDCMP_GADGETUP | MENUPICK | MOUSEBUTTONS | REFRESHWINDOW | MOUSEMOVE | IDCMP_NEWSIZE,
-		WA_Flags, WFLG_SMART_REFRESH | WFLG_SIZEGADGET | WFLG_ACTIVATE | WFLG_RMBTRAP | WFLG_DRAGBAR | WFLG_DEPTHGADGET | WFLG_CLOSEGADGET, //WFLG_BORDERLESS WFLG_BACKDROP
-		WA_Gadgets, (ULONG) data->context_gadget,
+		WA_IDCMP, IDCMP_CLOSEWINDOW | IDCMP_GADGETUP | MENUPICK | MOUSEBUTTONS | REFRESHWINDOW | MOUSEMOVE | IDCMP_NEWSIZE | IDCMP_MOUSEBUTTONS,
+		WA_Flags, WFLG_SIZEGADGET | WFLG_ACTIVATE | WFLG_RMBTRAP | WFLG_DRAGBAR | WFLG_DEPTHGADGET | WFLG_CLOSEGADGET, //WFLG_BORDERLESS WFLG_BACKDROP
+		WA_Gadgets, 0, // (ULONG) data->context_gadget,
 		WA_Title, (ULONG) "Hello",
 		WA_MinWidth, 0,
 		WA_MaxWidth, 1000,
@@ -172,13 +172,12 @@ function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHO
 		goto __exit;
 	}
 
-	GT_RefreshWindow(window, NULL);
-
-	data->window = window;
-
 	Am_Ui_Window_setBorder_0(this, window->BorderLeft, window->BorderTop, window->BorderRight, window->BorderBottom);
 	Am_Ui_Window_onResize_0(this, window->LeftEdge, window->TopEdge, window->Width, window->Height);
 
+	GT_RefreshWindow(window, NULL);
+
+	data->window = window;
 
 __exit: ;
 	if (this != NULL) {
@@ -225,6 +224,7 @@ function_result Am_Ui_Window_handleInput_0(aobject * const this)
 	printf("Wait done %d\n", signals);
 
 	BOOL close_window = FALSE;
+	BOOL repaint = FALSE;
 //	printf("Wait done %d, %d\n", sig_mask, signals & sig_mask);
 	if (TRUE) // signals & sig_mask)
 	{
@@ -246,13 +246,27 @@ function_result Am_Ui_Window_handleInput_0(aobject * const this)
 					break;
 				case IDCMP_NEWSIZE:
 					printf("Resize %dx%d\n", win->Width, win->Height);
-					Am_Ui_Window_setBorder_0(this, win->BorderLeft, win->BorderTop, win->BorderRight, win->BorderBottom);
+//					Am_Ui_Window_setBorder_0(this, win->BorderLeft, win->BorderTop, win->BorderRight, win->BorderBottom);
 					Am_Ui_Window_onResize_0(this, win->LeftEdge, win->TopEdge, win->Width, win->Height);
-					GT_RefreshWindow(win, NULL);
+//					GT_RefreshWindow(win, NULL);
+					repaint = TRUE;
+					break;
+				case IDCMP_MOUSEBUTTONS:
+					printf("Mouse click %d\n", msg->Code);
+					if (msg->Code == IECODE_RBUTTON) // Check for right mouse button
+                    {
+						Am_Ui_Window_onMouseClick_0(this, 2, msg->MouseX, msg->MouseY);
+                    } else if (msg->Code == IECODE_LBUTTON) {
+						Am_Ui_Window_onMouseClick_0(this, 1, msg->MouseX, msg->MouseY);
+					}
 					break;
 			}
 			GT_ReplyIMsg((struct IntuiMessage *)msg);
 		}
+	}
+
+	if (repaint) {
+		Am_Ui_Window_paint_0(this);
 	}
 
 	if (close_window) {

@@ -55,6 +55,7 @@ namespace Am.Ui
             w.graphics = new ViewContextGraphics(vc)
             w.x = x
             w.y = y
+            w.border = new Border(0S, 0S, 0S, 0S)
             w.width = width
             w.height = height
             w.screen = screen
@@ -70,17 +71,18 @@ namespace Am.Ui
             if (this.refreshRequested) {
                 this.refreshRequested = false
                 "Win refresh".println()
-                this.refresh()
+                this.paint()
+//                this.refresh()
             }
         }
 
         private fun paint() {
             "paint".println()
             if (this.rootView != null) {
-                this.graphics.translate(this.border.left, this.border.top)
+//                this.graphics.translate(this.border.left, this.border.top)
                 ("X offset: " + this.graphics.xOffset.toString()).println()
-                this.rootView.paint(this.graphics)
-                this.graphics.translate(-this.border.left, -this.border.top)
+                this.rootView.paintAll(this.graphics)
+//                this.graphics.translate(-this.border.left, -this.border.top)
             }
         }
 
@@ -100,9 +102,15 @@ namespace Am.Ui
         fun layout() {
             if (this.rootView != null) {
                 var b = this.border
-                ("border top" + b.top.toString()).println()
+//                ("border top" + b.top.toString()).println()
                 this.rootView.layout(b.left, b.top, this.width - (b.left + b.right).toUShort(), this.height - (b.top + b.bottom).toUShort())
             }
+        }
+
+        fun onMouseClick(button: UByte, x: Short, y: Short) {
+//            var lx = this.border.left
+            ("Window click: " + button.toString() + " " + x.toString() + " " + y.toString()).println()
+            this.rootView?.onMouseClick(button, x - this.border.left, y - this.border.top)
         }
 
         native fun handleInput()

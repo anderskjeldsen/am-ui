@@ -39,13 +39,25 @@ namespace Am.Ui
             "Ui started".println()
             var w = Window.openWindow(20S, 20S, 150US, 150US, null)
 
-            var b = new TestButton()
+            var vStack = new VStack()
+
+            var hStack = new HStack()
+            hStack.addChild(new TestButton())
+            hStack.addChild(new TestButton())
+            hStack.addChild(new TestButton())
+
+            vStack.addChild(hStack)
+            vStack.addChild(new TestButton())
+            vStack.addChild(new TestButton())
+            w.setRootView(vStack)
+
+/*            var b = new TestButton()
             "button created".println()
             w.setRootView(b)
+            */
             w.layout()
             w.requestRefresh()
             w.attemptRefresh()
-            "root view set".println()
 
             while(w.isOpen()) {
                 w.handleInput()

@@ -86,7 +86,9 @@ namespace Am.Ui
         }
 
         fun paintAll(graphics: Graphics) {
+            graphics.translate(this.x, this.y)
             this.paint(graphics)
+            graphics.translate(-this.x, -this.y)
         }
 
         fun layout(x: Short, y: Short, width: UShort, height: UShort) {
@@ -94,7 +96,31 @@ namespace Am.Ui
             this.y = y
             this.width = width
             this.height = height
+            ("Layout " + x.toString() + "," + y.toString() + "," + width.toString() + "," + height.toString()).println()
         }
+
+        fun contains(x: Short, y: Short): Bool {
+//            ("contains " + x.toString() + "," + y.toString() + " in " + this.width.toString() + ", " + this.height.toString()).println()
+            return (x >= 0S) && (x < this.width) && (y >= 0S) && (y < this.height)
+        }
+
+        fun findViewAt(x: Short, y: Short): View {
+            if (this.contains(x, y)) {
+                return this
+            }
+            return null
+        }
+
+        // returns true if consumed
+        fun onMouseClick(button: UByte, x: Short, y: Short): Bool {
+//            ("View click: " + button.toString() + " " + x.toString() + " " + y.toString()).println()
+
+            if (this.contains(x, y)) {
+                return true
+            }
+            return false
+        }
+
 
     }
 
@@ -123,12 +149,8 @@ namespace Am.Ui
         }
 
         fun paintChildren(graphics: Graphics) {
-            var i = 0
-            var cl = this.children
-            while(i < cl.size) {
-                var c = cl.get(i)
+            each(this.children, c) {
                 c.paintAll(graphics)
-                i++
             }
         }
 
@@ -144,6 +166,81 @@ namespace Am.Ui
                 // Do nothing
             }
         }
+
+        override fun layout(x: Short, y: Short, width: UShort, height: UShort) {
+            base.layout(x, y, width, height)
+            this.layoutChildren()
+        }
+
+        override fun findViewAt(x: Short, y: Short): View {
+            if (this.contains(x, y)) {
+                each(this.children, c) {
+                    var lx = x - c.x
+                    var ly = y - c.y
+
+                    var v = c.findViewAt(lx, ly)
+                    if (v != null) {
+                        return v
+                    }
+                }
+                return this
+            }
+            return null
+        }
+
+        override fun onMouseClick(button: UByte, x: Short, y: Short): Bool {
+            if (this.contains(x, y)) {
+                each(this.children, c) {
+                    var lx = x - c.x
+                    var ly = y - c.y
+
+                    var consumed = c.onMouseClick(button, lx, ly)
+                    if (consumed) {
+                        return consumed
+                    }
+                }
+            }
+            return false
+        }
+
+
+    }
+
+    class VStack : ViewGroup {
+        import Am.Lang
+        import Am.Collections
+
+        override fun layoutChildren() {
+            var left = 0S
+            var y = 0S
+//            var right = this.width.toShort() - 1S
+            var height = this.height
+            var childHeight = height / this.children.size.toUShort()
+
+            each(this.children, c) {
+                c.layout(left, y, this.width, childHeight)
+                y = y + childHeight.toShort()
+            }
+        }
+
+    }
+
+    class HStack : ViewGroup {
+        import Am.Lang
+        import Am.Collections
+
+        override fun layoutChildren() {
+            var x = 0S
+            var y = 0S
+            var width = this.width
+            var childWidth = width / this.children.size.toUShort()
+
+            each(this.children, c) {
+                c.layout(x, y, childWidth, this.height)
+                x = x + childWidth.toShort()
+            }
+        }
+
     }
 
     class Font(private var name: String) {
@@ -194,18 +291,29 @@ namespace Am.Ui
         override fun paint(graphics: Graphics) {
             base.paint(graphics)
 
-//            graphics.setBackgroundPen(2UB)
-//            graphics.eraseRect(0S, 0S, this.width.toShort(), this.height.toShort())
+            var x1 = 0S
+            var x2 = this.width.toShort() - 1S
+            var y1 = 0S
+            var y2 = this.height.toShort() - 1S
 
-            graphics.setForegroundPen(2UB)
-            graphics.fillRect(0S, 0S, this.width.toShort(), this.height.toShort())
+            graphics.setForegroundPen(3UB)
+            graphics.fillRect(x1, y1, x2, y2)
             graphics.setForegroundPen(1UB)
-            graphics.drawLine(0S, 2S, this.width.toShort(), 2S)
-            /*
-            graphics.drawLine(this.width.toShort(), 0S, this.width.toShort(), this.height.toShort())
-            graphics.drawLine(0S, this.height.toShort(), this.width.toShort(), this.height.toShort())
-            graphics.drawLine(0S, 0S, 0S, this.height.toShort())
-            */
+
+            graphics.drawLine(x1, y1, x2, y1)
+            graphics.drawLine(x2, y1, x2, y2)
+            graphics.drawLine(x1, y2, x2, y2)
+            graphics.drawLine(x1, y1, x1, y2)
+        }
+
+        override fun onMouseClick(button: UByte, x: Short, y: Short): Bool {
+//            ("Button click: " + button.toString() + " " + x.toString() + " " + y.toString()).println()
+
+            if (this.contains(x, y)) {
+//                "Button clicked".println()
+                return true
+            }
+            return false
         }
 
     }
