@@ -12,7 +12,10 @@ namespace Am.Ui
         }
 
         abstract fun setForegroundPen(pen: UByte)
+        abstract fun setBackgroundPen(pen: UByte)
         abstract fun drawLine(x: Short, y: Short, x2: Short, y2: Short)
+        abstract fun fillRect(x: Short, y: Short, x2: Short, y2: Short)
+        abstract fun eraseRect(x: Short, y: Short, x2: Short, y2: Short)
     }
 
     interface ViewContext {
@@ -25,8 +28,15 @@ namespace Am.Ui
 
     native class ViewContextGraphics(var viewContext: ViewContext) : Graphics {
         import Am.Lang
+        private fun getWindow(): Window {
+            return this.viewContext.getWindow()
+        }
         native override fun setForegroundPen(pen: UByte)
+        native override fun setBackgroundPen(pen: UByte)
         native override fun drawLine(x: Short, y: Short, x2: Short, y2: Short)
+        native override fun eraseRect(x: Short, y: Short, x2: Short, y2: Short)
+        native override fun fillRect(x: Short, y: Short, x2: Short, y2: Short)
+
     }
 
 
@@ -184,8 +194,18 @@ namespace Am.Ui
         override fun paint(graphics: Graphics) {
             base.paint(graphics)
 
+//            graphics.setBackgroundPen(2UB)
+//            graphics.eraseRect(0S, 0S, this.width.toShort(), this.height.toShort())
+
+            graphics.setForegroundPen(2UB)
+            graphics.fillRect(0S, 0S, this.width.toShort(), this.height.toShort())
             graphics.setForegroundPen(1UB)
-            graphics.drawLine(0S, 0S, this.width.toShort(), this.height.toShort())
+            graphics.drawLine(0S, 2S, this.width.toShort(), 2S)
+            /*
+            graphics.drawLine(this.width.toShort(), 0S, this.width.toShort(), this.height.toShort())
+            graphics.drawLine(0S, this.height.toShort(), this.width.toShort(), this.height.toShort())
+            graphics.drawLine(0S, 0S, 0S, this.height.toShort())
+            */
         }
 
     }

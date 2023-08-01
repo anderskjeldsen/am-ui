@@ -51,6 +51,7 @@ function_result Am_Ui_GadgetViews_layoutNative_0(aobject * gadgetView, short x, 
 	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
 	gadget_view_holder *gvh = (gadget_view_holder *) gadgetView->object_properties.class_object_properties.object_data.value.custom_value;
 
+/*
 	struct TagItem tags[] =
 	{
 		{GA_Left, x},
@@ -59,8 +60,19 @@ function_result Am_Ui_GadgetViews_layoutNative_0(aobject * gadgetView, short x, 
 		{GA_Height, height},   // Set the new height in pixels
 		{TAG_DONE}                // Marks the end of the tag list
 	};
+*/
 
-	SetGadgetAttrsA(gvh->gadget, window_data->window, NULL, tags);
+	printf("Old gadget size %dx%d\n", gvh->gadget->Width, gvh->gadget->Height);
+	printf("SetGadgetAttrsA %d,%d %dx%d\n", x, y, width, height);
+	UWORD pos = RemoveGList(window_data->window, gvh->gadget, gvh->gadget_num);
+	gvh->gadget->LeftEdge = x;
+	gvh->gadget->TopEdge = y;
+	gvh->gadget->Width = width;
+	gvh->gadget->Height = height;
+//	SetGadgetAttrsA(gvh->gadget, window_data->window, NULL, tags);
+	printf("New gadget size %dx%d\n", gvh->gadget->Width, gvh->gadget->Height);
+	AddGList(window_data->window, gvh->gadget, pos, 1, NULL);
+	RefreshGList(gvh->gadget, window_data->window, NULL, gvh->gadget_num);
 __exit: ;
 	if (gadgetView != NULL) {
 		__decrease_reference_count(gadgetView);

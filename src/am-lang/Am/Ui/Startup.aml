@@ -39,10 +39,12 @@ namespace Am.Ui
             "Ui started".println()
             var w = Window.openWindow(20S, 20S, 150US, 150US, null)
 
-
-            var b = new Button()
+            var b = new TestButton()
             "button created".println()
             w.setRootView(b)
+            w.layout()
+            w.requestRefresh()
+            w.attemptRefresh()
             "root view set".println()
 
             while(w.isOpen()) {

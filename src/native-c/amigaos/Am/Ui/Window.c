@@ -95,7 +95,7 @@ __exit: ;
 	return __result;
 };
 
-function_result Am_Ui_Window_open_0(aobject * const this, USHORT width, USHORT height, aobject * screen) //, aobject * screen)
+function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHORT width, USHORT height, aobject * screen) //, aobject * screen)
 {
 	function_result __result = { .has_return_value = false };
 	bool __returning = false;
@@ -143,20 +143,20 @@ function_result Am_Ui_Window_open_0(aobject * const this, USHORT width, USHORT h
 	printf("context gadget %p\n", data->context_gadget);
 
 	struct TagItem tags[] = {
-		WA_Left, 0,
-		WA_Top, 0,
+		WA_Left, x,
+		WA_Top, y,
 		WA_Width, width,
 		WA_Height, height,
 		WA_DetailPen, 1,
 		WA_BlockPen, 2,
-		WA_IDCMP, IDCMP_CLOSEWINDOW | IDCMP_GADGETUP | MENUPICK | MOUSEBUTTONS | REFRESHWINDOW | MOUSEMOVE,
-		WA_Flags, WFLG_SMART_REFRESH | WFLG_ACTIVATE | WFLG_RMBTRAP | WFLG_DRAGBAR | WFLG_DEPTHGADGET | WFLG_CLOSEGADGET, //WFLG_BORDERLESS WFLG_BACKDROP
+		WA_IDCMP, IDCMP_CLOSEWINDOW | IDCMP_GADGETUP | MENUPICK | MOUSEBUTTONS | REFRESHWINDOW | MOUSEMOVE | IDCMP_NEWSIZE,
+		WA_Flags, WFLG_SMART_REFRESH | WFLG_SIZEGADGET | WFLG_ACTIVATE | WFLG_RMBTRAP | WFLG_DRAGBAR | WFLG_DEPTHGADGET | WFLG_CLOSEGADGET, //WFLG_BORDERLESS WFLG_BACKDROP
 		WA_Gadgets, (ULONG) data->context_gadget,
 		WA_Title, (ULONG) "Hello",
-		WA_MinWidth, width,
-		WA_MaxWidth, width,
-		WA_MinHeight, height,
-		WA_MaxHeight, height,
+		WA_MinWidth, 0,
+		WA_MaxWidth, 1000,
+		WA_MinHeight, 0,
+		WA_MaxHeight, 1000,
 		WA_Checkmark, (ULONG) NULL,
 		WA_ScreenTitle, (ULONG) NULL,
 		WA_SuperBitMap, (ULONG) NULL,
@@ -175,6 +175,10 @@ function_result Am_Ui_Window_open_0(aobject * const this, USHORT width, USHORT h
 	GT_RefreshWindow(window, NULL);
 
 	data->window = window;
+
+	Am_Ui_Window_setBorder_0(this, window->BorderLeft, window->BorderTop, window->BorderRight, window->BorderBottom);
+	Am_Ui_Window_onResize_0(this, window->LeftEdge, window->TopEdge, window->Width, window->Height);
+
 
 __exit: ;
 	if (this != NULL) {
@@ -234,11 +238,15 @@ function_result Am_Ui_Window_handleInput_0(aobject * const this)
 					break;
 
 				case IDCMP_REFRESHWINDOW:
+					printf("Refresh\n");
 					GT_BeginRefresh(window_data->window);
+					Am_Ui_Window_paint_0(this);
 					/* custom rendering, if any, goes here */
 					GT_EndRefresh(window_data->window, TRUE);
 					break;
 				case IDCMP_NEWSIZE:
+					printf("Resize %dx%d\n", win->Width, win->Height);
+					Am_Ui_Window_setBorder_0(this, win->BorderLeft, win->BorderTop, win->BorderRight, win->BorderBottom);
 					Am_Ui_Window_onResize_0(this, win->LeftEdge, win->TopEdge, win->Width, win->Height);
 					GT_RefreshWindow(win, NULL);
 					break;
@@ -284,6 +292,7 @@ function_result Am_Ui_Window_refresh_0(aobject * const this)
 
 	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
 	GT_RefreshWindow(data->window, NULL);
+//	SetAttrs(data->window, WA_Damage, WAD_REFRESH, TAG_DONE);
 
 __exit: ;
 	if (this != NULL) {

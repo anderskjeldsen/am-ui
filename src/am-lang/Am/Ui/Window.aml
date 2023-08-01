@@ -1,6 +1,16 @@
 
 namespace Am.Ui 
 {
+    class Border(
+        var left: Short,
+        var top: Short,
+        var right: Short,
+        var bottom: Short,
+    ) {
+        import Am.Lang
+
+    }
+
     native class Window {
         import Am.Lang
 
@@ -12,9 +22,15 @@ namespace Am.Ui
         private var screen: Screen
         private var viewContext: ViewContext
         private var refreshRequested: Bool
+        private var graphics: ViewContextGraphics
+        private var border: Border
 
         fun getRootView(): View {
             return this.rootView
+        }
+
+        private fun setBorder(left: Short, top: Short, right: Short, bottom: Short) {
+            this.border = new Border(left, top, right, bottom)
         }
 
         fun setRootView(view: View) {
@@ -36,12 +52,13 @@ namespace Am.Ui
             var vc = new ViewContextImpl()
             vc.setWindow(w)
             w.viewContext = vc
+            w.graphics = new ViewContextGraphics(vc)
             w.x = x
             w.y = y
             w.width = width
             w.height = height
             w.screen = screen
-            w.open(width, height, screen)
+            w.open(x, y, width, height, screen)
             return w
         }
 
@@ -52,7 +69,18 @@ namespace Am.Ui
         fun attemptRefresh() {
             if (this.refreshRequested) {
                 this.refreshRequested = false
+                "Win refresh".println()
                 this.refresh()
+            }
+        }
+
+        private fun paint() {
+            "paint".println()
+            if (this.rootView != null) {
+                this.graphics.translate(this.border.left, this.border.top)
+                ("X offset: " + this.graphics.xOffset.toString()).println()
+                this.rootView.paint(this.graphics)
+                this.graphics.translate(-this.border.left, -this.border.top)
             }
         }
 
@@ -61,8 +89,19 @@ namespace Am.Ui
             this.y = y
             this.width = width
             this.height = height
+            this.layout()
+            /*
             if (this.rootView != null) {
                 this.rootView.layout(x, y, width, height)
+            }
+            */
+        }
+
+        fun layout() {
+            if (this.rootView != null) {
+                var b = this.border
+                ("border top" + b.top.toString()).println()
+                this.rootView.layout(b.left, b.top, this.width - (b.left + b.right).toUShort(), this.height - (b.top + b.bottom).toUShort())
             }
         }
 
@@ -70,7 +109,7 @@ namespace Am.Ui
         native fun isOpen(): Bool
         private native fun refresh()
 
-        private native fun open(width: UShort, height: UShort, screen: Screen)
+        private native fun open(x: Short, y: Short, width: UShort, height: UShort, screen: Screen)
         native fun close()
 
     }
