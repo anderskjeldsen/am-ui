@@ -41,28 +41,6 @@ __exit: ;
 	return __result;
 };
 
-ULONG gadget_count(struct Gadget *gadget) {
-	ULONG c = 0;
-	while(gadget != NULL) {
-		c++;
-		gadget = gadget->NextGadget;
-	}
-	return c;
-}
-
-struct Gadget * last_gadget(struct Gadget *gadget) {
-	while(gadget->NextGadget != NULL) {
-		gadget = gadget->NextGadget;
-	}
-	return gadget;
-}
-
-void debug_gadget(struct Gadget *gadget) {
-	printf("Gadget %d", gadget->GadgetID);
-	if (gadget->NextGadget != NULL) {
-		debug_gadget(gadget->NextGadget);
-	}
-}
 
 function_result Am_Ui_Button_attachButton_0(aobject * const this, aobject * window)
 {

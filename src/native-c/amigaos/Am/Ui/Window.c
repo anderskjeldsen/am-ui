@@ -213,8 +213,9 @@ function_result Am_Ui_Window_handleInput_0(aobject * const this)
 		__increase_reference_count(this);
 	}
 
-	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
-	ULONG sig_mask = 1L << data->window->UserPort->mp_SigBit;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
+	struct Window * win = window_data->window;
+	ULONG sig_mask = 1L << window_data->window->UserPort->mp_SigBit;
 	printf("Wait %d\n", sig_mask);
 	ULONG signals = Wait(sig_mask);
 	printf("Wait done %d\n", signals);
@@ -224,7 +225,7 @@ function_result Am_Ui_Window_handleInput_0(aobject * const this)
 	if (TRUE) // signals & sig_mask)
 	{
 		struct IntuiMessage *msg;
-		while ((msg = (struct IntuiMessage *)GT_GetIMsg(data->window->UserPort)) != NULL)
+		while ((msg = (struct IntuiMessage *)GT_GetIMsg(window_data->window->UserPort)) != NULL)
 		{
 			switch (msg->Class)
 			{
@@ -233,9 +234,13 @@ function_result Am_Ui_Window_handleInput_0(aobject * const this)
 					break;
 
 				case IDCMP_REFRESHWINDOW:
-					GT_BeginRefresh(data->window);
+					GT_BeginRefresh(window_data->window);
 					/* custom rendering, if any, goes here */
-					GT_EndRefresh(data->window, TRUE);
+					GT_EndRefresh(window_data->window, TRUE);
+					break;
+				case IDCMP_NEWSIZE:
+					Am_Ui_Window_onResize_0(this, win->LeftEdge, win->TopEdge, win->Width, win->Height);
+					GT_RefreshWindow(win, NULL);
 					break;
 			}
 			GT_ReplyIMsg((struct IntuiMessage *)msg);
@@ -262,6 +267,24 @@ function_result Am_Ui_Window_isOpen_0(aobject * const this)
 	}
 
 	__result.return_value.value.bool_value = this->object_properties.class_object_properties.object_data.value.custom_value != NULL;
+__exit: ;
+	if (this != NULL) {
+		__decrease_reference_count(this);
+	}
+	return __result;
+};
+
+function_result Am_Ui_Window_refresh_0(aobject * const this)
+{
+	function_result __result = { .has_return_value = false };
+	bool __returning = false;
+	if (this != NULL) {
+		__increase_reference_count(this);
+	}
+
+	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
+	GT_RefreshWindow(data->window, NULL);
+
 __exit: ;
 	if (this != NULL) {
 		__decrease_reference_count(this);

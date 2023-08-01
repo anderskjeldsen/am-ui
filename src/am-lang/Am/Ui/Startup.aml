@@ -37,7 +37,7 @@ namespace Am.Ui
         static fun main() {
 
             "Ui started".println()
-            var w = Window.openWindow(150US, 150US, null)
+            var w = Window.openWindow(20S, 20S, 150US, 150US, null)
 
 
             var b = new Button()

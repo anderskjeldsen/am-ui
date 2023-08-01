@@ -5,10 +5,13 @@ namespace Am.Ui
         import Am.Lang
 
         private var rootView: View
+        private var x: Short
+        private var y: Short
         private var width: UShort
         private var height: UShort
         private var screen: Screen
         private var viewContext: ViewContext
+        private var refreshRequested: Bool
 
         fun getRootView(): View {
             return this.rootView
@@ -28,11 +31,13 @@ namespace Am.Ui
             }
         }
 
-        static fun openWindow(width: UShort, height: UShort, screen: Screen): Window {
+        static fun openWindow(x: Short, y: Short, width: UShort, height: UShort, screen: Screen): Window {
             var w = new Window()
             var vc = new ViewContextImpl()
             vc.setWindow(w)
             w.viewContext = vc
+            w.x = x
+            w.y = y
             w.width = width
             w.height = height
             w.screen = screen
@@ -40,8 +45,30 @@ namespace Am.Ui
             return w
         }
 
+        fun requestRefresh() {
+            this.refreshRequested = true
+        }
+
+        fun attemptRefresh() {
+            if (this.refreshRequested) {
+                this.refreshRequested = false
+                this.refresh()
+            }
+        }
+
+        private fun onResize(x: Short, y: Short, width: UShort, height: UShort) {
+            this.x = x
+            this.y = y
+            this.width = width
+            this.height = height
+            if (this.rootView != null) {
+                this.rootView.layout(x, y, width, height)
+            }
+        }
+
         native fun handleInput()
         native fun isOpen(): Bool
+        private native fun refresh()
 
         private native fun open(width: UShort, height: UShort, screen: Screen)
         native fun close()

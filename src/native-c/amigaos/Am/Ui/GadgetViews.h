@@ -12,3 +12,6 @@ struct _gadget_view_holder {
     ULONG gadget_num;
 };
 
+ULONG gadget_count(struct Gadget *gadget);
+struct Gadget * last_gadget(struct Gadget *gadget);
+void debug_gadget(struct Gadget *gadget);
