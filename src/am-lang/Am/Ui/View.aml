@@ -61,6 +61,53 @@ namespace Am.Ui
         var y: Short
         var width: UShort
         var height: UShort
+        var padding: Padding = new Padding(0S, 0S, 0S, 0S)
+
+        fun minWidth(): Short {
+            return 0S
+        }
+
+        fun minHeight(): Short {
+            return 0S
+        }
+
+        fun growX(): UByte {
+            return 0UB
+        }
+
+        fun growY(): UByte {
+            return 0UB
+        }
+
+        fun innerX(): Short {
+            return this.x - this.padding.left
+        }
+
+        fun innerY(): Short {
+            return this.y - this.padding.top
+        }
+
+        fun innerWidth(): Short {
+            return this.width.toShort() - this.padding.left - this.padding.right
+        }
+
+        fun innerHeight(): Short {
+            return this.height.toShort() - this.padding.top - this.padding.bottom
+        }
+
+        fun setPadding(padding: Short) {
+            this.padding.left = padding
+            this.padding.top = padding
+            this.padding.right = padding
+            this.padding.bottom = padding
+        }
+
+        fun setPadding(horizontal: Short, vertical: Short) {
+            this.padding.left = horizontal
+            this.padding.top = vertical
+            this.padding.right = horizontal
+            this.padding.bottom = vertical
+        }
 
         fun getViewContext(): ViewContext {
             return this.viewContext
@@ -86,9 +133,11 @@ namespace Am.Ui
         }
 
         fun paintAll(graphics: Graphics) {
-            graphics.translate(this.x, this.y)
+            var ix = this.innerX()
+            var iy = this.innerY()
+            graphics.translate(ix, iy)
             this.paint(graphics)
-            graphics.translate(-this.x, -this.y)
+            graphics.translate(-ix, -iy)
         }
 
         fun layout(x: Short, y: Short, width: UShort, height: UShort) {
@@ -96,7 +145,7 @@ namespace Am.Ui
             this.y = y
             this.width = width
             this.height = height
-            ("Layout " + x.toString() + "," + y.toString() + "," + width.toString() + "," + height.toString()).println()
+//            ("Layout " + x.toString() + "," + y.toString() + "," + width.toString() + "," + height.toString()).println()
         }
 
         fun contains(x: Short, y: Short): Bool {
@@ -155,10 +204,12 @@ namespace Am.Ui
         }
 
         override fun paintAll(graphics: Graphics) {
-            graphics.translate(this.x, this.y)
+            var ix = this.innerX()
+            var iy = this.innerY()
+            graphics.translate(ix, iy)
             this.paint(graphics)
             this.paintChildren(graphics)
-            graphics.translate(-this.x, -this.y)
+            graphics.translate(-ix, -iy)
         }
 
         fun layoutChildren() {
@@ -206,21 +257,63 @@ namespace Am.Ui
 
     }
 
-    class VStack : ViewGroup {
+    class VStack(var spacing: Short) : ViewGroup {
         import Am.Lang
         import Am.Collections
 
         override fun layoutChildren() {
-            var left = 0S
-            var y = 0S
-//            var right = this.width.toShort() - 1S
-            var height = this.height
-            var childHeight = height / this.children.size.toUShort()
+            var left = this.padding.left
+            var y = this.padding.top
+            var height = this.innerHeight()
+            var minHeight = this.innerMinHeight()
+            var restHeight = height - minHeight
+            var sumGrowY = this.sumGrowY()
+            var innerWidth = this.innerWidth() 
+            // this.innerMinWidth()
 
             each(this.children, c) {
-                c.layout(left, y, this.width, childHeight)
-                y = y + childHeight.toShort()
+                var ch = c.minHeight() + ((c.growY().toInt() * restHeight.toInt()) / sumGrowY.toInt()).toShort()
+                c.layout(left, y, innerWidth.toUShort(), ch.toUShort())
+                y = y + ch + this.spacing
             }
+        }
+
+        fun innerMinHeight(): Short {
+            var h = 0S
+            each(this.children, c) {
+                if (h > 0S) {
+                    h = h + this.spacing
+                }
+                h = h + c.minHeight()
+            }
+            return h
+        }
+
+        override fun minHeight(): Short {
+            return this.innerMinHeight() + this.padding.top + this.padding.bottom
+        }
+
+        fun innerMinWidth(): Short {
+            var minW = 0S
+            each(this.children, c) {
+                var cMinW = c.minWidth()
+                if (cMinW > minW) {
+                    minW = cMinW
+                }
+            }
+            return minW
+        }
+
+        override fun minWidth(): Short {
+            return this.innerMinWidth() + this.padding.left + this.padding.right
+        }
+
+        fun sumGrowY(): Short {
+            var grow = 0S
+            each(this.children, c) {
+                grow = grow + c.growY().toShort()
+            }
+            return grow
         }
 
     }
@@ -274,9 +367,7 @@ namespace Am.Ui
 
         override fun onAttach(viewContext: ViewContext) {
             base.onAttach(viewContext)
-            "attachButton...".println()
             this.attachButton(viewContext.getWindow())
-            "attachButton...done".println()
         }
 
         override fun onDetach() {
@@ -285,16 +376,32 @@ namespace Am.Ui
         }
     }
 
-    class TestButton : View {
+    class TestButton(var grow: UByte) : View {
         import Am.Lang
+
+        override fun growX(): UByte {
+            return this.grow
+        }
+
+        override fun growY(): UByte {
+            return this.grow            
+        }
+
+        override fun minHeight(): Short {
+            return 30S
+        }
+
+        override fun minWidth(): Short {
+            return 30S
+        }
 
         override fun paint(graphics: Graphics) {
             base.paint(graphics)
 
             var x1 = 0S
-            var x2 = this.width.toShort() - 1S
+            var x2 = this.innerWidth() - 1S
             var y1 = 0S
-            var y2 = this.height.toShort() - 1S
+            var y2 = this.innerHeight() - 1S
 
             graphics.setForegroundPen(3UB)
             graphics.fillRect(x1, y1, x2, y2)

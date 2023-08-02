@@ -39,16 +39,21 @@ namespace Am.Ui
             "Ui started".println()
             var w = Window.openWindow(20S, 20S, 150US, 150US, null)
 
-            var vStack = new VStack()
+            var vStack = new VStack(5S)
+            vStack.setPadding(5S)
 
+/*
             var hStack = new HStack()
-            hStack.addChild(new TestButton())
-            hStack.addChild(new TestButton())
-            hStack.addChild(new TestButton())
+            hStack.addChild(new TestButton(0UB))
+            hStack.addChild(new TestButton(128UB))
+            hStack.addChild(new TestButton(255UB))
 
             vStack.addChild(hStack)
-            vStack.addChild(new TestButton())
-            vStack.addChild(new TestButton())
+ */
+ 
+            vStack.addChild(new TestButton(0UB))
+            vStack.addChild(new TestButton(128UB))
+            vStack.addChild(new TestButton(255UB))
             w.setRootView(vStack)
 
 /*            var b = new TestButton()
