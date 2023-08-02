@@ -80,19 +80,19 @@ namespace Am.Ui
         }
 
         fun innerX(): Short {
-            return this.x - this.padding.left
+            return this.x + this.padding.left
         }
 
         fun innerY(): Short {
-            return this.y - this.padding.top
+            return this.y + this.padding.top
         }
 
         fun innerWidth(): Short {
-            return this.width.toShort() - this.padding.left - this.padding.right
+            return (this.width.toShort() - (this.padding.left + this.padding.right))
         }
 
         fun innerHeight(): Short {
-            return this.height.toShort() - this.padding.top - this.padding.bottom
+            return this.height.toShort() - (this.padding.top + this.padding.bottom)
         }
 
         fun setPadding(padding: Short) {
@@ -135,6 +135,7 @@ namespace Am.Ui
         fun paintAll(graphics: Graphics) {
             var ix = this.innerX()
             var iy = this.innerY()
+            ("Inner pos " + ix.toString()).println()
             graphics.translate(ix, iy)
             this.paint(graphics)
             graphics.translate(-ix, -iy)
@@ -145,7 +146,7 @@ namespace Am.Ui
             this.y = y
             this.width = width
             this.height = height
-//            ("Layout " + x.toString() + "," + y.toString() + "," + width.toString() + "," + height.toString()).println()
+            ("Layout " + x.toString() + "," + y.toString() + "," + width.toString() + "," + height.toString()).println()
         }
 
         fun contains(x: Short, y: Short): Bool {
@@ -206,6 +207,7 @@ namespace Am.Ui
         override fun paintAll(graphics: Graphics) {
             var ix = this.innerX()
             var iy = this.innerY()
+            ("inner x for viewgroup: " + ix.toString()).println()
             graphics.translate(ix, iy)
             this.paint(graphics)
             this.paintChildren(graphics)
@@ -262,17 +264,18 @@ namespace Am.Ui
         import Am.Collections
 
         override fun layoutChildren() {
-            var left = this.padding.left
-            var y = this.padding.top
+            var left = 0S
+            var y = 0S
             var height = this.innerHeight()
             var minHeight = this.innerMinHeight()
-            var restHeight = height - minHeight
+            var unusedHeight = height - minHeight
+            var remainingHeight = restHeight
             var sumGrowY = this.sumGrowY()
             var innerWidth = this.innerWidth() 
-            // this.innerMinWidth()
+            ("inner width VStack: " + innerWidth.toString() + " vs " + this.width.toString()).println()
 
             each(this.children, c) {
-                var ch = c.minHeight() + ((c.growY().toInt() * restHeight.toInt()) / sumGrowY.toInt()).toShort()
+                var ch = c.minHeight() + ((c.growY().toInt() * unusedHeight.toInt()) / sumGrowY.toInt()).toShort()
                 c.layout(left, y, innerWidth.toUShort(), ch.toUShort())
                 y = y + ch + this.spacing
             }
@@ -402,6 +405,8 @@ namespace Am.Ui
             var x2 = this.innerWidth() - 1S
             var y1 = 0S
             var y2 = this.innerHeight() - 1S
+
+            ("Paint " + x1.toString() + " to " + x2.toString()).println()
 
             graphics.setForegroundPen(3UB)
             graphics.fillRect(x1, y1, x2, y2)
