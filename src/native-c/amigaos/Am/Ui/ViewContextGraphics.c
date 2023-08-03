@@ -194,9 +194,10 @@ function_result Am_Ui_ViewContextGraphics_drawString_0(aobject * const this, aob
 	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
 	struct RastPort *rp = window_data->window->RPort;
 	string_holder *sh = text->object_properties.class_object_properties.object_data.value.custom_value;
+    struct TextFont *textFont = rp->Font;
 
 	short tx = translated_x(this, x);
-	short ty = translated_y(this, y);
+	short ty = translated_y(this, y + textFont->tf_Baseline);
 
     Move(rp, tx, ty);
 	Text(rp, sh->string_value, sh->length);
@@ -210,3 +211,88 @@ __exit: ;
 	}
 	return __result;
 };
+
+function_result Am_Ui_ViewContextGraphics_calculateStringWidth_0(aobject * const this, aobject * text)
+{
+	function_result __result = { .has_return_value = true };
+	bool __returning = false;
+	if (this != NULL) {
+		__increase_reference_count(this);
+	}
+	if (text != NULL) {
+		__increase_reference_count(text);
+	}
+
+	aobject *window = Am_Ui_ViewContextGraphics_getWindow_0(this).return_value.value.object_value;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
+	struct RastPort *rp = window_data->window->RPort;
+	string_holder *sh = text->object_properties.class_object_properties.object_data.value.custom_value;
+
+	ULONG width = TextLength(rp, sh->string_value, sh->length);
+
+	__result.return_value.value.uint_value = width;
+
+__exit: ;
+	if (this != NULL) {
+		__decrease_reference_count(this);
+	}
+	if (text != NULL) {
+		__decrease_reference_count(text);
+	}
+	return __result;
+};
+
+function_result Am_Ui_ViewContextGraphics_getCurrentFontSize_0(aobject * const this)
+{
+	function_result __result = { .has_return_value = true };
+	bool __returning = false;
+	if (this != NULL) {
+		__increase_reference_count(this);
+	}
+
+	aobject *window = Am_Ui_ViewContextGraphics_getWindow_0(this).return_value.value.object_value;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
+	struct RastPort *rp = window_data->window->RPort;
+
+    struct TextFont *textFont = rp->Font; // this->object_properties.class_object_properties.object_data.value.custom_value;
+	if (textFont != NULL) {
+		__result.return_value.value.uchar_value = textFont->tf_YSize;		
+	} else {
+		__result.return_value.value.uchar_value = 0;
+	}
+
+__exit: ;
+	if (this != NULL) {
+		__decrease_reference_count(this);
+	}
+	return __result;
+};
+
+function_result Am_Ui_ViewContextGraphics_setFont_0(aobject * const this, aobject * font)
+{
+	function_result __result = { .has_return_value = false };
+	bool __returning = false;
+	if (this != NULL) {
+		__increase_reference_count(this);
+	}
+	if (font != NULL) {
+		__increase_reference_count(font);
+	}
+
+	aobject *window = Am_Ui_ViewContextGraphics_getWindow_0(this).return_value.value.object_value;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
+	struct RastPort *rp = window_data->window->RPort;
+
+    struct TextFont *textFont = this->object_properties.class_object_properties.object_data.value.custom_value;
+
+	SetFont(rp, textFont);
+__exit: ;
+	if (this != NULL) {
+		__decrease_reference_count(this);
+	}
+	if (font != NULL) {
+		__decrease_reference_count(font);
+	}
+	return __result;
+};
+

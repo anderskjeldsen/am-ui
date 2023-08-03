@@ -5,7 +5,7 @@ namespace Am.Ui
         import Am.Lang
         private var xOffset: Short
         private var yOffset: Short
-        var font: Font
+//        var font: Font
 
         fun translate(x: Short, y: Short) {
             this.xOffset = this.xOffset + x
@@ -19,6 +19,8 @@ namespace Am.Ui
         abstract fun eraseRect(x: Short, y: Short, x2: Short, y2: Short)
         abstract fun drawString(text: String, x: Short, y: Short)
         abstract fun calculateStringWidth(text: String): Short
+        abstract fun getCurrentFontSize(): UByte
+        abstract fun setFont(font: Font)
     }
 
     interface ViewContext {
@@ -40,6 +42,10 @@ namespace Am.Ui
         native override fun eraseRect(x: Short, y: Short, x2: Short, y2: Short)
         native override fun fillRect(x: Short, y: Short, x2: Short, y2: Short)
         native override fun drawString(text: String, x: Short, y: Short)
+        native override fun calculateStringWidth(text: String): Short
+        native override fun getCurrentFontSize(): UByte
+        native override fun setFont(font: Font)
+
     }
 
 
@@ -174,7 +180,6 @@ namespace Am.Ui
             return false
         }
 
-
     }
 
     class ViewGroup : View {
@@ -200,6 +205,21 @@ namespace Am.Ui
             this.children.remove(view)
             view.onDetach()
         }
+
+        override fun onAttach(viewContext: ViewContext) {
+            base.onAttach(viewContext)
+            each(this.children, c) {
+                c.onAttach(viewContext)
+            }
+        }
+
+        override fun onDetach() {
+            base.onDetach()
+            each(this.children, c) {
+                c.onDetach()
+            }
+        }
+
 
         fun paintChildren(graphics: Graphics) {
             each(this.children, c) {
@@ -346,7 +366,7 @@ namespace Am.Ui
         import Am.Lang
         import Am.Collections
 
-        private static var cache: HashMap<String, Font> = new HashMap<String, Font>()
+        private static var cache: HashMap<String, Font> // = new HashMap<String, Font>()
 
         fun getName(): String {
             return this.name
@@ -404,6 +424,19 @@ namespace Am.Ui
     class Label(var text: String) : View {
         import Am.Lang
 
+        var font: Font
+
+        fun getUsedFont(): Font {
+            if (this.font != null) {
+                return this.font
+            }
+            var vc = this.viewContext 
+            if (vc != null) {
+                return vc.getWindow().font
+            }
+            return null
+        }
+
         override fun growX(): UByte {
             return 0UB
         }
@@ -413,31 +446,36 @@ namespace Am.Ui
         }
 
         override fun minHeight(): Short {
+            var font = this.getUsedFont()
+            if (font != null) {
+                return font.size.toShort()
+            }
+            var vc = this.viewContext 
+            if (vc != null) {
+                return vc.getWindow().getCurrentFontSize().toShort()
+            }
             return 0S
         }
 
         override fun minWidth(): Short {
-            return 0S
+            "minwidth".println()
+            var font = this.getUsedFont()
+            return this.viewContext.getWindow().calculateStringWidth(font, this.text).toShort()
         }
 
         override fun paint(graphics: Graphics) {
             base.paint(graphics)
 
             var x1 = 0S
-            var x2 = this.innerWidth() - 1S
             var y1 = 0S
-            var y2 = this.innerHeight() - 1S
 
-            ("Paint " + x1.toString() + " to " + x2.toString()).println()
-
-            graphics.setForegroundPen(3UB)
-            graphics.fillRect(x1, y1, x2, y2)
             graphics.setForegroundPen(1UB)
+            var font = this.getUsedFont()
+            if (font != null) {
+                graphics.setFont(font)
+            }
 
-            graphics.drawLine(x1, y1, x2, y1)
-            graphics.drawLine(x2, y1, x2, y2)
-            graphics.drawLine(x1, y2, x2, y2)
-            graphics.drawLine(x1, y1, x1, y2)
+            graphics.drawString(this.text, x1, y1)
         }
     }
 

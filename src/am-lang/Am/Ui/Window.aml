@@ -37,6 +37,8 @@ namespace Am.Ui
         private var border: Border
         private var backgroundPen: UByte
         prviate var fillBackground: Bool
+        
+        var font: Font
 
         fun getRootView(): View {
             return this.rootView
@@ -99,6 +101,9 @@ namespace Am.Ui
                     this.graphics.setForegroundPen(this.backgroundPen)
                     this.graphics.fillRect(0S + this.border.left, 0S + this.border.top, this.width.toShort() - (1S + this.border.right), this.height.toShort() - (1S + this.border.bottom))
                 }
+                if (this.font != null) {
+                    this.graphics.setFont(this.font)
+                }
                 this.rootView.paintAll(this.graphics)
 //                this.graphics.translate(-this.border.left, -this.border.top)
             }
@@ -131,6 +136,18 @@ namespace Am.Ui
             ("Window click: " + button.toString() + " " + x.toString() + " " + y.toString()).println()
             this.rootView?.onMouseClick(button, x - this.border.left, y - this.border.top)
         }
+
+        fun calculateStringWidth(font: Font, text: String): UInt {
+            if (font != null) {
+                this.graphics.setFont(font)
+            }
+            return this.graphics.calculateStringWidth(text)
+        }
+
+        fun getCurrentFontSize(): UByte {
+            return this.graphics.getCurrentFontSize()
+        }
+
 
         native fun handleInput()
         native fun isOpen(): Bool
