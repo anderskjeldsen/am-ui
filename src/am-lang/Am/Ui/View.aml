@@ -3,8 +3,9 @@ namespace Am.Ui
 {
     class Graphics {
         import Am.Lang
-        var xOffset: Short
-        var yOffset: Short
+        private var xOffset: Short
+        private var yOffset: Short
+        var font: Font
 
         fun translate(x: Short, y: Short) {
             this.xOffset = this.xOffset + x
@@ -16,6 +17,8 @@ namespace Am.Ui
         abstract fun drawLine(x: Short, y: Short, x2: Short, y2: Short)
         abstract fun fillRect(x: Short, y: Short, x2: Short, y2: Short)
         abstract fun eraseRect(x: Short, y: Short, x2: Short, y2: Short)
+        abstract fun drawString(text: String, x: Short, y: Short)
+        abstract fun calculateStringWidth(text: String): Short
     }
 
     interface ViewContext {
@@ -36,7 +39,7 @@ namespace Am.Ui
         native override fun drawLine(x: Short, y: Short, x2: Short, y2: Short)
         native override fun eraseRect(x: Short, y: Short, x2: Short, y2: Short)
         native override fun fillRect(x: Short, y: Short, x2: Short, y2: Short)
-
+        native override fun drawString(text: String, x: Short, y: Short)
     }
 
 
@@ -269,7 +272,7 @@ namespace Am.Ui
             var height = this.innerHeight()
             var minHeight = this.innerMinHeight()
             var unusedHeight = height - minHeight
-            var remainingHeight = restHeight
+            var remainingHeight = unusedHeight
             var sumGrowY = this.sumGrowY()
             var innerWidth = this.innerWidth() 
             ("inner width VStack: " + innerWidth.toString() + " vs " + this.width.toString()).println()
@@ -339,11 +342,30 @@ namespace Am.Ui
 
     }
 
-    class Font(private var name: String) {
+    native class Font(private var name: String, private var size: UByte) {
         import Am.Lang
+        import Am.Collections
+
+        private static var cache: HashMap<String, Font> = new HashMap<String, Font>()
 
         fun getName(): String {
             return this.name
+        }
+
+        fun getSize(): UByte {
+            return this.size
+        }
+
+        native fun calculateStringWidth(text: String)
+
+        static fun loadFont(var name: String, var size: UByte) {
+            var key = name + ":" + size.toString()
+            var font = Font.cache.get(key)
+            if (font == null) {
+                font = new Font(name, size)
+                Font.cache.set(key, font)
+            }
+            return font
         }
     }
 
@@ -376,6 +398,46 @@ namespace Am.Ui
         override fun onDetach() {
             this.detachButton(this.viewContext.getWindow())
             base.onDetach()
+        }
+    }
+
+    class Label(var text: String) : View {
+        import Am.Lang
+
+        override fun growX(): UByte {
+            return 0UB
+        }
+
+        override fun growY(): UByte {
+            return 0UB          
+        }
+
+        override fun minHeight(): Short {
+            return 0S
+        }
+
+        override fun minWidth(): Short {
+            return 0S
+        }
+
+        override fun paint(graphics: Graphics) {
+            base.paint(graphics)
+
+            var x1 = 0S
+            var x2 = this.innerWidth() - 1S
+            var y1 = 0S
+            var y2 = this.innerHeight() - 1S
+
+            ("Paint " + x1.toString() + " to " + x2.toString()).println()
+
+            graphics.setForegroundPen(3UB)
+            graphics.fillRect(x1, y1, x2, y2)
+            graphics.setForegroundPen(1UB)
+
+            graphics.drawLine(x1, y1, x2, y1)
+            graphics.drawLine(x2, y1, x2, y2)
+            graphics.drawLine(x1, y2, x2, y2)
+            graphics.drawLine(x1, y1, x1, y2)
         }
     }
 

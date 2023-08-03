@@ -9,6 +9,7 @@
 #include <amigaos/amiga.h>
 #include <amigaos/Am/Ui/Window.h>
 #include <amigaos/Am/Ui/Screen.h>
+#include <libc/Am/Lang/String.h>
 
 #include <exec/types.h>
 #include <intuition/intuition.h>
@@ -174,6 +175,38 @@ function_result Am_Ui_ViewContextGraphics_fillRect_0(aobject * const this, short
 __exit: ;
 	if (this != NULL) {
 		__decrease_reference_count(this);
+	}
+	return __result;
+};
+
+function_result Am_Ui_ViewContextGraphics_drawString_0(aobject * const this, aobject * text, short x, short y)
+{
+	function_result __result = { .has_return_value = false };
+	bool __returning = false;
+	if (this != NULL) {
+		__increase_reference_count(this);
+	}
+	if (text != NULL) {
+		__increase_reference_count(text);
+	}
+
+	aobject *window = Am_Ui_ViewContextGraphics_getWindow_0(this).return_value.value.object_value;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
+	struct RastPort *rp = window_data->window->RPort;
+	string_holder *sh = text->object_properties.class_object_properties.object_data.value.custom_value;
+
+	short tx = translated_x(this, x);
+	short ty = translated_y(this, y);
+
+    Move(rp, tx, ty);
+	Text(rp, sh->string_value, sh->length);
+
+__exit: ;
+	if (this != NULL) {
+		__decrease_reference_count(this);
+	}
+	if (text != NULL) {
+		__decrease_reference_count(text);
 	}
 	return __result;
 };
