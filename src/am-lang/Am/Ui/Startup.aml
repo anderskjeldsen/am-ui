@@ -51,22 +51,48 @@ namespace Am.Ui
             vStack.addChild(hStack)
  */
  
-            vStack.addChild(new TestButton(128UB))
-            vStack.addChild(new Label("Hello Amiga"))
-            vStack.addChild(new TestButton(255UB))
+            vStack.addChild(new TestButton("Add label", (v) => {
+                "add label".println()
+                vStack.addChild(new Label("Another label"))
+                var w2 = w
+                w2.layout()
+                w2.requestRefresh()
+                w2.attemptRefresh()
+            }).setup((v) => {
+                "setup".println()
+                v.growX = 255UB
+                v.growY = 128UB
+            }))
+            vStack.addChild(new Label("Hello Amiga").setup((l) => {
+
+            }))
+            vStack.addChild(new TestButton("Remove last label", (v) => {
+                "remove last label".println()
+            }).setup((v) => {
+                v.growX = 255UB
+                v.growY = 128UB
+                v.setPadding(5S)
+            }))
+            "set root".println()
             w.setRootView(vStack)
 
 /*            var b = new TestButton()
             "button created".println()
             w.setRootView(b)
             */
+
+            "layout win".println()
             w.layout()
+            "refresh win".println()
             w.requestRefresh()
+            "refresh win2".println()
             w.attemptRefresh()
 
+            "isOpen".println()
             while(w.isOpen()) {
                 w.handleInput()
             }
+            w.dispose()
         }
     }
 }

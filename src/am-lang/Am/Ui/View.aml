@@ -24,8 +24,6 @@ namespace Am.Ui
     }
 
     interface ViewContext {
-//        private var window: Window
-//private var window: Window
         fun getWindow(): Window
 
         // Keep information about Window/Screen/Gadget Context etc.
@@ -53,6 +51,7 @@ namespace Am.Ui
         import Am.Lang
 
         private var windowRef: Weak<Window> = new Weak<Window>()
+//        private var graphicsRef: Weak<ViewContextGraphics> = new Weak<ViewContextGraphics>()
 
         fun getWindow(): Window {
             return this.windowRef.get()
@@ -61,6 +60,18 @@ namespace Am.Ui
         fun setWindow(window: Window) {
             this.windowRef.set(window)
         }
+        
+        /*
+        fun getGraphics(): ViewContextGraphics {
+            return this.graphicsRef.get()
+        }
+
+        fun setGraphics(graphics: ViewContextGraphics) {
+            this.graphicsRef.set(graphics)
+        }
+        */
+
+
     }
 
     class View {
@@ -71,6 +82,8 @@ namespace Am.Ui
         var width: UShort
         var height: UShort
         var padding: Padding = new Padding(0S, 0S, 0S, 0S)
+        var growX: UByte
+        var growY: UByte
 
         fun minWidth(): Short {
             return 0S
@@ -80,6 +93,7 @@ namespace Am.Ui
             return 0S
         }
 
+/*
         fun growX(): UByte {
             return 0UB
         }
@@ -87,6 +101,7 @@ namespace Am.Ui
         fun growY(): UByte {
             return 0UB
         }
+*/
 
         fun innerX(): Short {
             return this.x + this.padding.left
@@ -159,8 +174,18 @@ namespace Am.Ui
         }
 
         fun contains(x: Short, y: Short): Bool {
-//            ("contains " + x.toString() + "," + y.toString() + " in " + this.width.toString() + ", " + this.height.toString()).println()
-            return (x >= 0S) && (x < this.width) && (y >= 0S) && (y < this.height)
+            ("contains " + x.toString() + "," + y.toString() + " in " + this.width.toString() + ", " + this.height.toString()).println()
+/*
+            var xok1 = (x >= 0S)
+            var xok2 = (x < this.width.toShort())
+            return xok1 && xok2
+            var xok2 = (x < this.width.toShort())
+            var xok = ((x >= 0S) && (x < this.width.toShort()))
+            var yok = ((y >= 0S) && (y < this.height.toShort()))
+            ("xok: " + xok.toString() + ", yok: " + yok.toString()).println()
+            return xok && yok
+            */
+            return ((x >= 0S) && (x < this.width) && (y >= 0S) && (y < this.height))
         }
 
         fun findViewAt(x: Short, y: Short): View {
@@ -178,6 +203,11 @@ namespace Am.Ui
                 return true
             }
             return false
+        }
+
+        fun setup(i: (it: View) => View) : View {
+            i(this)
+            return this
         }
 
     }
@@ -208,9 +238,12 @@ namespace Am.Ui
 
         override fun onAttach(viewContext: ViewContext) {
             base.onAttach(viewContext)
+            "attach children".println()
             each(this.children, c) {
+                "attach child".println()
                 c.onAttach(viewContext)
             }
+            "attach done".println()
         }
 
         override fun onDetach() {
@@ -287,21 +320,34 @@ namespace Am.Ui
         import Am.Collections
 
         override fun layoutChildren() {
+            "layout childsen".println()
             var left = 0S
             var y = 0S
+            "layout childsenA".println()
             var height = this.innerHeight()
+            "layout childsenAA".println()
             var minHeight = this.innerMinHeight()
+            "layout childsenB".println()
+
             var unusedHeight = height - minHeight
             var remainingHeight = unusedHeight
+            "layout childsenC".println()
+
             var sumGrowY = this.sumGrowY()
+                        "layout childsenD".println()
+
             var innerWidth = this.innerWidth() 
-            ("inner width VStack: " + innerWidth.toString() + " vs " + this.width.toString()).println()
+//            ("inner width VStack: " + innerWidth.toString() + " vs " + this.width.toString()).println()
+
+            "layout childsen2".println()
 
             each(this.children, c) {
-                var ch = c.minHeight() + ((c.growY().toInt() * unusedHeight.toInt()) / sumGrowY.toInt()).toShort()
+                var ch = c.minHeight() + ((c.growY.toInt() * unusedHeight.toInt()) / sumGrowY.toInt()).toShort()
                 c.layout(left, y, innerWidth.toUShort(), ch.toUShort())
                 y = y + ch + this.spacing
             }
+                        "layout childsen3".println()
+
         }
 
         fun innerMinHeight(): Short {
@@ -337,7 +383,10 @@ namespace Am.Ui
         fun sumGrowY(): Short {
             var grow = 0S
             each(this.children, c) {
-                grow = grow + c.growY().toShort()
+                grow = grow + c.growY.toShort()
+            }
+            if (grow == 0) {
+                grow = 1S
             }
             return grow
         }
@@ -437,14 +486,6 @@ namespace Am.Ui
             return null
         }
 
-        override fun growX(): UByte {
-            return 0UB
-        }
-
-        override fun growY(): UByte {
-            return 0UB          
-        }
-
         override fun minHeight(): Short {
             var font = this.getUsedFont()
             if (font != null) {
@@ -452,6 +493,7 @@ namespace Am.Ui
             }
             var vc = this.viewContext 
             if (vc != null) {
+                "get font size".println()
                 return vc.getWindow().getCurrentFontSize().toShort()
             }
             return 0S
@@ -479,16 +521,8 @@ namespace Am.Ui
         }
     }
 
-    class TestButton(var grow: UByte) : View {
+    class TestButton(var text: String, var clickListener: (view: View) => Bool) : View {
         import Am.Lang
-
-        override fun growX(): UByte {
-            return this.grow
-        }
-
-        override fun growY(): UByte {
-            return this.grow            
-        }
 
         override fun minHeight(): Short {
             return 30S
@@ -519,14 +553,21 @@ namespace Am.Ui
         }
 
         override fun onMouseClick(button: UByte, x: Short, y: Short): Bool {
-//            ("Button click: " + button.toString() + " " + x.toString() + " " + y.toString()).println()
+            ("Button click: " + button.toString() + " " + x.toString() + " " + y.toString()).println()
 
             if (this.contains(x, y)) {
-//                "Button clicked".println()
-                return true
+                ("Button clicked: " + this.text).println()
+//                this.clickListener?(this)
+                var cl = this.clickListener
+                if (cl != null) {
+                    var res = cl(this)                    
+                    return res
+                }
             }
             return false
         }
+
+
 
     }
 }
