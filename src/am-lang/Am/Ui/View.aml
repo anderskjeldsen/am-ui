@@ -524,12 +524,29 @@ namespace Am.Ui
     class TestButton(var text: String, var clickListener: (view: View) => Bool) : View {
         import Am.Lang
 
+        private var label: Label
+
+        private fun ensureLabel(): Label {
+            if (this.label == null) {
+                this.label = new Label(this.text)
+            }
+            return this.label
+        }
+
         override fun minHeight(): Short {
-            return 30S
+            var label = this.ensureLabel()
+            return label.minHeight() + this.padding.top + this.padding.bottom
         }
 
         override fun minWidth(): Short {
-            return 30S
+            var label = this.ensureLabel()
+            return label.minWidth() + this.padding.left + this.padding.right
+        }
+
+        override fun layout(x: Short, y: Short, width: UShort, height: UShort) {
+            base.layout(x, y, width, height)
+            var label = this.ensureLabel()
+            label.layout(this.innerX(), this.innerY(), this.innerWidth().toUShort(), this.innerHeight().toUShort())            
         }
 
         override fun paint(graphics: Graphics) {
@@ -550,6 +567,9 @@ namespace Am.Ui
             graphics.drawLine(x2, y1, x2, y2)
             graphics.drawLine(x1, y2, x2, y2)
             graphics.drawLine(x1, y1, x1, y2)
+
+            var label = this.ensureLabel()
+            label.paint(graphics)
         }
 
         override fun onMouseClick(button: UByte, x: Short, y: Short): Bool {
