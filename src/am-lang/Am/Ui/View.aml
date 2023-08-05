@@ -526,6 +526,18 @@ namespace Am.Ui
 
         private var label: Label
 
+        override fun onAttach(viewContext: ViewContext) {
+            base.onAttach(viewContext)
+            var label = this.ensureLabel()
+            label.onAttach(viewContext)
+        }
+
+        override fun onDetach() {
+            base.onDetach()
+            var label = this.ensureLabel()
+            label.onDetach()
+        }
+
         private fun ensureLabel(): Label {
             if (this.label == null) {
                 this.label = new Label(this.text)
@@ -546,7 +558,9 @@ namespace Am.Ui
         override fun layout(x: Short, y: Short, width: UShort, height: UShort) {
             base.layout(x, y, width, height)
             var label = this.ensureLabel()
-            label.layout(this.innerX(), this.innerY(), this.innerWidth().toUShort(), this.innerHeight().toUShort())            
+            var lx = (this.innerWidth() / 2S) - (label.minWidth() / 2S)
+            var ly = (this.innerHeight() / 2S) - (label.minHeight() / 2S)
+            label.layout(this.innerX() + lx, this.innerY() + ly, label.minWidth().toUShort(), label.minHeight().toUShort())            
         }
 
         override fun paint(graphics: Graphics) {
@@ -569,7 +583,7 @@ namespace Am.Ui
             graphics.drawLine(x1, y1, x1, y2)
 
             var label = this.ensureLabel()
-            label.paint(graphics)
+            label.paintAll(graphics)
         }
 
         override fun onMouseClick(button: UByte, x: Short, y: Short): Bool {
@@ -577,7 +591,6 @@ namespace Am.Ui
 
             if (this.contains(x, y)) {
                 ("Button clicked: " + this.text).println()
-//                this.clickListener?(this)
                 var cl = this.clickListener
                 if (cl != null) {
                     var res = cl(this)                    
