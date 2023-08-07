@@ -35,22 +35,12 @@ namespace Am.Ui
         static var xxx: Int = 1
 
         static fun main() {
-
-            "Ui started".println()
             var w = Window.openWindow(20S, 20S, 150US, 150US, null)
+
 
             var vStack = new VStack(5S)
             vStack.setPadding(5S)
 
-/*
-            var hStack = new HStack()
-            hStack.addChild(new TestButton(0UB))
-            hStack.addChild(new TestButton(128UB))
-            hStack.addChild(new TestButton(255UB))
-
-            vStack.addChild(hStack)
- */
- 
             vStack.addChild(new TestButton("Add label", (v) => {
                 "add label".println()
                 vStack.addChild(new Label("Another label"))
@@ -73,26 +63,17 @@ namespace Am.Ui
                 v.growY = 128UB
                 v.setPadding(5S)
             }))
-            "set root".println()
+
             w.setRootView(vStack)
 
-/*            var b = new TestButton()
-            "button created".println()
-            w.setRootView(b)
-            */
-
-            "layout win".println()
             w.layout()
-            "refresh win".println()
             w.requestRefresh()
-            "refresh win2".println()
             w.attemptRefresh()
 
-            "isOpen".println()
             while(w.isOpen()) {
                 w.handleInput()
             }
-            w.dispose()
+            vStack.removeChildren() // Because the onClick callback of TestButton refers to vStack TODO: turn them into Weak's ?
         }
     }
 }

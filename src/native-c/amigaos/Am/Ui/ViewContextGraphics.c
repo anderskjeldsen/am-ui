@@ -69,7 +69,11 @@ function_result Am_Ui_ViewContextGraphics_setForegroundPen_0(aobject * const thi
 	struct RastPort *rp = window_data->window->RPort;
 
 	SetAPen(rp, pen);
+
 __exit: ;
+	if (window != NULL) {
+		__decrease_reference_count(window);
+	}
 	if (this != NULL) {
 		__decrease_reference_count(this);
 	}
@@ -89,8 +93,11 @@ function_result Am_Ui_ViewContextGraphics_setBackgroundPen_0(aobject * const thi
 	struct RastPort *rp = window_data->window->RPort;
 
 	SetBPen(rp, pen);
-
 __exit: ;
+	if (window != NULL) {
+		__decrease_reference_count(window);
+	}
+
 	if (this != NULL) {
 		__decrease_reference_count(this);
 	}
@@ -123,6 +130,10 @@ function_result Am_Ui_ViewContextGraphics_drawLine_0(aobject * const this, short
     Draw(rp, tx2, ty2);
 
 __exit: ;
+	if (window != NULL) {
+		__decrease_reference_count(window);
+	}
+
 	if (this != NULL) {
 		__decrease_reference_count(this);
 	}
@@ -147,7 +158,12 @@ function_result Am_Ui_ViewContextGraphics_eraseRect_0(aobject * const this, shor
 	short ty2 = translated_y(this, y2);
 
 	EraseRect(rp, tx, ty, tx2, ty2);
+
 __exit: ;
+	if (window != NULL) {
+		__decrease_reference_count(window);
+	}
+
 	if (this != NULL) {
 		__decrease_reference_count(this);
 	}
@@ -172,7 +188,12 @@ function_result Am_Ui_ViewContextGraphics_fillRect_0(aobject * const this, short
 	short ty2 = translated_y(this, y2);
 
 	RectFill(rp, tx, ty, tx2, ty2);
+
 __exit: ;
+	if (window != NULL) {
+		__decrease_reference_count(window);
+	}
+
 	if (this != NULL) {
 		__decrease_reference_count(this);
 	}
@@ -201,8 +222,11 @@ function_result Am_Ui_ViewContextGraphics_drawString_0(aobject * const this, aob
 
     Move(rp, tx, ty);
 	Text(rp, sh->string_value, sh->length);
-
 __exit: ;
+	if (window != NULL) {
+		__decrease_reference_count(window);
+	}
+
 	if (this != NULL) {
 		__decrease_reference_count(this);
 	}
@@ -233,6 +257,9 @@ function_result Am_Ui_ViewContextGraphics_calculateStringWidth_0(aobject * const
 	__result.return_value.value.uint_value = width;
 
 __exit: ;
+	if (window != NULL) {
+		__decrease_reference_count(window);
+	}
 	if (this != NULL) {
 		__decrease_reference_count(this);
 	}
@@ -262,6 +289,10 @@ function_result Am_Ui_ViewContextGraphics_getCurrentFontSize_0(aobject * const t
 	}
 
 __exit: ;
+	if (window != NULL) {
+		__decrease_reference_count(window);
+	}
+
 	if (this != NULL) {
 		__decrease_reference_count(this);
 	}
@@ -287,6 +318,10 @@ function_result Am_Ui_ViewContextGraphics_setFont_0(aobject * const this, aobjec
 
 	SetFont(rp, textFont);
 __exit: ;
+	if (window != NULL) {
+		__decrease_reference_count(window);
+	}
+
 	if (this != NULL) {
 		__decrease_reference_count(this);
 	}

@@ -74,6 +74,9 @@ function_result Am_Ui_GadgetViews_layoutNative_0(aobject * gadgetView, short x, 
 	AddGList(window_data->window, gvh->gadget, pos, 1, NULL);
 	RefreshGList(gvh->gadget, window_data->window, NULL, gvh->gadget_num);
 __exit: ;
+	if (window != NULL) {
+		__decrease_reference_count(window);
+	}
 	if (gadgetView != NULL) {
 		__decrease_reference_count(gadgetView);
 	}

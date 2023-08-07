@@ -159,7 +159,7 @@ namespace Am.Ui
         fun paintAll(graphics: Graphics) {
             var ix = this.innerX()
             var iy = this.innerY()
-            ("Inner pos " + ix.toString()).println()
+//            ("Inner pos " + ix.toString()).println()
             graphics.translate(ix, iy)
             this.paint(graphics)
             graphics.translate(-ix, -iy)
@@ -170,11 +170,11 @@ namespace Am.Ui
             this.y = y
             this.width = width
             this.height = height
-            ("Layout " + x.toString() + "," + y.toString() + "," + width.toString() + "," + height.toString()).println()
+//            ("Layout xyz" + x.toString() + "," + y.toString() + "," + width.toString() + "," + height.toString()).println()
         }
 
         fun contains(x: Short, y: Short): Bool {
-            ("contains " + x.toString() + "," + y.toString() + " in " + this.width.toString() + ", " + this.height.toString()).println()
+//            ("contains " + x.toString() + "," + y.toString() + " in " + this.width.toString() + ", " + this.height.toString()).println()
 /*
             var xok1 = (x >= 0S)
             var xok2 = (x < this.width.toShort())
@@ -182,7 +182,7 @@ namespace Am.Ui
             var xok2 = (x < this.width.toShort())
             var xok = ((x >= 0S) && (x < this.width.toShort()))
             var yok = ((y >= 0S) && (y < this.height.toShort()))
-            ("xok: " + xok.toString() + ", yok: " + yok.toString()).println()
+//            ("xok: " + xok.toString() + ", yok: " + yok.toString()).println()
             return xok && yok
             */
             return ((x >= 0S) && (x < this.width) && (y >= 0S) && (y < this.height))
@@ -236,14 +236,22 @@ namespace Am.Ui
             view.onDetach()
         }
 
+        fun removeChildren() {
+            each(this.children, c) {
+                c.onDetach()
+            }
+            var newList = List<View>.newList<View>()
+            this.children = newList
+        }
+
         override fun onAttach(viewContext: ViewContext) {
             base.onAttach(viewContext)
-            "attach children".println()
+//            "attach children".println()
             each(this.children, c) {
-                "attach child".println()
+//                "attach child".println()
                 c.onAttach(viewContext)
             }
-            "attach done".println()
+//            "attach done".println()
         }
 
         override fun onDetach() {
@@ -263,7 +271,7 @@ namespace Am.Ui
         override fun paintAll(graphics: Graphics) {
             var ix = this.innerX()
             var iy = this.innerY()
-            ("inner x for viewgroup: " + ix.toString()).println()
+//            ("inner x for viewgroup: " + ix.toString()).println()
             graphics.translate(ix, iy)
             this.paint(graphics)
             this.paintChildren(graphics)
@@ -320,33 +328,33 @@ namespace Am.Ui
         import Am.Collections
 
         override fun layoutChildren() {
-            "layout childsen".println()
+//            "layout childsen".println()
             var left = 0S
             var y = 0S
-            "layout childsenA".println()
+//            "layout childsenA".println()
             var height = this.innerHeight()
-            "layout childsenAA".println()
+//            "layout childsenAA".println()
             var minHeight = this.innerMinHeight()
-            "layout childsenB".println()
+//            "layout childsenB".println()
 
             var unusedHeight = height - minHeight
             var remainingHeight = unusedHeight
-            "layout childsenC".println()
+//            "layout childsenC".println()
 
             var sumGrowY = this.sumGrowY()
-                        "layout childsenD".println()
+//                        "layout childsenD".println()
 
             var innerWidth = this.innerWidth() 
 //            ("inner width VStack: " + innerWidth.toString() + " vs " + this.width.toString()).println()
 
-            "layout childsen2".println()
+//            "layout childsen2".println()
 
             each(this.children, c) {
                 var ch = c.minHeight() + ((c.growY.toInt() * unusedHeight.toInt()) / sumGrowY.toInt()).toShort()
                 c.layout(left, y, innerWidth.toUShort(), ch.toUShort())
                 y = y + ch + this.spacing
             }
-                        "layout childsen3".println()
+//            "layout childsen3".println()
 
         }
 
@@ -493,14 +501,14 @@ namespace Am.Ui
             }
             var vc = this.viewContext 
             if (vc != null) {
-                "get font size".println()
+//                "get font size".println()
                 return vc.getWindow().getCurrentFontSize().toShort()
             }
             return 0S
         }
 
         override fun minWidth(): Short {
-            "minwidth".println()
+//            "minwidth".println()
             var font = this.getUsedFont()
             return this.viewContext.getWindow().calculateStringWidth(font, this.text).toShort()
         }
@@ -571,7 +579,7 @@ namespace Am.Ui
             var y1 = 0S
             var y2 = this.innerHeight() - 1S
 
-            ("Paint " + x1.toString() + " to " + x2.toString()).println()
+//            ("Paint " + x1.toString() + " to " + x2.toString()).println()
 
             graphics.setForegroundPen(3UB)
             graphics.fillRect(x1, y1, x2, y2)
@@ -587,10 +595,10 @@ namespace Am.Ui
         }
 
         override fun onMouseClick(button: UByte, x: Short, y: Short): Bool {
-            ("Button click: " + button.toString() + " " + x.toString() + " " + y.toString()).println()
+//            ("Button click: " + button.toString() + " " + x.toString() + " " + y.toString()).println()
 
             if (this.contains(x, y)) {
-                ("Button clicked: " + this.text).println()
+//                ("Button clicked: " + this.text).println()
                 var cl = this.clickListener
                 if (cl != null) {
                     var res = cl(this)                    
