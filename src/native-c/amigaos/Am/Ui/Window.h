@@ -14,6 +14,9 @@ struct _Am_Ui_Window_data {
     struct VisualInfo * visual_info;
 //    struct Gadget *first_gadget;
     struct Gadget *context_gadget;
+    bool pending_close;
+    bool pending_refresh;
+    bool pending_resize;
 };
 
 #endif

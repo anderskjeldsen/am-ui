@@ -95,7 +95,7 @@ __exit: ;
 	return __result;
 };
 
-function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHORT width, USHORT height, aobject * screen) //, aobject * screen)
+function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHORT width, USHORT height, aobject * screen, aobject * windowManager) //, aobject * screen)
 {
 	function_result __result = { .has_return_value = false };
 	bool __returning = false;
@@ -142,6 +142,13 @@ function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHO
 	CreateContext(&data->context_gadget);
 	printf("context gadget %p\n", data->context_gadget);
 
+/*
+	ULONG user_port = (ULONG) NULL;
+	if (windowManager != NULL) {
+		struct MsgPort * msg_port = windowManager->object_properties.class_object_properties.object_data.value.custom_value;
+		user_port = (ULONG) msg_port;
+	}
+*/
 	struct TagItem tags[] = {
 		WA_Left, x,
 		WA_Top, y,
@@ -208,6 +215,38 @@ __exit: ;
 	return __result;
 };
 
+void handle_message(aobject * this, struct IntuiMessage * msg) {
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
+	struct Window * win = window_data->window;
+
+	switch (msg->Class)
+	{
+		case IDCMP_CLOSEWINDOW:
+			window_data->pending_close = TRUE;
+			break;
+
+		case IDCMP_REFRESHWINDOW:
+			window_data->pending_refresh = TRUE;
+			break;
+		case IDCMP_NEWSIZE:
+//			printf("Resize %dx%d\n", win->Width, win->Height);
+	//					Am_Ui_Window_setBorder_0(this, win->BorderLeft, win->BorderTop, win->BorderRight, win->BorderBottom);
+			window_data->pending_resize= TRUE;
+//			Am_Ui_Window_onResize_0(this, win->LeftEdge, win->TopEdge, win->Width, win->Height);
+	//					GT_RefreshWindow(win, NULL);
+			break;
+		case IDCMP_MOUSEBUTTONS:
+			printf("Mouse click %d\n", msg->Code);
+			if (msg->Code == IECODE_RBUTTON) // Check for right mouse button
+			{
+				Am_Ui_Window_onMouseClick_0(this, 2, msg->MouseX, msg->MouseY);
+			} else if (msg->Code == IECODE_LBUTTON) {
+				Am_Ui_Window_onMouseClick_0(this, 1, msg->MouseX, msg->MouseY);
+			}
+			break;
+	}
+}
+
 function_result Am_Ui_Window_handleInput_0(aobject * const this)
 {
 	function_result __result = { .has_return_value = false };
@@ -218,59 +257,44 @@ function_result Am_Ui_Window_handleInput_0(aobject * const this)
 
 	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
 	struct Window * win = window_data->window;
+
+	window_data->pending_close = FALSE;
+	window_data->pending_refresh = FALSE;
+	window_data->pending_resize = FALSE;
+
 	ULONG sig_mask = 1L << window_data->window->UserPort->mp_SigBit;
 	printf("Wait %d\n", sig_mask);
 	ULONG signals = Wait(sig_mask);
 	printf("Wait done %d\n", signals);
 
-	BOOL close_window = FALSE;
-	BOOL repaint = FALSE;
 //	printf("Wait done %d, %d\n", sig_mask, signals & sig_mask);
 	if (TRUE) // signals & sig_mask)
 	{
 		struct IntuiMessage *msg;
 		while ((msg = (struct IntuiMessage *)GT_GetIMsg(window_data->window->UserPort)) != NULL)
 		{
-			switch (msg->Class)
-			{
-				case IDCMP_CLOSEWINDOW:
-					close_window = true;
-					break;
-
-				case IDCMP_REFRESHWINDOW:
-					printf("Refresh\n");
-					GT_BeginRefresh(window_data->window);
-					Am_Ui_Window_paint_0(this);
-					/* custom rendering, if any, goes here */
-					GT_EndRefresh(window_data->window, TRUE);
-					break;
-				case IDCMP_NEWSIZE:
-					printf("Resize %dx%d\n", win->Width, win->Height);
-//					Am_Ui_Window_setBorder_0(this, win->BorderLeft, win->BorderTop, win->BorderRight, win->BorderBottom);
-					Am_Ui_Window_onResize_0(this, win->LeftEdge, win->TopEdge, win->Width, win->Height);
-//					GT_RefreshWindow(win, NULL);
-					repaint = TRUE;
-					break;
-				case IDCMP_MOUSEBUTTONS:
-					printf("Mouse click %d\n", msg->Code);
-					if (msg->Code == IECODE_RBUTTON) // Check for right mouse button
-                    {
-						Am_Ui_Window_onMouseClick_0(this, 2, msg->MouseX, msg->MouseY);
-                    } else if (msg->Code == IECODE_LBUTTON) {
-						Am_Ui_Window_onMouseClick_0(this, 1, msg->MouseX, msg->MouseY);
-					}
-					break;
-			}
+			handle_message(this, msg);
 			GT_ReplyIMsg((struct IntuiMessage *)msg);
 		}
 	}
 
-	if (repaint) {
-		Am_Ui_Window_paint_0(this);
+	if (window_data->pending_resize) {
+		Am_Ui_Window_onResize_0(this, win->LeftEdge, win->TopEdge, win->Width, win->Height);
 	}
 
-	if (close_window) {
-		close_window_native(this);
+	if (window_data->pending_refresh) {
+		GT_BeginRefresh(window_data->window);
+		Am_Ui_Window_paint_0(this);
+		GT_EndRefresh(window_data->window, TRUE);
+	}
+
+/*
+	if (window_data->pending_repaint) {
+		Am_Ui_Window_paint_0(this);
+	}
+*/
+	if (window_data->pending_close) {
+		Am_Ui_Window_onCloseButtonClick_0(this);
 	}
 
 __exit: ;

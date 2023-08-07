@@ -63,7 +63,7 @@ namespace Am.Ui
             }
         }
 
-        static fun openWindow(x: Short, y: Short, width: UShort, height: UShort, screen: Screen): Window {
+        static fun openWindow(x: Short, y: Short, width: UShort, height: UShort, screen: Screen, windowManager: WindowManager): Window {
             var w = new Window()
             var vc = new ViewContextImpl()
             vc.setWindow(w)
@@ -78,7 +78,7 @@ namespace Am.Ui
             w.width = width
             w.height = height
             w.screen = screen
-            w.open(x, y, width, height, screen)
+            w.open(x, y, width, height, screen, windowManager)
             return w
         }
 
@@ -117,11 +117,7 @@ namespace Am.Ui
             this.width = width
             this.height = height
             this.layout()
-            /*
-            if (this.rootView != null) {
-                this.rootView.layout(x, y, width, height)
-            }
-            */
+            this.paint()
         }
 
         fun layout() {
@@ -136,6 +132,10 @@ namespace Am.Ui
                 ("Win size: " + this.width.toString() + " x " + this.height.toString()).println()
                 this.rootView.layout(b.left, b.top, this.width - (b.left + b.right).toUShort(), this.height - (b.top + b.bottom).toUShort())
             }
+        }
+
+        fun onCloseButtonClick() {
+            this.close()
         }
 
         fun onMouseClick(button: UByte, x: Short, y: Short) {
@@ -169,7 +169,7 @@ namespace Am.Ui
         native fun isOpen(): Bool
         private native fun refresh()
 
-        private native fun open(x: Short, y: Short, width: UShort, height: UShort, screen: Screen)
+        private native fun open(x: Short, y: Short, width: UShort, height: UShort, screen: Screen, windowManager: WindowManager)
         native fun close()
         fun dispose() {
             this.viewContext = null

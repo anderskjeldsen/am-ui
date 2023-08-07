@@ -35,7 +35,7 @@ namespace Am.Ui
         static var xxx: Int = 1
 
         static fun main() {
-            var w = Window.openWindow(20S, 20S, 150US, 150US, null)
+            var w = Window.openWindow(20S, 20S, 150US, 150US, null, null)
 
 
             var vStack = new VStack(5S)

@@ -1,0 +1,20 @@
+
+namespace Am.Ui 
+{
+
+    native class WindowManager {
+        import Am.Lang
+
+        private static var instance: WindowManager
+
+        static fun getInstance(): WindowManager {
+            if (WindowManager.instance == null) {
+                WindowManager.instance = new WindowManager()
+            }
+            return WindowManager.instance
+        }
+
+        
+    }
+}
+
