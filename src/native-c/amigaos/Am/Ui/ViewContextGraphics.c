@@ -254,7 +254,7 @@ function_result Am_Ui_ViewContextGraphics_calculateStringWidth_0(aobject * const
 
 	ULONG width = TextLength(rp, sh->string_value, sh->length);
 
-	__result.return_value.value.uint_value = width;
+	__result.return_value.value.ushort_value = width;
 
 __exit: ;
 	if (window != NULL) {

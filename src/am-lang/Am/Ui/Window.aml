@@ -144,7 +144,7 @@ namespace Am.Ui
             this.rootView?.onMouseClick(button, x - this.border.left, y - this.border.top)
         }
 
-        fun calculateStringWidth(font: Font, text: String): UInt {
+        fun calculateStringWidth(font: Font, text: String): UShort {
             var graphics = this.getGraphics()
             if (font != null) {                
                 graphics.setFont(font)
