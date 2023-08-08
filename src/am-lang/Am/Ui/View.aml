@@ -1,15 +1,40 @@
 
 namespace Am.Ui 
 {
+
+    enum MouseEventType {
+        up = 1
+        down = 2
+    }
+
+    enum MouseButton {
+        left = 1
+        right = 2
+        middle = 3
+    }
+
+
     class Graphics {
         import Am.Lang
         private var xOffset: Short
         private var yOffset: Short
-//        var font: Font
+        private repaintAllRequested: Bool = false
 
         fun translate(x: Short, y: Short) {
             this.xOffset = this.xOffset + x
             this.yOffset = this.yOffset + y
+        }
+
+        fun shouldRepaintAll(): Bool {
+            return repaintAllRequested
+        }
+
+        fun requestRepaintAll() {
+            this.repaintAllRequested = true
+        }
+
+        fun finalizeRepaintCycle() {
+            this.repaintAllRequested = false
         }
 
         abstract fun setForegroundPen(pen: UByte)
@@ -84,6 +109,7 @@ namespace Am.Ui
         var padding: Padding = new Padding(0S, 0S, 0S, 0S)
         var growX: UByte
         var growY: UByte
+        private var repaintRequested: Bool = false
 
         fun minWidth(): Short {
             return 0S
@@ -105,10 +131,12 @@ namespace Am.Ui
 
         fun innerX(): Short {
             return this.x + this.padding.left
+//            return this.padding.left
         }
 
         fun innerY(): Short {
             return this.y + this.padding.top
+//            return this.padding.top
         }
 
         fun innerWidth(): Short {
@@ -157,12 +185,17 @@ namespace Am.Ui
         }
 
         fun paintAll(graphics: Graphics) {
-            var ix = this.innerX()
-            var iy = this.innerY()
-//            ("Inner pos " + ix.toString()).println()
-            graphics.translate(ix, iy)
-            this.paint(graphics)
-            graphics.translate(-ix, -iy)
+            if (graphics.shouldRepaintAll() || this.repaintRequested) {
+                var ix = this.innerX()
+                var iy = this.innerY()
+                graphics.translate(ix, iy)
+                this.paint(graphics)
+                graphics.translate(-ix, -iy)
+            }
+        }
+
+        fun requestRepaint() {
+            this.repaintRequested = true
         }
 
         fun layout(x: Short, y: Short, width: UShort, height: UShort) {
@@ -174,17 +207,8 @@ namespace Am.Ui
         }
 
         fun contains(x: Short, y: Short): Bool {
-//            ("contains " + x.toString() + "," + y.toString() + " in " + this.width.toString() + ", " + this.height.toString()).println()
-/*
-            var xok1 = (x >= 0S)
-            var xok2 = (x < this.width.toShort())
-            return xok1 && xok2
-            var xok2 = (x < this.width.toShort())
-            var xok = ((x >= 0S) && (x < this.width.toShort()))
-            var yok = ((y >= 0S) && (y < this.height.toShort()))
-//            ("xok: " + xok.toString() + ", yok: " + yok.toString()).println()
-            return xok && yok
-            */
+            ("contains " + x.toString() + "," + y.toString() + " in " + this.width.toString() + ", " + this.height.toString()).println()
+
             return ((x >= 0S) && (x < this.width) && (y >= 0S) && (y < this.height))
         }
 
@@ -196,9 +220,7 @@ namespace Am.Ui
         }
 
         // returns true if consumed
-        fun onMouseClick(button: UByte, x: Short, y: Short): Bool {
-//            ("View click: " + button.toString() + " " + x.toString() + " " + y.toString()).println()
-
+        fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
             if (this.contains(x, y)) {
                 return true
             }
@@ -269,13 +291,18 @@ namespace Am.Ui
         }
 
         override fun paintAll(graphics: Graphics) {
-            var ix = this.innerX()
-            var iy = this.innerY()
-//            ("inner x for viewgroup: " + ix.toString()).println()
-            graphics.translate(ix, iy)
-            this.paint(graphics)
-            this.paintChildren(graphics)
-            graphics.translate(-ix, -iy)
+            if (graphics.shouldRepaintAll() || this.repaintRequested) {
+                var ix = this.innerX()
+                var iy = this.innerY()
+                graphics.translate(ix, iy)
+                this.paint(graphics)
+                graphics.translate(-ix, -iy)
+                ix = this.x // because the padding is a part of the children's position by layout
+                iy = this.y
+                graphics.translate(ix, iy)
+                this.paintChildren(graphics)
+                graphics.translate(-ix, -iy)
+            }
         }
 
         fun layoutChildren() {
@@ -305,13 +332,13 @@ namespace Am.Ui
             return null
         }
 
-        override fun onMouseClick(button: UByte, x: Short, y: Short): Bool {
+        override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
             if (this.contains(x, y)) {
                 each(this.children, c) {
-                    var lx = x - c.x
+                    var lx = x - c.x 
                     var ly = y - c.y
 
-                    var consumed = c.onMouseClick(button, lx, ly)
+                    var consumed = c.onMouseEvent(type, button, lx, ly)
                     if (consumed) {
                         return consumed
                     }
@@ -328,34 +355,23 @@ namespace Am.Ui
         import Am.Collections
 
         override fun layoutChildren() {
-//            "layout childsen".println()
-            var left = 0S
-            var y = 0S
-//            "layout childsenA".println()
+            var left = this.padding.left
+            var y = this.padding.top
             var height = this.innerHeight()
-//            "layout childsenAA".println()
             var minHeight = this.innerMinHeight()
-//            "layout childsenB".println()
 
-            var unusedHeight = height - minHeight
+            var unusedHeight = Short.max(height - minHeight, 0S)
             var remainingHeight = unusedHeight
-//            "layout childsenC".println()
 
             var sumGrowY = this.sumGrowY()
-//                        "layout childsenD".println()
 
             var innerWidth = this.innerWidth() 
-//            ("inner width VStack: " + innerWidth.toString() + " vs " + this.width.toString()).println()
-
-//            "layout childsen2".println()
 
             each(this.children, c) {
                 var ch = c.minHeight() + ((c.growY.toInt() * unusedHeight.toInt()) / sumGrowY.toInt()).toShort()
                 c.layout(left, y, innerWidth.toUShort(), ch.toUShort())
                 y = y + ch + this.spacing
             }
-//            "layout childsen3".println()
-
         }
 
         fun innerMinHeight(): Short {
@@ -501,7 +517,6 @@ namespace Am.Ui
             }
             var vc = this.viewContext 
             if (vc != null) {
-//                ("get font size: " + vc.getWindow().getCurrentFontSize().toString()).println()
                 return vc.getWindow().getCurrentFontSize().toShort()
             }
             return 0S
@@ -534,6 +549,7 @@ namespace Am.Ui
         import Am.Lang
 
         private var label: Label
+        private var active: Bool
 
         override fun onAttach(viewContext: ViewContext) {
             base.onAttach(viewContext)
@@ -582,29 +598,47 @@ namespace Am.Ui
 
 //            ("Paint " + x1.toString() + " to " + x2.toString()).println()
 
-            graphics.setForegroundPen(3UB)
-            graphics.fillRect(x1, y1, x2, y2)
-            graphics.setForegroundPen(1UB)
+            var bgPen = 0UB
+            var upperLeftPen = 2UB
+            var lowerRightPen = 1UB
+            if (this.active) {
+                bgPen = 4UB
+                upperLeftPen = 1UB
+                lowerRightPen = 2UB
+            }
 
+            graphics.setForegroundPen(bgPen)
+            graphics.fillRect(x1, y1, x2, y2)
+
+            graphics.setForegroundPen(upperLeftPen)
             graphics.drawLine(x1, y1, x2, y1)
+            graphics.drawLine(x1, y1, x1, y2)
+
+            graphics.setForegroundPen(lowerRightPen)
             graphics.drawLine(x2, y1, x2, y2)
             graphics.drawLine(x1, y2, x2, y2)
-            graphics.drawLine(x1, y1, x1, y2)
 
             var label = this.ensureLabel()
             label.paintAll(graphics)
         }
 
-        override fun onMouseClick(button: UByte, x: Short, y: Short): Bool {
+        override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
 //            ("Button click: " + button.toString() + " " + x.toString() + " " + y.toString()).println()
 
             if (this.contains(x, y)) {
+
+                if (type == MouseEventType.up) {
+                    this.active = false
 //                ("Button clicked: " + this.text).println()
-                var cl = this.clickListener
-                if (cl != null) {
-                    var res = cl(this)                    
-                    return res
+                    var cl = this.clickListener
+                    if (cl != null) {
+                        var res = cl(this)                    
+                        return res
+                    }
+                } else if (type == MouseEventType.down) {
+                    this.active = true
                 }
+
             }
             return false
         }

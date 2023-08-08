@@ -86,29 +86,35 @@ namespace Am.Ui
             this.refreshRequested = true
         }
 
-        fun attemptRefresh() {
+        fun repaint() {
+            this.paint()
+            this.refreshRequested = false
+            /*
             if (this.refreshRequested) {
                 this.refreshRequested = false
                 "Win refresh".println()
                 this.paint()
-//                this.refresh()
             }
+            */
         }
 
         private fun paint() {
-            "paint".println()
+            var graphics = this.getGraphics()
+            graphics.requestRepaintAll(this.refreshRequested)
             if (this.rootView != null) {
-                var graphics = this.getGraphics()
 //                ("X offset: " + this.graphics.xOffset.toString()).println()
-                if (this.fillBackground) {
-                    graphics.setForegroundPen(this.backgroundPen)
-                    graphics.fillRect(0S + this.border.left, 0S + this.border.top, this.width.toShort() - (1S + this.border.right), this.height.toShort() - (1S + this.border.bottom))
+                if (this.refreshRequested) {
+                    if (this.fillBackground) {
+                        graphics.setForegroundPen(this.backgroundPen)
+                        graphics.fillRect(0S + this.border.left, 0S + this.border.top, this.width.toShort() - (1S + this.border.right), this.height.toShort() - (1S + this.border.bottom))
+                    }
                 }
                 if (this.font != null) {
                     graphics.setFont(this.font)
                 }
                 this.rootView.paintAll(graphics)
             }
+            graphics.finalizePaintCycle()
         }
 
         private fun onResize(x: Short, y: Short, width: UShort, height: UShort) {
@@ -138,10 +144,10 @@ namespace Am.Ui
             this.close()
         }
 
-        fun onMouseClick(button: UByte, x: Short, y: Short) {
+        fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short) {
 //            var lx = this.border.left
             ("Window click: " + button.toString() + " " + x.toString() + " " + y.toString()).println()
-            this.rootView?.onMouseClick(button, x - this.border.left, y - this.border.top)
+            this.rootView?.onMouseEvent(type, button, x - this.border.left, y - this.border.top)
         }
 
         fun calculateStringWidth(font: Font, text: String): UShort {

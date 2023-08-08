@@ -237,12 +237,18 @@ void handle_message(aobject * this, struct IntuiMessage * msg) {
 			break;
 		case IDCMP_MOUSEBUTTONS:
 			printf("Mouse click %d\n", msg->Code);
-			if (msg->Code == IECODE_RBUTTON) // Check for right mouse button
+			if (msg->Code == MENUUP) // Check for right mouse button // IECODE_RBUTTON
 			{
-				Am_Ui_Window_onMouseClick_0(this, 2, msg->MouseX, msg->MouseY);
-			} else if (msg->Code == IECODE_LBUTTON) {
-				Am_Ui_Window_onMouseClick_0(this, 1, msg->MouseX, msg->MouseY);
+				Am_Ui_Window_onMouseEvent_0(this, 1, 2, msg->MouseX, msg->MouseY);
+			} else if (msg->Code == SELECTUP) {
+				Am_Ui_Window_onMouseEvent_0(this, 1, 1, msg->MouseX, msg->MouseY);
+			} else if (msg->Code == MENUDOWN) // Check for right mouse button
+			{
+				Am_Ui_Window_onMouseEvent_0(this, 2, 2, msg->MouseX, msg->MouseY);
+			} else if (msg->Code == SELECTDOWN) {
+				Am_Ui_Window_onMouseEvent_0(this, 2, 1, msg->MouseX, msg->MouseY);
 			}
+
 			break;
 	}
 }
