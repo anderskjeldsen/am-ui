@@ -4,6 +4,13 @@
 #include <Am/Lang/Object.h>
 #include <libc/core_inline_functions.h>
 
+#include <exec/types.h>
+#include <intuition/intuition.h>
+
+#include <proto/exec.h>
+#include <proto/intuition.h>
+
+
 function_result Am_Ui_WindowManager__native_init_0(aobject * const this)
 {
 	function_result __result = { .has_return_value = false };
