@@ -220,6 +220,8 @@ void handle_message(aobject * this, struct IntuiMessage * msg) {
 	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
 	struct Window * win = window_data->window;
 
+	printf("Handle message %d\n", msg->Class);
+
 	switch (msg->Class)
 	{
 		case IDCMP_CLOSEWINDOW:
@@ -227,10 +229,11 @@ void handle_message(aobject * this, struct IntuiMessage * msg) {
 			break;
 
 		case IDCMP_REFRESHWINDOW:
+			printf("handle refresh window\n");
 			window_data->pending_refresh = TRUE;
 			break;
 		case IDCMP_NEWSIZE:
-//			printf("Resize %dx%d\n", win->Width, win->Height);
+			printf("Resize %dx%d\n", win->Width, win->Height);
 	//					Am_Ui_Window_setBorder_0(this, win->BorderLeft, win->BorderTop, win->BorderRight, win->BorderBottom);
 			window_data->pending_resize= TRUE;
 //			Am_Ui_Window_onResize_0(this, win->LeftEdge, win->TopEdge, win->Width, win->Height);
@@ -275,24 +278,30 @@ function_result Am_Ui_Window_handleInput_0(aobject * const this)
 	printf("Wait done %d\n", signals);
 
 //	printf("Wait done %d, %d\n", sig_mask, signals & sig_mask);
-	if (signals & sig_mask)
+	if (TRUE) // signals & sig_mask)
 	{
 		struct IntuiMessage *msg;
-		while ((msg = (struct IntuiMessage *)GT_GetIMsg(window_data->window->UserPort)) != NULL)
+		while ((msg = (struct IntuiMessage *)GetMsg(window_data->window->UserPort)) != NULL)
 		{
+			printf("Handle msg\n");
+
 			handle_message(this, msg);
-			GT_ReplyIMsg((struct IntuiMessage *)msg);
+			ReplyMsg((struct Message *) msg);
 		}
 	}
+
+	printf("Handling done %d\n", signals);
 
 	if (window_data->pending_resize) {
 		Am_Ui_Window_onResize_0(this, win->LeftEdge, win->TopEdge, win->Width, win->Height);
 	}
 
 	if (window_data->pending_refresh) {
-		GT_BeginRefresh(window_data->window);
+		printf("handle pending refresh\n");
+
+		BeginRefresh(window_data->window);
 		Am_Ui_Window_paint_0(this);
-		GT_EndRefresh(window_data->window, TRUE);
+		EndRefresh(window_data->window, TRUE);
 	}
 
 /*
@@ -341,10 +350,11 @@ function_result Am_Ui_Window_refresh_0(aobject * const this)
 
 	printf("Create refresh message\n");
 
-    struct IntuiMessage refreshMsg;
-    refreshMsg.Class = IDCMP_REFRESHWINDOW;
-    refreshMsg.Code = 0;
-    PutMsg(window->UserPort, (struct Message *)&refreshMsg);
+//    struct IntuiMessage refreshMsg;
+	struct IntuiMessage *refresh_msg = &data->refresh_msg;
+    refresh_msg->Class = IDCMP_REFRESHWINDOW;
+    refresh_msg->Code = 0;
+    PutMsg(window->UserPort, (struct Message *)refresh_msg);
 	printf("Create refresh message done\n");
 
 __exit: ;

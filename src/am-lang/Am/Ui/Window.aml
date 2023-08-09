@@ -67,13 +67,13 @@ namespace Am.Ui
 /*
         fun repaint() {
             this.paint()
-            this.repaintRequested = false
+//            this.repaintRequested = false
         }
         */
 
         private fun paint() {
             var graphics = this.getGraphics()
-//            graphics.requestRepaintAll(this.refreshRequested)
+            graphics.requestRepaintAll()
             if (this.rootView != null) {
 //                ("X offset: " + this.graphics.xOffset.toString()).println()
 //                if (this.repaintRequested) {
