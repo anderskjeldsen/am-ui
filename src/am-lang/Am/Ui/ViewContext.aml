@@ -1,0 +1,12 @@
+
+namespace Am.Ui 
+{
+
+    interface ViewContext {
+        fun getWindow(): Window
+
+        // Keep information about Window/Screen/Gadget Context etc.
+    }
+
+}
+

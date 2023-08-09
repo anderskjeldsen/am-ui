@@ -1,0 +1,24 @@
+
+namespace Am.Ui 
+{
+
+    native class ViewContextGraphics(var viewContext: ViewContext) : Graphics {
+        import Am.Lang
+        private fun getWindow(): Window {
+            return this.viewContext.getWindow()
+        }
+        native override fun setForegroundPen(pen: UByte)
+        native override fun setBackgroundPen(pen: UByte)
+        native override fun drawLine(x: Short, y: Short, x2: Short, y2: Short)
+        native override fun eraseRect(x: Short, y: Short, x2: Short, y2: Short)
+        native override fun fillRect(x: Short, y: Short, x2: Short, y2: Short)
+        native override fun drawString(text: String, x: Short, y: Short)
+        native override fun calculateStringWidth(text: String): UShort
+        native override fun getCurrentFontSize(): UByte
+        native override fun setFont(font: Font)
+
+    }
+
+
+}
+

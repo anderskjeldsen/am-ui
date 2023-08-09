@@ -1,0 +1,11 @@
+
+namespace Am.Ui 
+{
+    native class GadgetViews {
+        import Am.Lang
+
+        native static fun layoutNative(gadgetView: GadToolsBase, x: Short, y: Short, width: UShort, height: UShort)
+    }
+
+}
+

@@ -1,0 +1,15 @@
+
+namespace Am.Ui 
+{
+
+    class GadToolsBase : View {
+        import Am.Lang
+
+        override fun layout(x: Short, y: Short, width: UShort, height: UShort) {
+            base.layout(x, y, width, height)
+            GadgetViews.layoutNative(this, x, y, width, height)
+        }
+    }
+
+}
+

@@ -1,0 +1,58 @@
+
+namespace Am.Ui 
+{
+
+    class Label(var text: String) : View {
+        import Am.Lang
+
+        var font: Font
+
+        fun getUsedFont(): Font {
+            if (this.font != null) {
+                return this.font
+            }
+            var vc = this.viewContext 
+            if (vc != null) {
+                return vc.getWindow().font
+            }
+            return null
+        }
+
+        override fun minHeight(): Short {
+            var font = this.getUsedFont()
+            if (font != null) {
+                return font.size.toShort()
+            }
+            var vc = this.viewContext 
+            if (vc != null) {
+                return vc.getWindow().getCurrentFontSize().toShort()
+            }
+            return 0S
+        }
+
+        override fun minWidth(): Short {
+            var font = this.getUsedFont()
+//            ("text width: " + this.viewContext.getWindow().calculateStringWidth(font, this.text).toString()).println()
+
+            return this.viewContext.getWindow().calculateStringWidth(font, this.text).toShort()
+        }
+
+        override fun paint(graphics: Graphics) {
+            base.paint(graphics)
+
+            var x1 = 0S
+            var y1 = 0S
+
+            graphics.setForegroundPen(1UB)
+            var font = this.getUsedFont()
+            if (font != null) {
+                graphics.setFont(font)
+            }
+
+            graphics.drawString(this.text, x1, y1)
+        }
+    }
+
+
+}
+

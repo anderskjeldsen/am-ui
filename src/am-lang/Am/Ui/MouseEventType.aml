@@ -1,0 +1,9 @@
+
+namespace Am.Ui 
+{
+    enum MouseEventType {
+        up = 1
+        down = 2
+    }
+}
+

@@ -1,0 +1,124 @@
+
+namespace Am.Ui 
+{
+    class ViewGroup : View {
+        import Am.Lang
+        import Am.Collections
+
+        private var children: List<View> = List<View>.newList<View>()
+        
+        var font: Font
+
+        fun getChildren() {
+            return this.children
+        }
+
+        fun addChild(view: View) {
+            this.children.add(view)
+            if (this.viewContext != null) {
+                view.onAttach(this.viewContext)
+            }
+        }
+
+        fun removeChild(view: View) {
+            this.children.remove(view)
+            view.onDetach()
+        }
+
+        fun removeChildren() {
+            each(this.children, c) {
+                c.onDetach()
+            }
+            var newList = List<View>.newList<View>()
+            this.children = newList
+        }
+
+        override fun onAttach(viewContext: ViewContext) {
+            base.onAttach(viewContext)
+//            "attach children".println()
+            each(this.children, c) {
+//                "attach child".println()
+                c.onAttach(viewContext)
+            }
+//            "attach done".println()
+        }
+
+        override fun onDetach() {
+            base.onDetach()
+            each(this.children, c) {
+                c.onDetach()
+            }
+        }
+
+
+        fun paintChildren(graphics: Graphics) {
+            each(this.children, c) {
+                c.paintAll(graphics)
+            }
+        }
+
+        override fun paintAll(graphics: Graphics) {
+            var ix = this.innerX()
+            var iy = this.innerY()
+
+            var b1 = graphics.shouldRepaintAll()
+            var b2 = this.getRepaintRequested()
+            if (b1 || b2) {
+                graphics.translate(ix, iy)
+                this.paint(graphics)
+                graphics.translate(-ix, -iy)
+            }
+            ix = this.x // because the padding is a part of the children's position by layout
+            iy = this.y
+            graphics.translate(ix, iy)
+            this.paintChildren(graphics)
+            graphics.translate(-ix, -iy)
+        }
+
+        fun layoutChildren() {
+            each(this.children, c) {
+                // Do nothing
+            }
+        }
+
+        override fun layout(x: Short, y: Short, width: UShort, height: UShort) {
+            base.layout(x, y, width, height)
+            this.layoutChildren()
+        }
+
+        override fun findViewAt(x: Short, y: Short): View {
+            if (this.contains(x, y)) {
+                each(this.children, c) {
+                    var lx = x - c.x
+                    var ly = y - c.y
+
+                    var v = c.findViewAt(lx, ly)
+                    if (v != null) {
+                        return v
+                    }
+                }
+                return this
+            }
+            return null
+        }
+
+        override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
+            if (this.contains(x, y)) {
+                each(this.children, c) {
+                    var lx = x - c.x 
+                    var ly = y - c.y
+
+                    var consumed = c.onMouseEvent(type, button, lx, ly)
+                    if (consumed) {
+                        return consumed
+                    }
+                }
+            }
+            return false
+        }
+
+
+    }
+
+}
+

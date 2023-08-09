@@ -1,0 +1,25 @@
+
+namespace Am.Ui 
+{
+
+
+    native class GadToolsButton : GadToolsBase {
+        import Am.Lang
+
+        private native fun attachButton(window: Window)
+        private native fun detachButton(window: Window)
+
+        override fun onAttach(viewContext: ViewContext) {
+            base.onAttach(viewContext)
+            this.attachButton(viewContext.getWindow())
+        }
+
+        override fun onDetach() {
+            this.detachButton(this.viewContext.getWindow())
+            base.onDetach()
+        }
+    }
+
+
+}
+

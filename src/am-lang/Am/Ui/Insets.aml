@@ -1,0 +1,13 @@
+
+namespace Am.Ui 
+{
+    class Insets (
+        var left: Short,
+        var top: Short,
+        var right: Short,
+        var bottom: Short,
+    ) {
+        import Am.Lang
+    }
+}
+

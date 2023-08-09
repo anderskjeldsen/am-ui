@@ -41,13 +41,14 @@ namespace Am.Ui
             var vStack = new VStack(5S)
             vStack.setPadding(5S)
 
-            vStack.addChild(new TestButton("Add label", (v) => {
+            vStack.addChild(new Button("Add label", (v) => {
                 "add label".println()
                 vStack.addChild(new Label("Another label"))
                 var w2 = w
                 w2.layout()
-                w2.requestRefresh()
-                w2.attemptRefresh()
+                w2.requestRepaint()
+//                w2.repaint()
+//                w2.attemptRefresh()
             }).setup((v) => {
                 "setup".println()
                 v.growX = 255UB
@@ -56,7 +57,7 @@ namespace Am.Ui
             vStack.addChild(new Label("Hello Amiga").setup((l) => {
 
             }))
-            vStack.addChild(new TestButton("Remove last label", (v) => {
+            vStack.addChild(new Button("Remove last label", (v) => {
                 "remove last label".println()
             }).setup((v) => {
                 v.growX = 255UB
@@ -67,8 +68,8 @@ namespace Am.Ui
             w.setRootView(vStack)
 
             w.layout()
-            w.requestRefresh()
-            w.attemptRefresh()
+            w.requestRepaint()
+//            w.repaint()
 
             while(w.isOpen()) {
                 w.handleInput()

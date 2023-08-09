@@ -16,6 +16,7 @@
 #include <proto/exec.h>
 #include <proto/intuition.h>
 #include <proto/gadtools.h>
+#include <proto/graphics.h>
 
 #include <libc/core_inline_functions.h>
 
@@ -274,7 +275,7 @@ function_result Am_Ui_Window_handleInput_0(aobject * const this)
 	printf("Wait done %d\n", signals);
 
 //	printf("Wait done %d, %d\n", sig_mask, signals & sig_mask);
-	if (TRUE) // signals & sig_mask)
+	if (signals & sig_mask)
 	{
 		struct IntuiMessage *msg;
 		while ((msg = (struct IntuiMessage *)GT_GetIMsg(window_data->window->UserPort)) != NULL)
@@ -335,8 +336,16 @@ function_result Am_Ui_Window_refresh_0(aobject * const this)
 	}
 
 	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
-	GT_RefreshWindow(data->window, NULL);
-//	SetAttrs(data->window, WA_Damage, WAD_REFRESH, TAG_DONE);
+	struct Window *window = data->window;
+//	EraseRect(window->RPort, 0, 0, window->Width - 1, window->Height - 1); // Erase old content
+
+	printf("Create refresh message\n");
+
+    struct IntuiMessage refreshMsg;
+    refreshMsg.Class = IDCMP_REFRESHWINDOW;
+    refreshMsg.Code = 0;
+    PutMsg(window->UserPort, (struct Message *)&refreshMsg);
+	printf("Create refresh message done\n");
 
 __exit: ;
 	if (this != NULL) {

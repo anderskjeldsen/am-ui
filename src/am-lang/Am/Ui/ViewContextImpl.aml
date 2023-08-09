@@ -1,0 +1,33 @@
+
+namespace Am.Ui 
+{
+
+    class ViewContextImpl : ViewContext {
+        import Am.Lang
+
+        private var windowRef: Weak<Window> = new Weak<Window>()
+//        private var graphicsRef: Weak<ViewContextGraphics> = new Weak<ViewContextGraphics>()
+
+        fun getWindow(): Window {
+            return this.windowRef.get()
+        }
+
+        fun setWindow(window: Window) {
+            this.windowRef.set(window)
+        }
+        
+        /*
+        fun getGraphics(): ViewContextGraphics {
+            return this.graphicsRef.get()
+        }
+
+        fun setGraphics(graphics: ViewContextGraphics) {
+            this.graphicsRef.set(graphics)
+        }
+        */
+
+
+    }
+
+}
+

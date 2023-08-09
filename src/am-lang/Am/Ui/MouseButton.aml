@@ -1,0 +1,11 @@
+
+namespace Am.Ui 
+{
+    enum MouseButton {
+        left = 1
+        right = 2
+        middle = 3
+    }
+
+}
+

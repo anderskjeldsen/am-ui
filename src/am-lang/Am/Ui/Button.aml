@@ -1,0 +1,108 @@
+
+namespace Am.Ui 
+{
+
+    class Button(var text: String, var clickListener: (view: View) => Bool) : View {
+        import Am.Lang
+
+        private var label: Label
+        private var active: Bool
+
+        override fun onAttach(viewContext: ViewContext) {
+            base.onAttach(viewContext)
+            var label = this.ensureLabel()
+            label.onAttach(viewContext)
+        }
+
+        override fun onDetach() {
+            base.onDetach()
+            var label = this.ensureLabel()
+            label.onDetach()
+        }
+
+        private fun ensureLabel(): Label {
+            if (this.label == null) {
+                this.label = new Label(this.text)
+            }
+            return this.label
+        }
+
+        override fun minHeight(): Short {
+            var label = this.ensureLabel()
+            return label.minHeight() + this.padding.top + this.padding.bottom
+        }
+
+        override fun minWidth(): Short {
+            var label = this.ensureLabel()
+            return label.minWidth() + this.padding.left + this.padding.right
+        }
+
+        override fun layout(x: Short, y: Short, width: UShort, height: UShort) {
+            base.layout(x, y, width, height)
+            var label = this.ensureLabel()
+            var lx = (this.innerWidth() / 2S) - (label.minWidth() / 2S)
+            var ly = (this.innerHeight() / 2S) - (label.minHeight() / 2S)
+            label.layout(lx, ly, label.minWidth().toUShort(), label.minHeight().toUShort())            
+        }
+
+        override fun paint(graphics: Graphics) {
+            base.paint(graphics)
+
+            var x1 = 0S
+            var x2 = this.innerWidth() - 1S
+            var y1 = 0S
+            var y2 = this.innerHeight() - 1S
+
+//            ("Paint " + x1.toString() + " to " + x2.toString()).println()
+
+            var bgPen = 0UB
+            var upperLeftPen = 2UB
+            var lowerRightPen = 1UB
+            if (this.active) {
+                bgPen = 4UB
+                upperLeftPen = 1UB
+                lowerRightPen = 2UB
+            }
+
+            graphics.setForegroundPen(bgPen)
+            graphics.fillRect(x1, y1, x2, y2)
+
+            graphics.setForegroundPen(upperLeftPen)
+            graphics.drawLine(x1, y1, x2, y1)
+            graphics.drawLine(x1, y1, x1, y2)
+
+            graphics.setForegroundPen(lowerRightPen)
+            graphics.drawLine(x2, y1, x2, y2)
+            graphics.drawLine(x1, y2, x2, y2)
+
+            var label = this.ensureLabel()
+            label.paintAll(graphics)
+        }
+
+        override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
+//            ("Button click: " + button.toString() + " " + x.toString() + " " + y.toString()).println()
+
+            if (this.contains(x, y)) {
+
+                if (type == MouseEventType.up) {
+                    this.active = false
+//                ("Button clicked: " + this.text).println()
+                    var cl = this.clickListener
+                    if (cl != null) {
+                        var res = cl(this)                    
+                        return res
+                    }
+                } else if (type == MouseEventType.down) {
+                    this.active = true
+                }
+                this.requestRepaint()
+
+            }
+            return false
+        }
+
+
+
+    }
+}
+

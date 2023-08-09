@@ -1,0 +1,33 @@
+
+namespace Am.Ui 
+{
+
+    native class Font(private var name: String, private var size: UByte) {
+        import Am.Lang
+        import Am.Collections
+
+        private static var cache: HashMap<String, Font> // = new HashMap<String, Font>()
+
+        fun getName(): String {
+            return this.name
+        }
+
+        fun getSize(): UByte {
+            return this.size
+        }
+
+        native fun calculateStringWidth(text: String): UShort
+
+        static fun loadFont(var name: String, var size: UByte) {
+            var key = name + ":" + size.toString()
+            var font = Font.cache.get(key)
+            if (font == null) {
+                font = new Font(name, size)
+                Font.cache.set(key, font)
+            }
+            return font
+        }
+    }
+
+}
+
