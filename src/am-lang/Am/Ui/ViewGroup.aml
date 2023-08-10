@@ -68,6 +68,7 @@ namespace Am.Ui
                 this.paint(graphics)
                 graphics.translate(-ix, -iy)
             }
+            this.markAsPainted()
             ix = this.x // because the padding is a part of the children's position by layout
             iy = this.y
             graphics.translate(ix, iy)

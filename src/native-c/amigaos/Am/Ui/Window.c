@@ -158,7 +158,7 @@ function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHO
 		WA_DetailPen, 1,
 		WA_BlockPen, 2,
 		WA_IDCMP, IDCMP_CLOSEWINDOW | IDCMP_GADGETUP | MENUPICK | MOUSEBUTTONS | REFRESHWINDOW | MOUSEMOVE | IDCMP_NEWSIZE | IDCMP_MOUSEBUTTONS,
-		WA_Flags, WFLG_SIZEGADGET | WFLG_ACTIVATE | WFLG_RMBTRAP | WFLG_DRAGBAR | WFLG_DEPTHGADGET | WFLG_CLOSEGADGET, //WFLG_BORDERLESS WFLG_BACKDROP
+		WA_Flags, WFLG_SIZEGADGET | WFLG_ACTIVATE | WFLG_RMBTRAP | WFLG_DRAGBAR | WFLG_DEPTHGADGET | WFLG_CLOSEGADGET | WFLG_SIMPLE_REFRESH, //WFLG_BORDERLESS WFLG_BACKDROP
 		WA_Gadgets, 0, // (ULONG) data->context_gadget,
 		WA_Title, (ULONG) "Hello",
 		WA_MinWidth, 0,
@@ -230,7 +230,11 @@ void handle_message(aobject * this, struct IntuiMessage * msg) {
 
 		case IDCMP_REFRESHWINDOW:
 			printf("handle refresh window\n");
-			window_data->pending_refresh = TRUE;
+			if (msg->Code == 1) {
+				window_data->pending_full_refresh = TRUE;
+			} else {
+				window_data->pending_refresh = TRUE;
+			}
 			break;
 		case IDCMP_NEWSIZE:
 			printf("Resize %dx%d\n", win->Width, win->Height);
@@ -270,6 +274,7 @@ function_result Am_Ui_Window_handleInput_0(aobject * const this)
 
 	window_data->pending_close = FALSE;
 	window_data->pending_refresh = FALSE;
+	window_data->pending_full_refresh = FALSE;
 	window_data->pending_resize = FALSE;
 
 	ULONG sig_mask = 1L << window_data->window->UserPort->mp_SigBit;
@@ -283,9 +288,10 @@ function_result Am_Ui_Window_handleInput_0(aobject * const this)
 		struct IntuiMessage *msg;
 		while ((msg = (struct IntuiMessage *)GetMsg(window_data->window->UserPort)) != NULL)
 		{
-			printf("Handle msg\n");
+			printf("Handle msg %d %p\n", msg->Class, msg);
 
 			handle_message(this, msg);
+			printf("Reply msg\n");
 			ReplyMsg((struct Message *) msg);
 		}
 	}
@@ -296,7 +302,10 @@ function_result Am_Ui_Window_handleInput_0(aobject * const this)
 		Am_Ui_Window_onResize_0(this, win->LeftEdge, win->TopEdge, win->Width, win->Height);
 	}
 
-	if (window_data->pending_refresh) {
+	if (window_data->pending_full_refresh) {
+		Am_Ui_Window_paint_0(this);
+	}
+	else if (window_data->pending_refresh) {
 		printf("handle pending refresh\n");
 
 		BeginRefresh(window_data->window);
@@ -352,8 +361,9 @@ function_result Am_Ui_Window_refresh_0(aobject * const this)
 
 //    struct IntuiMessage refreshMsg;
 	struct IntuiMessage *refresh_msg = &data->refresh_msg;
+	memset(refresh_msg, 0, sizeof(struct IntuiMessage));
     refresh_msg->Class = IDCMP_REFRESHWINDOW;
-    refresh_msg->Code = 0;
+    refresh_msg->Code = 1;
     PutMsg(window->UserPort, (struct Message *)refresh_msg);
 	printf("Create refresh message done\n");
 

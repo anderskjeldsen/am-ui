@@ -17,6 +17,7 @@ struct _Am_Ui_Window_data {
     struct Gadget *context_gadget;
     bool pending_close;
     bool pending_refresh;
+    bool pending_full_refresh;
     bool pending_resize;    
 };
 

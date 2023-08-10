@@ -99,13 +99,21 @@ namespace Am.Ui
                 var iy = this.innerY()
                 graphics.translate(ix, iy)
                 this.paint(graphics)
+                this.markAsPainted()
                 graphics.translate(-ix, -iy)
             }
         }
 
+        fun markAsPainted() {
+            this.repaintRequested = false
+        }
+
         fun requestRepaint() {
-            this.repaintRequested = true
-            this.viewContext.getWindow().requestRepaint()
+            var b = this.repaintRequested
+            if (!b) {
+                this.repaintRequested = true
+                this.viewContext.getWindow().requestRepaint()
+            }
         }
 
         fun layout(x: Short, y: Short, width: UShort, height: UShort) {

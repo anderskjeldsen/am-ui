@@ -1,0 +1,13 @@
+
+namespace Am.Ui 
+{
+    class Rectangle (
+        var x: Short,
+        var y: Short,
+        var width: UShort,
+        var height: UShort,
+    ) {
+        import Am.Lang
+    }
+}
+

@@ -4,9 +4,12 @@ namespace Am.Ui
 
     class Graphics {
         import Am.Lang
+        import Am.Collections
+
         private var xOffset: Short
         private var yOffset: Short
         private var repaintAllRequested: Bool = false
+        private var clipRects: List<Rectangle> = List<Rectangle>.newList<Rectangle>()
 
         fun translate(x: Short, y: Short) {
             this.xOffset = this.xOffset + x
@@ -23,6 +26,14 @@ namespace Am.Ui
 
         fun finalizeRepaintCycle() {
             this.repaintAllRequested = false
+        }
+
+        fun pushClipRect(rect: Rectangle) {
+            this.clipRects.add(rect)
+        }
+
+        fun popClipRect(): Rectangle {
+            return this.clipRects.removeAt(this.clipRects.size - 1)
         }
 
         abstract fun setForegroundPen(pen: UByte)

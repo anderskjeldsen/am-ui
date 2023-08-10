@@ -85,7 +85,10 @@ namespace Am.Ui
             if (this.contains(x, y)) {
 
                 if (type == MouseEventType.up) {
+//                    "Mouse up".println()
                     this.active = false
+                    this.requestRepaint()
+
 //                ("Button clicked: " + this.text).println()
                     var cl = this.clickListener
                     if (cl != null) {
@@ -93,9 +96,10 @@ namespace Am.Ui
                         return res
                     }
                 } else if (type == MouseEventType.down) {
+//                    "Mouse down".println()
                     this.active = true
+                    this.requestRepaint()
                 }
-                this.requestRepaint()
 
             }
             return false
