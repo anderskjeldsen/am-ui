@@ -6,8 +6,9 @@ namespace Am.Ui
         import Am.Collections
 
         override fun layoutChildren() {
-            var left = this.padding.left
-            var y = this.padding.top
+            var left = this.margin.left + this.padding.left + this.borderWidths.left
+            var y = this.margin.top + this.padding.top + this.borderWidths.top
+            ("First y: " + y.toString()).println()
             var height = this.innerHeight()
             var minHeight = this.innerMinHeight()
 
@@ -16,7 +17,7 @@ namespace Am.Ui
 
             var sumGrowY = this.sumGrowY()
 
-            var innerWidth = this.innerWidth() 
+            var innerWidth = this.innerWidth()
 
             each(this.children, c) {
                 var ch = c.minHeight() + ((c.growY.toInt() * unusedHeight.toInt()) / sumGrowY.toInt()).toShort()

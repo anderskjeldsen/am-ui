@@ -12,11 +12,13 @@ namespace Am.Ui
         private var screen: Screen
         private var viewContext: ViewContextImpl
         private var graphics: ViewContextGraphics
-//        private var repaintRequested: Bool
+        private var repaintRequested: Bool
         private var border: Insets
         private var backgroundPen: UByte
-        prviate var fillBackground: Bool
-        
+        private var fillBackground: Bool
+        private var pixelScaleX: UByte
+        private var pixelScaleY: UByte
+
         var font: Font
 
         fun getRootView(): View {
@@ -61,8 +63,11 @@ namespace Am.Ui
         }
 
         fun requestRepaint() {
-//            this.repaintRequested = true
-            this.refresh()
+            var b = this.repaintRequested
+            if (!b) {
+                this.repaintRequested = true
+                this.refresh()
+            }
         }
 /*
         fun repaint() {
@@ -88,6 +93,7 @@ namespace Am.Ui
                 this.rootView.paintAll(graphics)
             }
             graphics.finalizeRepaintCycle()
+            this.repaintRequested = false
         }
 
         private fun onResize(x: Short, y: Short, width: UShort, height: UShort) {
@@ -100,15 +106,10 @@ namespace Am.Ui
         }
 
         fun layout() {
-            "layout 1".println()
             if (this.rootView != null) {
-                "layout 2".println()
-
                 var b = this.border
-                "layout 3".println()
-
 //                ("border top" + b.top.toString()).println()
-                ("Win size: " + this.width.toString() + " x " + this.height.toString()).println()
+//                ("Win size: " + this.width.toString() + " x " + this.height.toString()).println()
                 this.rootView.layout(b.left, b.top, this.width - (b.left + b.right).toUShort(), this.height - (b.top + b.bottom).toUShort())
             }
         }
@@ -119,7 +120,7 @@ namespace Am.Ui
 
         fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short) {
 //            var lx = this.border.left
-            ("Window click: " + button.toString() + " " + x.toString() + " " + y.toString()).println()
+//            ("Window click: " + button.toString() + " " + x.toString() + " " + y.toString()).println()
             this.rootView?.onMouseEvent(type, button, x - this.border.left, y - this.border.top)
         }
 
@@ -144,6 +145,14 @@ namespace Am.Ui
 //            return this.viewContext.getGraphics()
         }
 
+        fun getPixelScaleX(): UByte {
+            return this.pixelScaleX
+        }
+
+        fun getPixelScaleY(): UByte {
+            return this.pixelScaleY
+        }
+
         native fun handleInput()
         native fun isOpen(): Bool
         private native fun refresh()
@@ -154,6 +163,15 @@ namespace Am.Ui
             this.viewContext = null
             this.graphics = null
         }
+
+        fun getScaledX(x: Short): Short {
+            return x * this.pixelScaleX.toShort()            
+        }
+
+        fun getScaledY(y: Short): Short {
+            return y * this.pixelScaleY.toShort()            
+        }
+
     }
 }
 

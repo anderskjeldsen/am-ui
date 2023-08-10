@@ -7,6 +7,18 @@ namespace Am.Ui
 
         private var label: Label
         private var active: Bool
+        private var hovered: Bool
+
+        private var borderPens: BorderPens = new BorderPens(2UB, 2UB, 1UB, 1UB)
+        private var activeBorderPens: BorderPens = new BorderPens(1UB, 1UB, 2UB, 2UB)
+
+        override fun setDefaultPadding() {
+            this.setPadding(5S)
+        }
+
+        override fun setDefaultBorder() {
+            this.setBorderWidths(1S)
+        }
 
         override fun onAttach(viewContext: ViewContext) {
             base.onAttach(viewContext)
@@ -29,19 +41,21 @@ namespace Am.Ui
 
         override fun minHeight(): Short {
             var label = this.ensureLabel()
-            return label.minHeight() + this.padding.top + this.padding.bottom
+            var minH = label.minHeight() + this.padding.top + this.padding.bottom + this.margin.top + this.margin.bottom + this.borderWidths.top + this.borderWidths.bottom
+            ("Button min height: " + minH.toString()).println()
+            return minH
         }
 
         override fun minWidth(): Short {
             var label = this.ensureLabel()
-            return label.minWidth() + this.padding.left + this.padding.right
+            return label.minWidth() + this.padding.left + this.padding.right + this.margin.left + this.margin.right + this.borderWidths.left + this.borderWidths.right
         }
 
         override fun layout(x: Short, y: Short, width: UShort, height: UShort) {
             base.layout(x, y, width, height)
             var label = this.ensureLabel()
-            var lx = (this.innerWidth() / 2S) - (label.minWidth() / 2S)
-            var ly = (this.innerHeight() / 2S) - (label.minHeight() / 2S)
+            var lx = ((this.innerWidth() / 2S) - (label.minWidth() / 2S)) + this.margin.left + this.borderWidths.left + this.padding.left
+            var ly = ((this.innerHeight() / 2S) - (label.minHeight() / 2S)) + this.margin.top + this.borderWidths.top + this.padding.top
             label.layout(lx, ly, label.minWidth().toUShort(), label.minHeight().toUShort())            
         }
 
@@ -49,24 +63,26 @@ namespace Am.Ui
             base.paint(graphics)
 
             var x1 = 0S
-            var x2 = this.innerWidth() - 1S
+            var x2 = this.width.toShort() - (this.margin.right + this.borderWidths.right + 1S)
             var y1 = 0S
-            var y2 = this.innerHeight() - 1S
+            var y2 = this.height.toShort() - (this.margin.bottom + this.borderWidths.bottom + 1S)
 
-//            ("Paint " + x1.toString() + " to " + x2.toString()).println()
+            ("Paint " + x1.toString() + "," + x1.toString() + " to " + x2.toString() + "," + y2.toString()).println()
 
+            var borderPens = this.borderPens
             var bgPen = 0UB
-            var upperLeftPen = 2UB
-            var lowerRightPen = 1UB
-            if (this.active) {
+            if (this.active && this.hovered) {
                 bgPen = 4UB
-                upperLeftPen = 1UB
-                lowerRightPen = 2UB
+                borderPens = this.activeBorderPens
             }
 
-            graphics.setForegroundPen(bgPen)
+            // Background bl,bt - w-br,h-bb
+            graphics.setForegroundPen(5UB)
             graphics.fillRect(x1, y1, x2, y2)
 
+            this.paintBorder(graphics, borderPens)
+
+/*            // Border ml, mt - w-mr, h-mb
             graphics.setForegroundPen(upperLeftPen)
             graphics.drawLine(x1, y1, x2, y1)
             graphics.drawLine(x1, y1, x1, y2)
@@ -74,7 +90,7 @@ namespace Am.Ui
             graphics.setForegroundPen(lowerRightPen)
             graphics.drawLine(x2, y1, x2, y2)
             graphics.drawLine(x1, y2, x2, y2)
-
+*/
             var label = this.ensureLabel()
             label.paintAll(graphics)
         }
@@ -82,7 +98,10 @@ namespace Am.Ui
         override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
 //            ("Button click: " + button.toString() + " " + x.toString() + " " + y.toString()).println()
 
+            var wasHovered = this.hovered
+
             if (this.contains(x, y)) {
+                this.hovered = true
 
                 if (type == MouseEventType.up) {
 //                    "Mouse up".println()
@@ -99,7 +118,28 @@ namespace Am.Ui
 //                    "Mouse down".println()
                     this.active = true
                     this.requestRepaint()
+                } else if (type == MouseEventType.move) {
+//                    ("Mouse move "  + x.toString() + ", " + y.toString()).println()
+                    if (!wasHovered) {
+                        if (this.active) {
+                            this.requestRepaint()
+                        }
+                    }
+
                 }
+
+            } else {
+                this.hovered = false
+
+                if (type == MouseEventType.up) {
+                    if (this.active) {
+                        this.active = false
+                        this.requestRepaint()
+                    }
+                } else if (wasHovered && this.active) {
+                    this.requestRepaint()
+                }
+
 
             }
             return false

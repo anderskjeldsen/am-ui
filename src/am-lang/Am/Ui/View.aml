@@ -10,6 +10,9 @@ namespace Am.Ui
         var width: UShort
         var height: UShort
         var padding: Insets = new Insets(0S, 0S, 0S, 0S)
+        var margin: Insets = new Insets(0S, 0S, 0S, 0S)
+        var borderWidths: Insets = new Insets(0S, 0S, 0S, 0S)
+//        var borderPens: BorderPens
         var growX: UByte
         var growY: UByte
         private var repaintRequested: Bool = false
@@ -19,11 +22,11 @@ namespace Am.Ui
         }
 
         fun minWidth(): Short {
-            return 0S
+            return this.margin.left + this.margin.right + this.padding.left + this.padding.right
         }
 
         fun minHeight(): Short {
-            return 0S
+            return this.margin.top + this.margin.bottom + this.padding.top + this.margin.bottom
         }
 
 /*
@@ -36,22 +39,31 @@ namespace Am.Ui
         }
 */
 
+        // Where is the actual content, inside the margin+border+padding
         fun innerX(): Short {
-            return this.x + this.padding.left
+            return this.x + this.margin.left + this.padding.left + this.borderWidths.left
 //            return this.padding.left
         }
 
         fun innerY(): Short {
-            return this.y + this.padding.top
+            return this.y + this.margin.top + this.padding.top + this.borderWidths.top
 //            return this.padding.top
         }
 
         fun innerWidth(): Short {
-            return (this.width.toShort() - (this.padding.left + this.padding.right))
+            return (this.width.toShort() - (this.margin.left + this.margin.right + this.padding.left + this.padding.right + this.borderWidths.left + this.borderWidths.right))
         }
 
         fun innerHeight(): Short {
-            return this.height.toShort() - (this.padding.top + this.padding.bottom)
+            return this.height.toShort() - (this.margin.top + this.margin.bottom + this.padding.top + this.padding.bottom + this.borderWidths.top + this.borderWidths.bottom)
+        }
+
+        fun setDefaultPadding() {
+            this.setPadding(0S)
+        }
+
+        fun setDefaultBorder() {
+            this.setBorderWidths(0S)
         }
 
         fun setPadding(padding: Short) {
@@ -66,6 +78,27 @@ namespace Am.Ui
             this.padding.top = vertical
             this.padding.right = horizontal
             this.padding.bottom = vertical
+        }
+
+        fun setMargin(margin: Short) {
+            this.margin.left = margin
+            this.margin.top = margin
+            this.margin.right = margin
+            this.margin.bottom = margin
+        }
+
+        fun setMargin(horizontal: Short, vertical: Short) {
+            this.margin.left = horizontal
+            this.margin.top = vertical
+            this.margin.right = horizontal
+            this.margin.bottom = vertical
+        }
+
+        fun setBorderWidths(width: Short) {
+            this.borderWidths.left = width
+            this.borderWidths.top = width
+            this.borderWidths.right = width
+            this.borderWidths.bottom = width
         }
 
         fun getViewContext(): ViewContext {
@@ -95,8 +128,11 @@ namespace Am.Ui
             var b1 = graphics.shouldRepaintAll()
             var b2 = this.getRepaintRequested()
             if (b1 || b2) {
-                var ix = this.innerX()
-                var iy = this.innerY()
+                var ix = this.x + this.margin.left
+                var iy = this.y + this.margin.top
+
+                ("Translate " + ix.toString() + "," + iy.toString()).println()
+
                 graphics.translate(ix, iy)
                 this.paint(graphics)
                 this.markAsPainted()
@@ -124,8 +160,27 @@ namespace Am.Ui
 //            ("Layout xyz" + x.toString() + "," + y.toString() + "," + width.toString() + "," + height.toString()).println()
         }
 
+        fun paintBorder(graphics: Graphics, borderPens: BorderPens) {
+            var x1 = 0S
+            var y1 = 0S
+            var x2 = this.width.toShort() - this.margin.right
+            var y2 = this.height.toShort() - this.margin.bottom
+
+            graphics.setForegroundPen(borderPens.top)
+            graphics.fillRect(x1, y1, x2, y1 + this.borderWidths.top)
+
+            graphics.setForegroundPen(borderPens.left)
+            graphics.drawLine(x1, y1, x1 + this.borderWidths.left, y2)
+
+            graphics.setForegroundPen(borderPens.right)
+            graphics.drawLine(x2 - this.borderWidths.right, y1, x2, y2)
+
+            graphics.setForegroundPen(borderPens.bottom)
+            graphics.drawLine(x1, y2 - this.borderWidths.bottom, x2, y2)
+        }
+
         fun contains(x: Short, y: Short): Bool {
-            ("contains " + x.toString() + "," + y.toString() + " in " + this.width.toString() + ", " + this.height.toString()).println()
+//            ("contains " + x.toString() + "," + y.toString() + " in " + this.width.toString() + ", " + this.height.toString()).println()
 
             return ((x >= 0S) && (x < this.width) && (y >= 0S) && (y < this.height))
         }

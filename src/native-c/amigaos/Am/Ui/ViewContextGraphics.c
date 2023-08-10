@@ -120,12 +120,13 @@ function_result Am_Ui_ViewContextGraphics_drawLine_0(aobject * const this, short
 	short ty = translated_y(this, y);
 	short tx2 = translated_x(this, x2);
 	short ty2 = translated_y(this, y2);
-/*
-	printf("x %d => %d\n", x, tx);
-	printf("x2 %d => %d\n", x2, tx2);
-	printf("y %d => %d\n", y, ty);
-	printf("y2 %d => %d\n", y2, ty2);
-*/
+
+	printf("Draw line from %d, %d\n", tx, ty);
+//	printf("x %d => %d\n", x, tx);
+//	printf("x2 %d => %d\n", x2, tx2);
+//	printf("y %d => %d\n", y, ty);
+//	printf("y2 %d => %d\n", y2, ty2);
+
     Move(rp, tx, ty);
     Draw(rp, tx2, ty2);
 

@@ -18,7 +18,9 @@ struct _Am_Ui_Window_data {
     bool pending_close;
     bool pending_refresh;
     bool pending_full_refresh;
-    bool pending_resize;    
+    bool pending_resize;
+    short last_mouse_x;
+    short last_mouse_y;
 };
 
 #endif

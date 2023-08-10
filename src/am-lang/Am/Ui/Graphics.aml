@@ -12,8 +12,15 @@ namespace Am.Ui
         private var clipRects: List<Rectangle> = List<Rectangle>.newList<Rectangle>()
 
         fun translate(x: Short, y: Short) {
+            this.printOffset()
             this.xOffset = this.xOffset + x
-            this.yOffset = this.yOffset + y
+            this.yOffset = this.yOffset + y            
+            this.printOffset()
+
+        }
+
+        fun printOffset() {
+            ("offset: " + this.xOffset.toString() + "," + this.yOffset.toString()).println()
         }
 
         fun shouldRepaintAll(): Bool {

@@ -1,0 +1,13 @@
+
+namespace Am.Ui 
+{
+    class BorderPens (
+        var left: UByte,
+        var top: UByte,
+        var right: UByte,
+        var bottom: UByte,
+    ) {
+        import Am.Lang
+    }
+}
+

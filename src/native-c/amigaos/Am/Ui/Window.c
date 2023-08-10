@@ -96,6 +96,23 @@ __exit: ;
 	return __result;
 };
 
+UBYTE calculate_pixel_scale_x(USHORT screen_width, USHORT screen_height) {
+	USHORT xs = screen_width / screen_height;
+	if (xs == 0) {
+		xs = 1;
+	}
+	return (UBYTE) xs;
+}
+
+UBYTE calculate_pixel_scale_y(USHORT screen_width, USHORT screen_height) {
+	USHORT ys = screen_height / screen_width;
+	if (ys == 0) {
+		ys = 1;
+	}
+	return (UBYTE) ys;
+}
+
+
 function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHORT width, USHORT height, aobject * screen, aobject * windowManager) //, aobject * screen)
 {
 	function_result __result = { .has_return_value = false };
@@ -157,7 +174,7 @@ function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHO
 		WA_Height, height,
 		WA_DetailPen, 1,
 		WA_BlockPen, 2,
-		WA_IDCMP, IDCMP_CLOSEWINDOW | IDCMP_GADGETUP | MENUPICK | MOUSEBUTTONS | REFRESHWINDOW | MOUSEMOVE | IDCMP_NEWSIZE | IDCMP_MOUSEBUTTONS,
+		WA_IDCMP, IDCMP_CLOSEWINDOW | IDCMP_GADGETUP | MENUPICK | MOUSEBUTTONS | REFRESHWINDOW | IDCMP_INTUITICKS | IDCMP_NEWSIZE | IDCMP_MOUSEBUTTONS,
 		WA_Flags, WFLG_SIZEGADGET | WFLG_ACTIVATE | WFLG_RMBTRAP | WFLG_DRAGBAR | WFLG_DEPTHGADGET | WFLG_CLOSEGADGET | WFLG_SIMPLE_REFRESH, //WFLG_BORDERLESS WFLG_BACKDROP
 		WA_Gadgets, 0, // (ULONG) data->context_gadget,
 		WA_Title, (ULONG) "Hello",
@@ -179,6 +196,14 @@ function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHO
 		__throw_simple_exception("Unable to open window", "Am_Ui_Window_open_0, OpenWindowTagList", &__result);
 		goto __exit;
 	}
+
+	// if we want a 5 pixel padding around a view, then:
+	// 320x256: x: 5x1, y:5x1
+	// 640x256: x: 5x2, y: 5x1
+	// 320x512: x: 5x1, y: 5x2
+
+	this->object_properties.class_object_properties.properties[Am_Ui_Window_P_pixelScaleX].nullable_value.value.uchar_value = calculate_pixel_scale_x(window->WScreen->Width, window->WScreen->Height);
+	this->object_properties.class_object_properties.properties[Am_Ui_Window_P_pixelScaleY].nullable_value.value.uchar_value = calculate_pixel_scale_y(window->WScreen->Width, window->WScreen->Height);
 
 	Am_Ui_Window_setBorder_0(this, window->BorderLeft, window->BorderTop, window->BorderRight, window->BorderBottom);
 	Am_Ui_Window_onResize_0(this, window->LeftEdge, window->TopEdge, window->Width, window->Height);
@@ -220,7 +245,7 @@ void handle_message(aobject * this, struct IntuiMessage * msg) {
 	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
 	struct Window * win = window_data->window;
 
-	printf("Handle message %d\n", msg->Class);
+//	printf("Handle message %d\n", msg->Class);
 
 	switch (msg->Class)
 	{
@@ -244,19 +269,26 @@ void handle_message(aobject * this, struct IntuiMessage * msg) {
 	//					GT_RefreshWindow(win, NULL);
 			break;
 		case IDCMP_MOUSEBUTTONS:
-			printf("Mouse click %d\n", msg->Code);
+//			printf("Mouse click %d\n", msg->Code);
 			if (msg->Code == MENUUP) // Check for right mouse button // IECODE_RBUTTON
 			{
-				Am_Ui_Window_onMouseEvent_0(this, 1, 2, msg->MouseX, msg->MouseY);
+				Am_Ui_Window_onMouseEvent_0(this, 2, 2, msg->MouseX, msg->MouseY);
 			} else if (msg->Code == SELECTUP) {
-				Am_Ui_Window_onMouseEvent_0(this, 1, 1, msg->MouseX, msg->MouseY);
+				Am_Ui_Window_onMouseEvent_0(this, 2, 1, msg->MouseX, msg->MouseY);
 			} else if (msg->Code == MENUDOWN) // Check for right mouse button
 			{
-				Am_Ui_Window_onMouseEvent_0(this, 2, 2, msg->MouseX, msg->MouseY);
+				Am_Ui_Window_onMouseEvent_0(this, 3, 2, msg->MouseX, msg->MouseY);
 			} else if (msg->Code == SELECTDOWN) {
-				Am_Ui_Window_onMouseEvent_0(this, 2, 1, msg->MouseX, msg->MouseY);
+				Am_Ui_Window_onMouseEvent_0(this, 3, 1, msg->MouseX, msg->MouseY);
 			}
-
+			break;
+		case IDCMP_MOUSEMOVE:
+		case IDCMP_INTUITICKS:
+			if (msg->MouseX != window_data->last_mouse_x && msg->MouseY != window_data->last_mouse_y) {
+				window_data->last_mouse_x = msg->MouseX;
+				window_data->last_mouse_y = msg->MouseY;
+				Am_Ui_Window_onMouseEvent_0(this, 1, 0, msg->MouseX, msg->MouseY);
+			}
 			break;
 	}
 }
@@ -278,25 +310,25 @@ function_result Am_Ui_Window_handleInput_0(aobject * const this)
 	window_data->pending_resize = FALSE;
 
 	ULONG sig_mask = 1L << window_data->window->UserPort->mp_SigBit;
-	printf("Wait %d\n", sig_mask);
+//	printf("Wait %d\n", sig_mask);
 	ULONG signals = Wait(sig_mask);
-	printf("Wait done %d\n", signals);
+//	printf("Wait done %d\n", signals);
 
 //	printf("Wait done %d, %d\n", sig_mask, signals & sig_mask);
-	if (TRUE) // signals & sig_mask)
+	if (signals & sig_mask) // )
 	{
 		struct IntuiMessage *msg;
 		while ((msg = (struct IntuiMessage *)GetMsg(window_data->window->UserPort)) != NULL)
 		{
-			printf("Handle msg %d %p\n", msg->Class, msg);
+//			printf("Handle msg %d %p\n", msg->Class, msg);
 
 			handle_message(this, msg);
-			printf("Reply msg\n");
-			ReplyMsg((struct Message *) msg);
+
+			ReplyMsg((struct Message *) msg);				
 		}
 	}
 
-	printf("Handling done %d\n", signals);
+//	printf("Handling done %d\n", signals);
 
 	if (window_data->pending_resize) {
 		Am_Ui_Window_onResize_0(this, win->LeftEdge, win->TopEdge, win->Width, win->Height);
@@ -357,15 +389,14 @@ function_result Am_Ui_Window_refresh_0(aobject * const this)
 	struct Window *window = data->window;
 //	EraseRect(window->RPort, 0, 0, window->Width - 1, window->Height - 1); // Erase old content
 
-	printf("Create refresh message\n");
-
 //    struct IntuiMessage refreshMsg;
+	Forbid();
 	struct IntuiMessage *refresh_msg = &data->refresh_msg;
 	memset(refresh_msg, 0, sizeof(struct IntuiMessage));
     refresh_msg->Class = IDCMP_REFRESHWINDOW;
     refresh_msg->Code = 1;
     PutMsg(window->UserPort, (struct Message *)refresh_msg);
-	printf("Create refresh message done\n");
+	Permit();
 
 __exit: ;
 	if (this != NULL) {

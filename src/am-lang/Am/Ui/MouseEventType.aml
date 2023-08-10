@@ -2,8 +2,10 @@
 namespace Am.Ui 
 {
     enum MouseEventType {
-        up = 1
-        down = 2
+        move = 1
+        up = 2
+        down = 3
+        middle= 4
     }
 }
 

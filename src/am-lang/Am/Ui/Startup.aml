@@ -39,7 +39,7 @@ namespace Am.Ui
 
 
             var vStack = new VStack(5S)
-            vStack.setPadding(5S)
+            vStack.setPadding(0S)
 
             vStack.addChild(new Button("Add label", (v) => {
                 "add label".println()
@@ -51,20 +51,25 @@ namespace Am.Ui
 //                w2.attemptRefresh()
             }).setup((v) => {
                 "setup".println()
+                v.setDefaultPadding()
+                var w2 = w
+                v.setMargin(w2.getScaledX(5S), w2.getScaledY(5S))
                 v.growX = 255UB
                 v.growY = 128UB
             }))
+            /*
             vStack.addChild(new Label("Hello Amiga").setup((l) => {
 
             }))
             vStack.addChild(new Button("Remove last label", (v) => {
                 "remove last label".println()
             }).setup((v) => {
+                v.setDefaultPadding()
                 v.growX = 255UB
                 v.growY = 128UB
-                v.setPadding(5S)
+//                v.setPadding(5S)
             }))
-
+*/
             w.setRootView(vStack)
 
             w.layout()
