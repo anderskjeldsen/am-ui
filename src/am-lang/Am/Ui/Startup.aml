@@ -36,26 +36,23 @@ namespace Am.Ui
 
         static fun main() {
             var w = Window.openWindow(20S, 20S, 150US, 150US, null, null)
-
+            var pm = w.getPixelMetrics()
 
             var vStack = new VStack(5S)
             vStack.setPadding(w.getScaledX(2S), w.getScaledY(2S))
 
             vStack.addChild(new Button("Add label", (v) => {
-//                "add label".println()
                 vStack.addChild(new Label("Another label"))
                 var w2 = w
                 w2.layout()
                 w2.requestRepaint()
-//                w2.repaint()
-//                w2.attemptRefresh()
             }).setup((v) => {
                 "setup".println()
                 v.setDefaultPadding()
                 var w2 = w
 //                v.setMargin(w2.getScaledX(2S), w2.getScaledY(2S))
                 v.growX = 255UB
-                v.growY = 128UB
+                v.growY = 0UB
             }))
 
             var l2 = new Label("Hello")

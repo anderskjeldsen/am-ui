@@ -6,6 +6,8 @@ namespace Am.Ui
         import Am.Lang
 
         var font: Font
+        var backgroundPen: UByte = 0UB
+        var textPen: UByte = 1UB
 
         fun getUsedFont(): Font {
             if (this.font != null) {
@@ -43,7 +45,8 @@ namespace Am.Ui
             var x1 = 0S
             var y1 = 0S
 
-            graphics.setForegroundPen(1UB)
+            graphics.setBackgroundPen(this.backgroundPen)
+            graphics.setForegroundPen(this.textPen)
             var font = this.getUsedFont()
             if (font != null) {
                 graphics.setFont(font)

@@ -17,7 +17,7 @@ namespace Am.Ui
         }
 
         override fun setDefaultBorder() {
-            this.setBorderWidths(1S)
+            this.setBorderWidths(2S, 1S)
         }
 
         override fun onAttach(viewContext: ViewContext) {
@@ -72,15 +72,15 @@ namespace Am.Ui
             var borderPens = this.borderPens
             var bgPen = 0UB
             if (this.active && this.hovered) {
-                bgPen = 4UB
+                bgPen = 3UB
                 borderPens = this.activeBorderPens
             }
 
-            // Background bl,bt - w-br,h-bb
-            graphics.setForegroundPen(0UB)
+            // Background bl,bt - w-br,h-bb            
+            graphics.setForegroundPen(bgPen)
             graphics.fillRect(x1, y1, x2, y2)
 
-            this.paintBorder(graphics, borderPens)
+            this.paintNativeBorder(graphics, borderPens)
 
 /*            // Border ml, mt - w-mr, h-mb
             graphics.setForegroundPen(upperLeftPen)
@@ -92,6 +92,7 @@ namespace Am.Ui
             graphics.drawLine(x1, y2, x2, y2)
 */
             var label = this.ensureLabel()
+            label.backgroundPen = bgPen
             label.paintAll(graphics)
         }
 

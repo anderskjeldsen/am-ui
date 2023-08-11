@@ -1,0 +1,11 @@
+
+namespace Am.Ui 
+{
+    class PixelMetrics (
+        var horizontalFraction: UByte,
+        var verticalFraction: UByte
+    ) {
+        import Am.Lang
+    }
+}
+

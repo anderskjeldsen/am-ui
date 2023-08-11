@@ -101,6 +101,13 @@ namespace Am.Ui
             this.borderWidths.bottom = width
         }
 
+        fun setBorderWidths(horizontal: Short, vertical: Short) {
+            this.borderWidths.left = horizontal
+            this.borderWidths.top = vertical
+            this.borderWidths.right = horizontal
+            this.borderWidths.bottom = vertical
+        }
+
         fun getViewContext(): ViewContext {
             return this.viewContext
         }
@@ -170,13 +177,34 @@ namespace Am.Ui
             graphics.fillRect(x1, y1, x2, y1 + this.borderWidths.top)
 
             graphics.setForegroundPen(borderPens.left)
-            graphics.drawLine(x1, y1, x1 + this.borderWidths.left, y2)
+            graphics.fillRect(x1, y1, x1 + this.borderWidths.left, y2)
 
             graphics.setForegroundPen(borderPens.right)
-            graphics.drawLine(x2 - this.borderWidths.right, y1, x2, y2)
+            graphics.fillRect(x2 - this.borderWidths.right, y1, x2, y2)
 
             graphics.setForegroundPen(borderPens.bottom)
-            graphics.drawLine(x1, y2 - this.borderWidths.bottom, x2, y2)
+            graphics.fillRect(x1, y2 - this.borderWidths.bottom, x2, y2)
+        }
+
+        fun paintNativeBorder(graphics: Graphics, borderPens: BorderPens) {
+            var x1 = 0S
+            var y1 = 0S
+            var x2 = this.width.toShort() - (this.margin.right + this.margin.left + 1S)
+            var y2 = this.height.toShort() - (this.margin.bottom + this.margin.top + 1S)
+
+            graphics.setForegroundPen(borderPens.top)
+            graphics.drawLine(x1, y1, x2 - 1S, y1 + this.borderWidths.top)
+
+            graphics.setForegroundPen(borderPens.left)
+            graphics.drawLine(x1, y1, x1, y2)
+            graphics.drawLine(x1 + 1S, y1, x1 + 1S, y2 - 1S)
+
+            graphics.setForegroundPen(borderPens.right)
+            graphics.drawLine(x2, y1, x2, y2)
+            graphics.drawLine(x2 - 1S, y1 + 1S, x2 - 1S, y2)
+
+            graphics.setForegroundPen(borderPens.bottom)
+            graphics.drawLine(x1 + 1S, y2, x2, y2)
         }
 
         fun contains(x: Short, y: Short): Bool {
