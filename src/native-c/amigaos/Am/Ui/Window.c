@@ -254,7 +254,7 @@ void handle_message(aobject * this, struct IntuiMessage * msg) {
 			break;
 
 		case IDCMP_REFRESHWINDOW:
-			printf("handle refresh window\n");
+//			printf("handle refresh window\n");
 			if (msg->Code == 1) {
 				window_data->pending_full_refresh = TRUE;
 			} else {
@@ -262,7 +262,7 @@ void handle_message(aobject * this, struct IntuiMessage * msg) {
 			}
 			break;
 		case IDCMP_NEWSIZE:
-			printf("Resize %dx%d\n", win->Width, win->Height);
+//			printf("Resize %dx%d\n", win->Width, win->Height);
 	//					Am_Ui_Window_setBorder_0(this, win->BorderLeft, win->BorderTop, win->BorderRight, win->BorderBottom);
 			window_data->pending_resize= TRUE;
 //			Am_Ui_Window_onResize_0(this, win->LeftEdge, win->TopEdge, win->Width, win->Height);

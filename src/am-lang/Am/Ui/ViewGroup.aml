@@ -55,8 +55,8 @@ namespace Am.Ui
         }
 
         override fun paintAll(graphics: Graphics) {
-            var ix = this.x
-            var iy = this.y
+            var ix = this.x + this.margin.left
+            var iy = this.y + this.margin.top
 
             var b1 = graphics.shouldRepaintAll()
             var b2 = this.getRepaintRequested()
@@ -66,8 +66,8 @@ namespace Am.Ui
                 graphics.translate(-ix, -iy)
             }
             this.markAsPainted()
-            ix = this.x // because the padding is a part of the children's position by layout
-            iy = this.y
+            ix = this.x + this.margin.left + this.borderWidths.left + this.padding.left
+            iy = this.y + this.margin.top + this.borderWidths.top + this.padding.top
             graphics.translate(ix, iy)
             this.paintChildren(graphics)
             graphics.translate(-ix, -iy)
@@ -115,7 +115,10 @@ namespace Am.Ui
             return false
         }
 
-
+        fun setupGroup(i: (it: ViewGroup) => ViewGroup) : ViewGroup {
+            i(this)
+            return this
+        }
     }
 
 }

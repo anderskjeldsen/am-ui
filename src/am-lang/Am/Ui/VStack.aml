@@ -6,14 +6,16 @@ namespace Am.Ui
         import Am.Collections
 
         override fun layoutChildren() {
-            var left = this.margin.left + this.padding.left + this.borderWidths.left
-            var y = this.margin.top + this.padding.top + this.borderWidths.top
-            ("First y: " + y.toString()).println()
+            var left = 0S // this.margin.left + this.padding.left + this.borderWidths.left
+            var y = 0S // this.margin.top + this.padding.top + this.borderWidths.top
+//            ("First y: " + y.toString()).println()
             var height = this.innerHeight()
             var minHeight = this.innerMinHeight()
 
+//            ("Height: " + height.toString() + " vs inner height: " + minHeight.toString()).println()
+
             var unusedHeight = Short.max(height - minHeight, 0S)
-            var remainingHeight = unusedHeight
+            var remainingHeight = unusedHeight            
 
             var sumGrowY = this.sumGrowY()
 
@@ -38,7 +40,7 @@ namespace Am.Ui
         }
 
         override fun minHeight(): Short {
-            return this.innerMinHeight() + this.padding.top + this.padding.bottom
+            return this.innerMinHeight() + this.padding.top + this.padding.bottom + this.margin.top + this.margin.bottom + this.borderWidths.top + this.borderWidths.bottom
         }
 
         fun innerMinWidth(): Short {
@@ -53,7 +55,7 @@ namespace Am.Ui
         }
 
         override fun minWidth(): Short {
-            return this.innerMinWidth() + this.padding.left + this.padding.right
+            return this.innerMinWidth() + this.padding.left + this.padding.right + this.margin.left + this.margin.right + this.borderWidths.left + this.borderWidths.right
         }
 
         fun sumGrowY(): Short {

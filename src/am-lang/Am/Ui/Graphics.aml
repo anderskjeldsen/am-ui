@@ -20,7 +20,7 @@ namespace Am.Ui
         }
 
         fun printOffset() {
-            ("offset: " + this.xOffset.toString() + "," + this.yOffset.toString()).println()
+//            ("offset: " + this.xOffset.toString() + "," + this.yOffset.toString()).println()
         }
 
         fun shouldRepaintAll(): Bool {

@@ -42,7 +42,6 @@ namespace Am.Ui
         override fun minHeight(): Short {
             var label = this.ensureLabel()
             var minH = label.minHeight() + this.padding.top + this.padding.bottom + this.margin.top + this.margin.bottom + this.borderWidths.top + this.borderWidths.bottom
-            ("Button min height: " + minH.toString()).println()
             return minH
         }
 
@@ -54,8 +53,8 @@ namespace Am.Ui
         override fun layout(x: Short, y: Short, width: UShort, height: UShort) {
             base.layout(x, y, width, height)
             var label = this.ensureLabel()
-            var lx = ((this.innerWidth() / 2S) - (label.minWidth() / 2S)) + this.margin.left + this.borderWidths.left + this.padding.left
-            var ly = ((this.innerHeight() / 2S) - (label.minHeight() / 2S)) + this.margin.top + this.borderWidths.top + this.padding.top
+            var lx = ((this.innerWidth() / 2S) - (label.minWidth() / 2S)) + this.borderWidths.left + this.padding.left
+            var ly = ((this.innerHeight() / 2S) - (label.minHeight() / 2S)) + this.borderWidths.top + this.padding.top
             label.layout(lx, ly, label.minWidth().toUShort(), label.minHeight().toUShort())            
         }
 
@@ -63,11 +62,12 @@ namespace Am.Ui
             base.paint(graphics)
 
             var x1 = 0S
-            var x2 = this.width.toShort() - (this.margin.right + this.borderWidths.right + 1S)
+            var x2 = this.width.toShort() - (this.margin.right + this.margin.left + 1S)
             var y1 = 0S
-            var y2 = this.height.toShort() - (this.margin.bottom + this.borderWidths.bottom + 1S)
+            var y2 = this.height.toShort() - (this.margin.bottom + this.margin.top + 1S)
 
-            ("Paint " + x1.toString() + "," + x1.toString() + " to " + x2.toString() + "," + y2.toString()).println()
+//            ("Height: " + this.height.toString()).println()
+//            ("Paint " + x1.toString() + "," + x1.toString() + " to " + x2.toString() + "," + y2.toString()).println()
 
             var borderPens = this.borderPens
             var bgPen = 0UB
@@ -77,7 +77,7 @@ namespace Am.Ui
             }
 
             // Background bl,bt - w-br,h-bb
-            graphics.setForegroundPen(5UB)
+            graphics.setForegroundPen(0UB)
             graphics.fillRect(x1, y1, x2, y2)
 
             this.paintBorder(graphics, borderPens)

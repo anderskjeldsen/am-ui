@@ -131,7 +131,7 @@ namespace Am.Ui
                 var ix = this.x + this.margin.left
                 var iy = this.y + this.margin.top
 
-                ("Translate " + ix.toString() + "," + iy.toString()).println()
+//                ("Translate " + ix.toString() + "," + iy.toString()).println()
 
                 graphics.translate(ix, iy)
                 this.paint(graphics)
@@ -163,8 +163,8 @@ namespace Am.Ui
         fun paintBorder(graphics: Graphics, borderPens: BorderPens) {
             var x1 = 0S
             var y1 = 0S
-            var x2 = this.width.toShort() - this.margin.right
-            var y2 = this.height.toShort() - this.margin.bottom
+            var x2 = this.width.toShort() - (this.margin.right + this.margin.left + 1S)
+            var y2 = this.height.toShort() - (this.margin.bottom + this.margin.top + 1S)
 
             graphics.setForegroundPen(borderPens.top)
             graphics.fillRect(x1, y1, x2, y1 + this.borderWidths.top)

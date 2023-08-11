@@ -39,10 +39,10 @@ namespace Am.Ui
 
 
             var vStack = new VStack(5S)
-            vStack.setPadding(0S)
+            vStack.setPadding(w.getScaledX(2S), w.getScaledY(2S))
 
             vStack.addChild(new Button("Add label", (v) => {
-                "add label".println()
+//                "add label".println()
                 vStack.addChild(new Label("Another label"))
                 var w2 = w
                 w2.layout()
@@ -53,10 +53,29 @@ namespace Am.Ui
                 "setup".println()
                 v.setDefaultPadding()
                 var w2 = w
-                v.setMargin(w2.getScaledX(5S), w2.getScaledY(5S))
+//                v.setMargin(w2.getScaledX(2S), w2.getScaledY(2S))
                 v.growX = 255UB
                 v.growY = 128UB
             }))
+
+            var l2 = new Label("Hello")
+
+            l2.setup((v) => {
+                v.growX = 255UB
+            })
+
+            var hStack = new HStack(5S)
+
+            hStack.addChild(new Label("Hello").setup((v) => {
+                v.growX = 255UB
+            }))
+
+            hStack.addChild(new Label("World").setup((v) => {
+                v.growX = 255UB
+            }))
+
+            vStack.addChild(hStack)
+
             /*
             vStack.addChild(new Label("Hello Amiga").setup((l) => {
 
