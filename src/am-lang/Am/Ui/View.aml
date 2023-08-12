@@ -193,7 +193,7 @@ namespace Am.Ui
             var y2 = this.height.toShort() - (this.margin.bottom + this.margin.top + 1S)
 
             graphics.setForegroundPen(borderPens.top)
-            graphics.drawLine(x1, y1, x2 - 1S, y1 + this.borderWidths.top)
+            graphics.drawLine(x1, y1, x2 - 1S, y1)
 
             graphics.setForegroundPen(borderPens.left)
             graphics.drawLine(x1, y1, x1, y2)

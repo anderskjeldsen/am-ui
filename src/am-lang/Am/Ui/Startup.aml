@@ -38,7 +38,13 @@ namespace Am.Ui
             var w = Window.openWindow(20S, 20S, 150US, 150US, null, null)
             var pm = w.getPixelMetrics()
 
+            var panel = new Panel()
+            panel.setDefaultBorder()
+            panel.setDefaultPadding()
+            panel.setMargin(w.getScaledX(2S), w.getScaledY(2S))
+
             var vStack = new VStack(5S)
+            panel.setChild(vStack)
             vStack.setPadding(w.getScaledX(2S), w.getScaledY(2S))
 
             vStack.addChild(new Button("Add label", (v) => {
@@ -86,7 +92,7 @@ namespace Am.Ui
 //                v.setPadding(5S)
             }))
 */
-            w.setRootView(vStack)
+            w.setRootView(panel)
 
             w.layout()
             w.requestRepaint()

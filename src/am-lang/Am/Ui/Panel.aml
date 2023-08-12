@@ -1,0 +1,98 @@
+
+namespace Am.Ui 
+{
+
+    class Panel() : View {
+        import Am.Lang
+
+        private var child: View
+
+        private var borderPens: BorderPens = new BorderPens(2UB, 2UB, 1UB, 1UB)
+
+        override fun setDefaultPadding() {
+            this.setPadding(5S)
+        }
+
+        override fun setDefaultBorder() {
+            this.setBorderWidths(2S, 1S)
+        }
+
+        override fun onAttach(viewContext: ViewContext) {
+            base.onAttach(viewContext)
+            this.child?.onAttach(viewContext)
+        }
+
+        override fun onDetach() {
+            base.onDetach()
+            this.child?.onDetach()
+        }
+
+        override fun minHeight(): Short {
+            var ch = 0S
+            if (this.child != null) {
+                ch = this.child.minHeight()
+            }
+            return ch + this.padding.top + this.padding.bottom + this.margin.top + this.margin.bottom + this.borderWidths.top + this.borderWidths.bottom
+        }
+
+        override fun minWidth(): Short {
+            var cw = 0S
+            if (this.child != null) {
+                cw = this.child.minWidth()
+            }
+            return cw + this.padding.left + this.padding.right + this.margin.left + this.margin.right + this.borderWidths.left + this.borderWidths.right
+        }
+
+        override fun layout(x: Short, y: Short, width: UShort, height: UShort) {
+            base.layout(x, y, width, height)
+            if (this.child != null) {
+                var c = this.child
+                c.layout(this.margin.left + this.borderWidths.left + this.padding.left, this.margin.top + this.borderWidths.top + this.padding.top, this.innerWidth().toUShort(), this.innerHeight().toUShort())
+            }
+        }
+
+        override fun paint(graphics: Graphics) {
+            base.paint(graphics)
+
+            var x1 = 0S
+            var x2 = this.width.toShort() - (this.margin.right + this.margin.left + 1S)
+            var y1 = 0S
+            var y2 = this.height.toShort() - (this.margin.bottom + this.margin.top + 1S)
+
+            var borderPens = this.borderPens
+            var bgPen = 0UB
+
+            // Background bl,bt - w-br,h-bb            
+            graphics.setForegroundPen(bgPen)
+            graphics.fillRect(x1, y1, x2, y2)
+
+            this.paintNativeBorder(graphics, borderPens)
+
+            this.child.paintAll(graphics)
+        }
+
+        fun setChild(child: View) {
+            this.child = child
+        }
+
+        fun getChild(): View {
+            return this.child
+        }
+
+        override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
+            if (this.contains(x, y)) {
+                var c = this.child
+                var lx = x - c.x 
+                var ly = y - c.y
+
+                var consumed = c.onMouseEvent(type, button, lx, ly)
+                if (consumed) {
+                    return consumed
+                }
+            }
+            return false
+        }
+
+    }
+}
+
