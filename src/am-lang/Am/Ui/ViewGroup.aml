@@ -57,21 +57,19 @@ namespace Am.Ui
         override fun paintAll(graphics: Graphics) {
             var ix = this.x + this.margin.left
             var iy = this.y + this.margin.top
-            ("Translate panel " + ix.toString() + "," + iy.toString()).println()
+//            ("Translate panel " + ix.toString() + "," + iy.toString()).println()
 
             var b1 = graphics.shouldRepaintAll()
             var b2 = this.getRepaintRequested()
             if (b1 || b2) {
                 graphics.translate(ix, iy)
                 this.paint(graphics)
-                graphics.setBackgroundPen(5UB)
-                graphics.fillRect(0S, 0S, this.innerWidth(), this.innerHeight())
                 graphics.translate(-ix, -iy)
             }
             this.markAsPainted()
-            ix = this.x + this.margin.left + this.borderWidths.left + this.padding.left
-            iy = this.y + this.margin.top + this.borderWidths.top + this.padding.top
-            ("Translate ViewGroup children " + ix.toString() + "," + iy.toString()).println()
+            ix = this.x // + this.margin.left + this.borderWidths.left + this.padding.left
+            iy = this.y // + this.margin.top + this.borderWidths.top + this.padding.top
+//            ("Translate ViewGroup children " + ix.toString() + "," + iy.toString()).println()
             graphics.translate(ix, iy)            
             this.paintChildren(graphics)
             graphics.translate(-ix, -iy)

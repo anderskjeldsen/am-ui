@@ -138,7 +138,7 @@ namespace Am.Ui
                 var ix = this.x + this.margin.left
                 var iy = this.y + this.margin.top
 
-                ("Translate " + ix.toString() + "," + iy.toString()).println()
+//                ("Translate " + ix.toString() + "," + iy.toString()).println()
 
                 graphics.translate(ix, iy)
                 this.paint(graphics)

@@ -7,7 +7,7 @@ namespace Am.Ui
 
         private var child: View
 
-        private var borderPens: BorderPens = new BorderPens(2UB, 2UB, 1UB, 1UB)
+        private var borderPens: BorderPens = new BorderPens(1UB, 1UB, 2UB, 2UB)
 
         override fun setDefaultPadding() {
             this.setPadding(5S)
@@ -54,7 +54,7 @@ namespace Am.Ui
         override fun paintAll(graphics: Graphics) {
             var ix = this.x + this.margin.left
             var iy = this.y + this.margin.top
-            ("Translate " + ix.toString() + "," + iy.toString()).println()
+//            ("Translate " + ix.toString() + "," + iy.toString()).println()
 
             var b1 = graphics.shouldRepaintAll()
             var b2 = this.getRepaintRequested()
@@ -65,9 +65,9 @@ namespace Am.Ui
             }
             this.markAsPainted()
             if (this.child != null) {
-                ix = this.x + this.margin.left + this.borderWidths.left + this.padding.left
-                iy = this.y + this.margin.top + this.borderWidths.top + this.padding.top
-                ("Translate panel children " + ix.toString() + "," + iy.toString()).println()
+                ix = this.x // + this.margin.left + this.borderWidths.left + this.padding.left
+                iy = this.y // + this.margin.top + this.borderWidths.top + this.padding.top
+//                ("Translate panel children " + ix.toString() + "," + iy.toString()).println()
 
                 graphics.translate(ix, iy)
                 this.child.paintAll(graphics)
