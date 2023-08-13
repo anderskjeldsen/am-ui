@@ -51,6 +51,30 @@ namespace Am.Ui
             }
         }
 
+        override fun paintAll(graphics: Graphics) {
+            var ix = this.x + this.margin.left
+            var iy = this.y + this.margin.top
+            ("Translate " + ix.toString() + "," + iy.toString()).println()
+
+            var b1 = graphics.shouldRepaintAll()
+            var b2 = this.getRepaintRequested()
+            if (b1 || b2) {
+                graphics.translate(ix, iy)
+                this.paint(graphics)
+                graphics.translate(-ix, -iy)
+            }
+            this.markAsPainted()
+            if (this.child != null) {
+                ix = this.x + this.margin.left + this.borderWidths.left + this.padding.left
+                iy = this.y + this.margin.top + this.borderWidths.top + this.padding.top
+                ("Translate panel children " + ix.toString() + "," + iy.toString()).println()
+
+                graphics.translate(ix, iy)
+                this.child.paintAll(graphics)
+                graphics.translate(-ix, -iy)
+            }
+        }
+
         override fun paint(graphics: Graphics) {
             base.paint(graphics)
 
@@ -67,8 +91,6 @@ namespace Am.Ui
             graphics.fillRect(x1, y1, x2, y2)
 
             this.paintNativeBorder(graphics, borderPens)
-
-            this.child.paintAll(graphics)
         }
 
         fun setChild(child: View) {

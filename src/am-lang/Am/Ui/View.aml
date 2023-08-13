@@ -22,11 +22,11 @@ namespace Am.Ui
         }
 
         fun minWidth(): Short {
-            return this.margin.left + this.margin.right + this.padding.left + this.padding.right
+            return this.margin.left + this.margin.right + this.padding.left + this.padding.right + this.borderWidths.left + this.borderWidths.right
         }
 
         fun minHeight(): Short {
-            return this.margin.top + this.margin.bottom + this.padding.top + this.margin.bottom
+            return this.margin.top + this.margin.bottom + this.padding.top + this.padding.bottom + this.borderWidths.top + this.borderWidths.bottom
         }
 
 /*
@@ -51,7 +51,7 @@ namespace Am.Ui
         }
 
         fun innerWidth(): Short {
-            return (this.width.toShort() - (this.margin.left + this.margin.right + this.padding.left + this.padding.right + this.borderWidths.left + this.borderWidths.right))
+            return this.width.toShort() - (this.margin.left + this.margin.right + this.padding.left + this.padding.right + this.borderWidths.left + this.borderWidths.right)
         }
 
         fun innerHeight(): Short {
@@ -138,7 +138,7 @@ namespace Am.Ui
                 var ix = this.x + this.margin.left
                 var iy = this.y + this.margin.top
 
-//                ("Translate " + ix.toString() + "," + iy.toString()).println()
+                ("Translate " + ix.toString() + "," + iy.toString()).println()
 
                 graphics.translate(ix, iy)
                 this.paint(graphics)

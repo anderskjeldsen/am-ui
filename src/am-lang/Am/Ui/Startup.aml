@@ -40,12 +40,12 @@ namespace Am.Ui
 
             var panel = new Panel()
             panel.setDefaultBorder()
-            panel.setDefaultPadding()
+//            panel.setDefaultPadding()
             panel.setMargin(w.getScaledX(2S), w.getScaledY(2S))
 
-            var vStack = new VStack(5S)
+            var vStack = new VStack(0S)
             panel.setChild(vStack)
-            vStack.setPadding(w.getScaledX(2S), w.getScaledY(2S))
+//            vStack.setPadding(w.getScaledX(2S), w.getScaledY(2S))
 
             vStack.addChild(new Button("Add label", (v) => {
                 vStack.addChild(new Label("Another label"))
