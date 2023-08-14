@@ -175,7 +175,7 @@ function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHO
 		WA_DetailPen, 1,
 		WA_BlockPen, 2,
 		WA_IDCMP, IDCMP_CLOSEWINDOW | IDCMP_GADGETUP | MENUPICK | MOUSEBUTTONS | REFRESHWINDOW | IDCMP_INTUITICKS | IDCMP_NEWSIZE | IDCMP_MOUSEBUTTONS,
-		WA_Flags, WFLG_SIZEGADGET | WFLG_ACTIVATE | WFLG_RMBTRAP | WFLG_DRAGBAR | WFLG_DEPTHGADGET | WFLG_CLOSEGADGET | WFLG_SIMPLE_REFRESH, //WFLG_BORDERLESS WFLG_BACKDROP
+		WA_Flags, WFLG_SIZEGADGET | WFLG_ACTIVATE | WFLG_RMBTRAP | WFLG_DRAGBAR | WFLG_DEPTHGADGET | WFLG_CLOSEGADGET | WFLG_SIMPLE_REFRESH | WFLG_SIZEBBOTTOM, //WFLG_BORDERLESS WFLG_BACKDROP
 		WA_Gadgets, 0, // (ULONG) data->context_gadget,
 		WA_Title, (ULONG) "Hello",
 		WA_MinWidth, 0,
@@ -311,11 +311,11 @@ function_result Am_Ui_Window_handleInput_0(aobject * const this)
 
 	ULONG sig_mask = 1L << window_data->window->UserPort->mp_SigBit;
 //	printf("Wait %d\n", sig_mask);
-	ULONG signals = Wait(sig_mask);
+	ULONG signals = Wait(sig_mask || SIGBREAKF_CTRL_C);
 //	printf("Wait done %d\n", signals);
 
 //	printf("Wait done %d, %d\n", sig_mask, signals & sig_mask);
-	if (signals & sig_mask) // )
+	if (signals & sig_mask ) // )
 	{
 		struct IntuiMessage *msg;
 		while ((msg = (struct IntuiMessage *)GetMsg(window_data->window->UserPort)) != NULL)
