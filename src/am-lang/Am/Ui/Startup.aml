@@ -28,6 +28,20 @@ namespace Am.Ui
         }
     }
 
+    static fun listFolder(prefix: String, folder: File) {
+        var files = folder.listFiles()
+        var i = 0
+        while(i < files.length()) {
+            var f = files[i]
+            (prefix + f.filename).println()
+            if (f.isDirectory()) {
+                Startup.listFolder(prefix + "-", f)
+            }
+            i++
+        }
+
+    }
+
     class Startup {
         import Am.Lang
         import Am.Threading
@@ -38,6 +52,9 @@ namespace Am.Ui
             var w = Window.openWindow(20S, 20S, 150US, 150US, null, null)
             var pm = w.getPixelMetrics()
 
+            var folder = new File("ram:")
+            Startup.listFolder("", folder)
+            
             var panel = new Panel()
             panel.setDefaultBorder()
             panel.setDefaultPadding()
