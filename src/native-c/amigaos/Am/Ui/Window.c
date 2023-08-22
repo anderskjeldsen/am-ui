@@ -311,7 +311,7 @@ function_result Am_Ui_Window_handleInput_0(aobject * const this)
 
 	ULONG sig_mask = 1L << window_data->window->UserPort->mp_SigBit;
 //	printf("Wait %d\n", sig_mask);
-	ULONG signals = Wait(sig_mask || SIGBREAKF_CTRL_C);
+	ULONG signals = Wait(sig_mask);
 //	printf("Wait done %d\n", signals);
 
 //	printf("Wait done %d, %d\n", sig_mask, signals & sig_mask);
