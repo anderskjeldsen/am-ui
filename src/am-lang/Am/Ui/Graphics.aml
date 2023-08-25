@@ -10,6 +10,7 @@ namespace Am.Ui
         private var yOffset: Short
         private var repaintAllRequested: Bool = false
         private var clipRects: List<Rectangle> = List<Rectangle>.newList<Rectangle>()
+//        private var clipRect: Rectangle
 
         fun translate(x: Short, y: Short) {
             this.printOffset()
@@ -52,6 +53,8 @@ namespace Am.Ui
         abstract fun calculateStringWidth(text: String): UShort
         abstract fun getCurrentFontSize(): UByte
         abstract fun setFont(font: Font)
+        abstract fun setClipArea(x: Short, y: Short, width: UShort, height: UShort)
+        abstract fun resetClipArea()
     }
 
 }

@@ -16,7 +16,8 @@ namespace Am.Ui
         native override fun calculateStringWidth(text: String): UShort
         native override fun getCurrentFontSize(): UByte
         native override fun setFont(font: Font)
-
+        native override fun setClipArea(x: Short, y: Short, width: UShort, height: UShort)
+        native override fun resetClipArea()
     }
 
 

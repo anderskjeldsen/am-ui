@@ -16,6 +16,7 @@ namespace Am.Ui
         var growX: UByte
         var growY: UByte
         private var repaintRequested: Bool = false
+        var visible: Bool = true
 
         fun getRepaintRequested(): Bool {
             return this.repaintRequested

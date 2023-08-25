@@ -2,19 +2,18 @@
 namespace Am.Ui 
 {
 
-    class Panel() : View {
+    class ScrollView() : View {
         import Am.Lang
 
         private var child: View
+        private var scrollX: Short = 0S
+        private var scrollY: Short = 0S
 
-        private var borderPens: BorderPens = new BorderPens(1UB, 1UB, 2UB, 2UB)
+        private var showVertical: Bool
+        private var showHorizontal: Bool
 
         override fun setDefaultPadding() {
             this.setPadding(4S, 2S)
-        }
-
-        override fun setDefaultBorder() {
-            this.setBorderWidths(2S, 1S)
         }
 
         override fun onAttach(viewContext: ViewContext) {
@@ -28,33 +27,32 @@ namespace Am.Ui
         }
 
         override fun minHeight(): Short {
-            var ch = 0S
-            if (this.child != null) {
-                ch = this.child.minHeight()
-            }
-            return ch + this.padding.top + this.padding.bottom + this.margin.top + this.margin.bottom + this.borderWidths.top + this.borderWidths.bottom
+            return 0S
         }
 
         override fun minWidth(): Short {
-            var cw = 0S
-            if (this.child != null) {
-                cw = this.child.minWidth()
-            }
-            return cw + this.padding.left + this.padding.right + this.margin.left + this.margin.right + this.borderWidths.left + this.borderWidths.right
+            return 0S
         }
 
         override fun layout(x: Short, y: Short, width: UShort, height: UShort) {
             base.layout(x, y, width, height)
-            if (this.child != null) {
-                var c = this.child
-                c.layout(this.margin.left + this.borderWidths.left + this.padding.left, this.margin.top + this.borderWidths.top + this.padding.top, this.innerWidth().toUShort(), this.innerHeight().toUShort())
-            }
+            this.layoutChildren()
         }
+
+        private fun layoutChildren() {
+            var x = 0S
+            var y = 0S
+
+            var height = this.child.minHeight()
+            var width = this.child.minWidth()
+
+            this.child.layout(x, y, width.toUShort(), height.toUShort())
+        }
+
 
         override fun paintAll(graphics: Graphics) {
             var ix = this.x + this.margin.left
             var iy = this.y + this.margin.top
-//            ("Translate " + ix.toString() + "," + iy.toString()).println()
 
             var b1 = graphics.shouldRepaintAll()
             var b2 = this.getRepaintRequested()
@@ -65,9 +63,8 @@ namespace Am.Ui
             }
             this.markAsPainted()
             if (this.child != null) {
-                ix = this.x // + this.margin.left + this.borderWidths.left + this.padding.left
-                iy = this.y // + this.margin.top + this.borderWidths.top + this.padding.top
-//                ("Translate panel children " + ix.toString() + "," + iy.toString()).println()
+                ix = this.x + this.scrollX
+                iy = this.y + this.scrollY
 
                 graphics.translate(ix, iy)
                 this.child.paintAll(graphics)
@@ -83,14 +80,10 @@ namespace Am.Ui
             var y1 = 0S
             var y2 = this.height.toShort() - (this.margin.bottom + this.margin.top + 1S)
 
-            var borderPens = this.borderPens
             var bgPen = 0UB
 
-            // Background bl,bt - w-br,h-bb            
             graphics.setForegroundPen(bgPen)
             graphics.fillRect(x1, y1, x2, y2)
-
-            this.paintNativeBorder(graphics, borderPens)
         }
 
         fun setChild(child: View) {

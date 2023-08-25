@@ -2,12 +2,10 @@
 namespace Am.Ui 
 {
 
-    class Panel() : View {
+    class ListView() : View {
         import Am.Lang
 
-        private var child: View
-
-        private var borderPens: BorderPens = new BorderPens(1UB, 1UB, 2UB, 2UB)
+        private var child: VStack
 
         override fun setDefaultPadding() {
             this.setPadding(4S, 2S)
@@ -83,22 +81,11 @@ namespace Am.Ui
             var y1 = 0S
             var y2 = this.height.toShort() - (this.margin.bottom + this.margin.top + 1S)
 
-            var borderPens = this.borderPens
             var bgPen = 0UB
 
-            // Background bl,bt - w-br,h-bb            
+            // Background bl,bt - w-br,h-bb
             graphics.setForegroundPen(bgPen)
             graphics.fillRect(x1, y1, x2, y2)
-
-            this.paintNativeBorder(graphics, borderPens)
-        }
-
-        fun setChild(child: View) {
-            this.child = child
-        }
-
-        fun getChild(): View {
-            return this.child
         }
 
         override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
