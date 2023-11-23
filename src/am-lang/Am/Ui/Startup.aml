@@ -80,7 +80,7 @@ namespace Am.Ui
             }
         }
 
-        static fun main() {
+        static fun main2() {
             var w = Window.openWindow(20S, 20S, 150US, 150US, null, null)
             var pm = w.getPixelMetrics()
 
