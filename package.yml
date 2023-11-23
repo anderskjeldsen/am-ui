@@ -19,8 +19,6 @@ platforms:
     additionalAsmSources:
     additionalCSources: 
     additionalIncludePaths:
-#      - c-libs/libpng15/include
-#      - c-libs/zlib/nofpu/include
     gccAdditionalOptions:
       - -noixemul     
     gccAdditionalLibraries:
@@ -28,38 +26,28 @@ platforms:
   - id: morphos-ppc
     extends: libc
     gccCommand: ppc-morphos-gcc -O3
-#    asmCommand: vasmm68k_mot
     additionalHeaders:
     additionalAsmSources:
     additionalCSources: 
     additionalIncludePaths:
-#      - c-libs/libpng15/include
-#      - c-libs/zlib/nofpu/include
     gccAdditionalOptions:
       - -noixemul     
     gccAdditionalLibraries:
 
 buildTargets:
-  - id: amigaos_docker_win_anders
+  - id: amigaos_docker_arm64
     platform: amigaos
-    commands:
-      - docker run -v ${build_dir}:/host -i d931759c3883 make -f amigaos.makefile -C /host all
-  - id: amigaos_docker_matebook_anders
+    dockerBuild:
+      image: kjeldsenanders/dnf-dev:initial
+      buildPath: /host
+  - id: amigaos_docker_x64
     platform: amigaos
-    commands:
-      - docker run -v ${build_dir}:/host kjeldsenanders/dnf-dev:initial-x86 make -f amigaos.makefile -C /host ${make_target}
-  - id: amigaos_docker_macm1_anders
-    platform: amigaos
-    commands:
-      - docker run -v ${build_dir}:/host kjeldsenanders/dnf-dev:initial make -f amigaos.makefile -C /host all
+    dockerBuild:
+      image: kjeldsenanders/dnf-dev:initial-x86
+      buildPath: /host
   - id: morphos-ppc_docker
     platform: morphos-ppc
-    commands:
-#      - docker run --rm -v "${build_dir}":/work -e USER=$( id -u ) -e GROUP=$( id -g ) -it amigadev/crosstools:ppc-morphos make -f morphos_ppc.makefile -C /work all
-      - docker run --rm -v "${build_dir}":/work -i amigadev/crosstools:ppc-morphos make -f morphos-ppc.makefile -C /work all
+    dockerBuild:
+      image: amigadev/crosstools:ppc-morphos
+      buildPath: /work
 
-
-#  - id: macos
-#    platform: linux-x64
-#    commands:
-#      - make -f linux-x64.makefile
