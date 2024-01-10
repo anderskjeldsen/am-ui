@@ -44,6 +44,13 @@ __exit: ;
 	return __result;
 };
 
+function_result Am_Ui_GadToolsButton__native_mark_children_0(aobject * const this)
+{
+	function_result __result = { .has_return_value = false };
+	bool __returning = false;
+__exit: ;
+	return __result;
+};
 
 function_result Am_Ui_GadToolsButton_attachButton_0(aobject * const this, aobject * window)
 {
