@@ -41,7 +41,7 @@ namespace Am.Ui
         }
 
         fun popClipRect(): Rectangle {
-            return this.clipRects.removeAt(this.clipRects.size - 1)
+            return this.clipRects.removeAt(this.clipRects.getSize() - 1)
         }
 
         abstract fun setForegroundPen(pen: UByte)

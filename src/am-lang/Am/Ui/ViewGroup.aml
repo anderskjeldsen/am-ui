@@ -9,7 +9,7 @@ namespace Am.Ui
         
         var font: Font
 
-        fun getChildren() {
+        fun getChildren(): List<View> {
             return this.children
         }
 
