@@ -50,7 +50,8 @@ function_result Am_Ui_GadToolsButton__native_mark_children_0(aobject * const thi
 	bool __returning = false;
 __exit: ;
 	return __result;
-};
+}
+
 
 function_result Am_Ui_GadToolsButton_attachButton_0(aobject * const this, aobject * window)
 {

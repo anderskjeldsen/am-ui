@@ -102,7 +102,7 @@ function_result Am_Ui_Window__native_mark_children_0(aobject * const this)
 	bool __returning = false;
 __exit: ;
 	return __result;
-};
+}
 
 UBYTE calculate_pixel_scale_x(USHORT screen_width, USHORT screen_height) {
 	USHORT xs = screen_width / screen_height;

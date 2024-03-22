@@ -62,7 +62,7 @@ function_result Am_Ui_ViewContextGraphics__native_mark_children_0(aobject * cons
 	bool __returning = false;
 __exit: ;
 	return __result;
-};
+}
 
 function_result Am_Ui_ViewContextGraphics_setForegroundPen_0(aobject * const this, unsigned char pen)
 {

@@ -47,7 +47,7 @@ function_result Am_Ui_Screen__native_mark_children_0(aobject * const this)
 	bool __returning = false;
 __exit: ;
 	return __result;
-};
+}
 
 /*
 function_result const Am_Ui_Screen__native_init_0(aobject * const this)

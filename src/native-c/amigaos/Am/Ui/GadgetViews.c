@@ -45,7 +45,7 @@ function_result Am_Ui_GadgetViews__native_mark_children_0(aobject * const this)
 	bool __returning = false;
 __exit: ;
 	return __result;
-};
+}
 
 function_result Am_Ui_GadgetViews_layoutNative_0(aobject * gadgetView, short x, short y, unsigned short width, unsigned short height)
 {

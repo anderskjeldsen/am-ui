@@ -108,7 +108,7 @@ function_result Am_Ui_ScreenModeRequester__native_mark_children_0(aobject * cons
 	bool __returning = false;
 __exit: ;
 	return __result;
-};
+}
 
 function_result Am_Ui_ScreenModeRequester_setMin_0(aobject * const this, int width, int height, int depth)
 {

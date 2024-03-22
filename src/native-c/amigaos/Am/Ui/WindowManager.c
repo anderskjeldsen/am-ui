@@ -52,6 +52,5 @@ function_result Am_Ui_WindowManager__native_mark_children_0(aobject * const this
 	bool __returning = false;
 __exit: ;
 	return __result;
-};
-
+}
 
