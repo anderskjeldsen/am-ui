@@ -298,6 +298,9 @@ void handle_message(aobject * this, struct IntuiMessage * msg) {
 				Am_Ui_Window_onMouseEvent_0(this, 1, 0, msg->MouseX, msg->MouseY);
 			}
 			break;
+		case IDCMP_RAWKEY:
+			Am_Ui_Window_onKeyboardEvent_0(this, 1, msg->Code);
+			break;
 	}
 }
 
