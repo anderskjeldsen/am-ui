@@ -119,6 +119,10 @@ namespace Am.Ui
             this.close()
         }
 
+        fun onKeyboardEvent(type: KeyboardEventType, key: UShort) {
+            this.rootView?.onKeyboardEvent(type, key)
+        }
+
         fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short) {
 //            var lx = this.border.left
 //            ("Window click: " + button.toString() + " " + x.toString() + " " + y.toString()).println()

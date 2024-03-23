@@ -102,6 +102,17 @@ namespace Am.Ui
             return null
         }
 
+        override fun onKeyboardEvent(type: KeyboardEventType, key: UShort): Bool {
+            each(this.children, c) {
+                var consumed = c.onKeyboardEvent(type, key)
+                if (consumed) {
+                    return consumed
+                }
+            }
+            return false
+        }
+
+
         override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
             if (this.contains(x, y)) {
                 each(this.children, c) {

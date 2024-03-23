@@ -221,6 +221,10 @@ namespace Am.Ui
             return null
         }
 
+        fun onKeyboardEvent(type: KeyboardEventType, key: UShort): Bool {
+            return false
+        }
+
         // returns true if consumed
         fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
             if (this.contains(x, y)) {

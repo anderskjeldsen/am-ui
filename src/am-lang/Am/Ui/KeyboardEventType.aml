@@ -1,0 +1,9 @@
+
+namespace Am.Ui 
+{
+    enum KeyboardEventType {
+        down = 1
+        up = 2
+    }
+}
+
