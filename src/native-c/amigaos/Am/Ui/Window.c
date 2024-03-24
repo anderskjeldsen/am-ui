@@ -17,6 +17,7 @@
 #include <proto/intuition.h>
 #include <proto/gadtools.h>
 #include <proto/graphics.h>
+#include <proto/keymap.h>
 
 #include <libc/core_inline_functions.h>
 
@@ -182,7 +183,7 @@ function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHO
 		WA_Height, height,
 		WA_DetailPen, 1,
 		WA_BlockPen, 2,
-		WA_IDCMP, IDCMP_CLOSEWINDOW | IDCMP_GADGETUP | MENUPICK | MOUSEBUTTONS | REFRESHWINDOW | IDCMP_INTUITICKS | IDCMP_NEWSIZE | IDCMP_MOUSEBUTTONS,
+		WA_IDCMP, IDCMP_CLOSEWINDOW | IDCMP_GADGETUP | MENUPICK | MOUSEBUTTONS | REFRESHWINDOW | IDCMP_INTUITICKS | IDCMP_NEWSIZE | IDCMP_MOUSEBUTTONS | IDCMP_RAWKEY,
 		WA_Flags, WFLG_SIZEGADGET | WFLG_ACTIVATE | WFLG_RMBTRAP | WFLG_DRAGBAR | WFLG_DEPTHGADGET | WFLG_CLOSEGADGET | WFLG_SIMPLE_REFRESH | WFLG_SIZEBBOTTOM, //WFLG_BORDERLESS WFLG_BACKDROP
 		WA_Gadgets, 0, // (ULONG) data->context_gadget,
 		WA_Title, (ULONG) "Hello",
@@ -299,7 +300,8 @@ void handle_message(aobject * this, struct IntuiMessage * msg) {
 			}
 			break;
 		case IDCMP_RAWKEY:
-			Am_Ui_Window_onKeyboardEvent_0(this, 1, msg->Code);
+			printf("Key character: %c\n", MapRawKey(msg->Code 0x7f, msg->Qualifier));
+			Am_Ui_Window_onKeyboardEvent_0(this, 1 + ((msg->Code >> 7) & 0x7f), msg->Code & 0x7f);
 			break;
 	}
 }

@@ -119,7 +119,12 @@ namespace Am.Ui
             this.close()
         }
 
-        fun onKeyboardEvent(type: KeyboardEventType, key: UShort) {
+        fun onKeyboardEvent(type: KeyboardEventType, key: UShort) {            
+            if (type == KeyboardEventType.down) {
+                ("Window key down: " + key.toString()).println()
+            } else if (type == KeyboardEventType.up) {
+                ("Window key: up: " + key.toString()).println()
+            }
             this.rootView?.onKeyboardEvent(type, key)
         }
 
