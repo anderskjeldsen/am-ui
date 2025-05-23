@@ -80,7 +80,7 @@ namespace Am.Ui
             }
         }
 
-        static fun main2() {
+        static fun main() {
             var w = Window.openWindow(20S, 20S, 150US, 150US, null, null)
             var pm = w.getPixelMetrics()
 
@@ -151,7 +151,6 @@ namespace Am.Ui
             while(w.isOpen()) {
                 w.handleInput()
             }
-            vStack.removeChildren() // Because the onClick callback of TestButton refers to vStack TODO: turn them into Weak's ?
         }
     }
 }
