@@ -72,7 +72,7 @@ function_result Am_Ui_ViewContextGraphics_setForegroundPen_0(aobject * const thi
 		__increase_reference_count(this);
 	}
 
-	aobject *window = Am_Ui_ViewContextGraphics_getWindow_0(this).return_value.value.object_value;
+	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
 	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
 	struct RastPort *rp = window_data->window->RPort;
 
@@ -96,7 +96,7 @@ function_result Am_Ui_ViewContextGraphics_setBackgroundPen_0(aobject * const thi
 		__increase_reference_count(this);
 	}
 
-	aobject *window = Am_Ui_ViewContextGraphics_getWindow_0(this).return_value.value.object_value;
+	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
 	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
 	struct RastPort *rp = window_data->window->RPort;
 
@@ -120,7 +120,7 @@ function_result Am_Ui_ViewContextGraphics_drawLine_0(aobject * const this, short
 		__increase_reference_count(this);
 	}
 
-	aobject *window = Am_Ui_ViewContextGraphics_getWindow_0(this).return_value.value.object_value;
+	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
 	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
 	struct RastPort *rp = window_data->window->RPort;
 
@@ -157,7 +157,7 @@ function_result Am_Ui_ViewContextGraphics_eraseRect_0(aobject * const this, shor
 		__increase_reference_count(this);
 	}
 
-	aobject *window = Am_Ui_ViewContextGraphics_getWindow_0(this).return_value.value.object_value;
+	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
 	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
 	struct RastPort *rp = window_data->window->RPort;
 
@@ -187,7 +187,7 @@ function_result Am_Ui_ViewContextGraphics_fillRect_0(aobject * const this, short
 		__increase_reference_count(this);
 	}
 
-	aobject *window = Am_Ui_ViewContextGraphics_getWindow_0(this).return_value.value.object_value;
+	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
 	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
 	struct RastPort *rp = window_data->window->RPort;
 
@@ -220,7 +220,7 @@ function_result Am_Ui_ViewContextGraphics_drawString_0(aobject * const this, aob
 		__increase_reference_count(text);
 	}
 
-	aobject *window = Am_Ui_ViewContextGraphics_getWindow_0(this).return_value.value.object_value;
+	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
 	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
 	struct RastPort *rp = window_data->window->RPort;
 	string_holder *sh = text->object_properties.class_object_properties.object_data.value.custom_value;
@@ -256,7 +256,7 @@ function_result Am_Ui_ViewContextGraphics_calculateStringWidth_0(aobject * const
 		__increase_reference_count(text);
 	}
 
-	aobject *window = Am_Ui_ViewContextGraphics_getWindow_0(this).return_value.value.object_value;
+	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
 	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
 	struct RastPort *rp = window_data->window->RPort;
 	string_holder *sh = text->object_properties.class_object_properties.object_data.value.custom_value;
@@ -286,7 +286,7 @@ function_result Am_Ui_ViewContextGraphics_getCurrentFontSize_0(aobject * const t
 		__increase_reference_count(this);
 	}
 
-	aobject *window = Am_Ui_ViewContextGraphics_getWindow_0(this).return_value.value.object_value;
+	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
 	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
 	struct RastPort *rp = window_data->window->RPort;
 
@@ -319,7 +319,7 @@ function_result Am_Ui_ViewContextGraphics_setFont_0(aobject * const this, aobjec
 		__increase_reference_count(font);
 	}
 
-	aobject *window = Am_Ui_ViewContextGraphics_getWindow_0(this).return_value.value.object_value;
+	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
 	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
 	struct RastPort *rp = window_data->window->RPort;
 

@@ -187,7 +187,7 @@ function_result Am_Ui_ScreenModeRequester_open_0(aobject * const this)
 	if ( AslRequest((APTR)data->screenModeRequester, reqTypes) )
 	{
 		printf("  createScreenMode %d\n", data->screenModeRequester->sm_DisplayWidth);
-		__result = Am_Ui_ScreenModeRequester_createScreenMode_0(this, data->screenModeRequester->sm_DisplayWidth, data->screenModeRequester->sm_DisplayHeight, data->screenModeRequester->sm_DisplayDepth, data->screenModeRequester->sm_DisplayID);
+		__result = Am_Ui_ScreenModeRequester_f_createScreenMode_0(this, data->screenModeRequester->sm_DisplayWidth, data->screenModeRequester->sm_DisplayHeight, data->screenModeRequester->sm_DisplayDepth, data->screenModeRequester->sm_DisplayID);
 	}
 	else {
 	

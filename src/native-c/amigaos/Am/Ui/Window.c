@@ -27,7 +27,7 @@ void close_window_native(aobject * const this) {
 		if (releasing) {
 			this->reference_count = -100;
 		}
-		Am_Ui_Window_setRootView_0(this, NULL);
+		Am_Ui_Window_f_setRootView_0(this, NULL);
 		if (releasing) {
 			this->reference_count = 0;
 		}
@@ -213,8 +213,8 @@ function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHO
 	this->object_properties.class_object_properties.properties[Am_Ui_Window_P_pixelScaleX].nullable_value.value.uchar_value = calculate_pixel_scale_x(window->WScreen->Width, window->WScreen->Height);
 	this->object_properties.class_object_properties.properties[Am_Ui_Window_P_pixelScaleY].nullable_value.value.uchar_value = calculate_pixel_scale_y(window->WScreen->Width, window->WScreen->Height);
 
-	Am_Ui_Window_setBorder_0(this, window->BorderLeft, window->BorderTop, window->BorderRight, window->BorderBottom);
-	Am_Ui_Window_onResize_0(this, window->LeftEdge, window->TopEdge, window->Width, window->Height);
+	Am_Ui_Window_f_setBorder_0(this, window->BorderLeft, window->BorderTop, window->BorderRight, window->BorderBottom);
+	Am_Ui_Window_f_onResize_0(this, window->LeftEdge, window->TopEdge, window->Width, window->Height);
 
 	GT_RefreshWindow(window, NULL);
 
@@ -280,14 +280,14 @@ void handle_message(aobject * this, struct IntuiMessage * msg) {
 //			printf("Mouse click %d\n", msg->Code);
 			if (msg->Code == MENUUP) // Check for right mouse button // IECODE_RBUTTON
 			{
-				Am_Ui_Window_onMouseEvent_0(this, 2, 2, msg->MouseX, msg->MouseY);
+				Am_Ui_Window_f_onMouseEvent_0(this, 2, 2, msg->MouseX, msg->MouseY);
 			} else if (msg->Code == SELECTUP) {
-				Am_Ui_Window_onMouseEvent_0(this, 2, 1, msg->MouseX, msg->MouseY);
+				Am_Ui_Window_f_onMouseEvent_0(this, 2, 1, msg->MouseX, msg->MouseY);
 			} else if (msg->Code == MENUDOWN) // Check for right mouse button
 			{
-				Am_Ui_Window_onMouseEvent_0(this, 3, 2, msg->MouseX, msg->MouseY);
+				Am_Ui_Window_f_onMouseEvent_0(this, 3, 2, msg->MouseX, msg->MouseY);
 			} else if (msg->Code == SELECTDOWN) {
-				Am_Ui_Window_onMouseEvent_0(this, 3, 1, msg->MouseX, msg->MouseY);
+				Am_Ui_Window_f_onMouseEvent_0(this, 3, 1, msg->MouseX, msg->MouseY);
 			}
 			break;
 		case IDCMP_MOUSEMOVE:
@@ -295,11 +295,11 @@ void handle_message(aobject * this, struct IntuiMessage * msg) {
 			if (msg->MouseX != window_data->last_mouse_x && msg->MouseY != window_data->last_mouse_y) {
 				window_data->last_mouse_x = msg->MouseX;
 				window_data->last_mouse_y = msg->MouseY;
-				Am_Ui_Window_onMouseEvent_0(this, 1, 0, msg->MouseX, msg->MouseY);
+				Am_Ui_Window_f_onMouseEvent_0(this, 1, 0, msg->MouseX, msg->MouseY);
 			}
 			break;
 		case IDCMP_RAWKEY:
-			Am_Ui_Window_onKeyboardEvent_0(this, 1, msg->Code);
+			Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code);
 			break;
 	}
 }
@@ -342,17 +342,17 @@ function_result Am_Ui_Window_handleInput_0(aobject * const this)
 //	printf("Handling done %d\n", signals);
 
 	if (window_data->pending_resize) {
-		Am_Ui_Window_onResize_0(this, win->LeftEdge, win->TopEdge, win->Width, win->Height);
+		Am_Ui_Window_f_onResize_0(this, win->LeftEdge, win->TopEdge, win->Width, win->Height);
 	}
 
 	if (window_data->pending_full_refresh) {
-		Am_Ui_Window_paint_0(this);
+		Am_Ui_Window_f_paint_0(this);
 	}
 	else if (window_data->pending_refresh) {
 		printf("handle pending refresh\n");
 
 		BeginRefresh(window_data->window);
-		Am_Ui_Window_paint_0(this);
+		Am_Ui_Window_f_paint_0(this);
 		EndRefresh(window_data->window, TRUE);
 	}
 
@@ -362,7 +362,7 @@ function_result Am_Ui_Window_handleInput_0(aobject * const this)
 	}
 */
 	if (window_data->pending_close) {
-		Am_Ui_Window_onCloseButtonClick_0(this);
+		Am_Ui_Window_f_onCloseButtonClick_0(this);
 	}
 
 __exit: ;

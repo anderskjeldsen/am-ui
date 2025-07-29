@@ -15,8 +15,8 @@ namespace Am.Ui
 
         fun addChild(view: View) {
             this.children.add(view)
-            if (this.viewContext != null) {
-                view.onAttach(this.viewContext)
+            if (this.getViewContext() != null) {
+                view.onAttach(this.getViewContext())
             }
         }
 
@@ -75,7 +75,7 @@ namespace Am.Ui
             graphics.translate(-ix, -iy)
         }
 
-        fun layoutChildren() {
+        open fun layoutChildren() {
             each(this.children, c) {
                 // Do nothing
             }

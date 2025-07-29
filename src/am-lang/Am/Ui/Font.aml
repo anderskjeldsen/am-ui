@@ -18,7 +18,7 @@ namespace Am.Ui
 
         native fun calculateStringWidth(text: String): UShort
 
-        static fun loadFont(var name: String, var size: UByte) {
+        static fun loadFont(var name: String, var size: UByte): Font {
             var key = name + ":" + size.toString()
             var font = Font.cache.get(key)
             if (font == null) {

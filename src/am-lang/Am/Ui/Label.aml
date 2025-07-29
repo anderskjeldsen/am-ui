@@ -13,7 +13,7 @@ namespace Am.Ui
             if (this.font != null) {
                 return this.font
             }
-            var vc = this.viewContext 
+            var vc = this.getViewContext() 
             if (vc != null) {
                 return vc.getWindow().font
             }
@@ -25,18 +25,22 @@ namespace Am.Ui
             if (font != null) {
                 return font.size.toShort()
             }
-            var vc = this.viewContext 
+            var vc = this.getViewContext()  
             if (vc != null) {
-                return vc.getWindow().getCurrentFontSize().toShort()
+                "vc is null".println()
+                var win = vc.getWindow()
+                var fontSize = win.getCurrentFontSize()
+                return fontSize.toShort()
+//                return vc.getWindow().getCurrentFontSize().toShort()
             }
             return 0S
         }
 
         override fun minWidth(): Short {
             var font = this.getUsedFont()
-//            ("text width: " + this.viewContext.getWindow().calculateStringWidth(font, this.text).toString()).println()
+//            ("text width: " + this.getViewContext() .getWindow().calculateStringWidth(font, this.text).toString()).println()
 
-            return this.viewContext.getWindow().calculateStringWidth(font, this.text).toShort()
+            return this.getViewContext() .getWindow().calculateStringWidth(font, this.text).toShort()
         }
 
         override fun paint(graphics: Graphics) {

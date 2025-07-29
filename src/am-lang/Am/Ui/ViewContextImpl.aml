@@ -5,15 +5,14 @@ namespace Am.Ui
     class ViewContextImpl : ViewContext {
         import Am.Lang
 
-        private var windowRef: Weak<Window> = new Weak<Window>()
-//        private var graphicsRef: Weak<ViewContextGraphics> = new Weak<ViewContextGraphics>()
+        private var window: Window
 
         fun getWindow(): Window {
-            return this.windowRef.get()
+            return this.window
         }
 
         fun setWindow(window: Window) {
-            this.windowRef.set(window)
+            this.window = window
         }
         
         /*

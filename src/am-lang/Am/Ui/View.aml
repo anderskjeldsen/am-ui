@@ -22,11 +22,11 @@ namespace Am.Ui
             return this.repaintRequested
         }
 
-        fun minWidth(): Short {
+        open fun minWidth(): Short {
             return this.margin.left + this.margin.right + this.padding.left + this.padding.right + this.borderWidths.left + this.borderWidths.right
         }
 
-        fun minHeight(): Short {
+        open fun minHeight(): Short {
             return this.margin.top + this.margin.bottom + this.padding.top + this.padding.bottom + this.borderWidths.top + this.borderWidths.bottom
         }
 
@@ -59,11 +59,11 @@ namespace Am.Ui
             return this.height.toShort() - (this.margin.top + this.margin.bottom + this.padding.top + this.padding.bottom + this.borderWidths.top + this.borderWidths.bottom)
         }
 
-        fun setDefaultPadding() {
+        open fun setDefaultPadding() {
             this.setPadding(0S)
         }
 
-        fun setDefaultBorder() {
+        open fun setDefaultBorder() {
             this.setBorderWidths(0S)
         }
 
@@ -117,22 +117,22 @@ namespace Am.Ui
             return this.viewContext.getWindow()
         }
 
-        fun onAttach(viewContext: ViewContext) {
+        open fun onAttach(viewContext: ViewContext) {
             if (this.viewContext != null) {
                 throw new Exception("View already attached")
             }
             this.viewContext = viewContext
         }
 
-        fun onDetach() {
+        open fun onDetach() {
             this.viewContext = null
         }
 
-        fun paint(graphics: Graphics) {
+        open fun paint(graphics: Graphics) {
 
         }
 
-        fun paintAll(graphics: Graphics) {
+        open fun paintAll(graphics: Graphics) {
             var b1 = graphics.shouldRepaintAll()
             var b2 = this.getRepaintRequested()
             if (b1 || b2) {
@@ -160,7 +160,7 @@ namespace Am.Ui
             }
         }
 
-        fun layout(x: Short, y: Short, width: UShort, height: UShort) {
+        open fun layout(x: Short, y: Short, width: UShort, height: UShort) {
             this.x = x
             this.y = y
             this.width = width
@@ -208,25 +208,25 @@ namespace Am.Ui
             graphics.drawLine(x1 + 1S, y2, x2, y2)
         }
 
-        fun contains(x: Short, y: Short): Bool {
+        open fun contains(x: Short, y: Short): Bool {
 //            ("contains " + x.toString() + "," + y.toString() + " in " + this.width.toString() + ", " + this.height.toString()).println()
 
             return ((x >= 0S) && (x < this.width) && (y >= 0S) && (y < this.height))
         }
 
-        fun findViewAt(x: Short, y: Short): View {
+        open fun findViewAt(x: Short, y: Short): View {
             if (this.contains(x, y)) {
                 return this
             }
             return null
         }
 
-        fun onKeyboardEvent(type: KeyboardEventType, key: UShort): Bool {
+        open fun onKeyboardEvent(type: KeyboardEventType, key: UShort): Bool {
             return false
         }
 
         // returns true if consumed
-        fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
+        open fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
             if (this.contains(x, y)) {
                 return true
             }

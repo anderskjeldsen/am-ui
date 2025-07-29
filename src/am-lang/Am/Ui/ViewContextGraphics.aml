@@ -2,7 +2,7 @@
 namespace Am.Ui 
 {
 
-    native class ViewContextGraphics(var viewContext: ViewContext) : Graphics {
+    native class ViewContextGraphics(private var viewContext: ViewContext) : Graphics {
         import Am.Lang
         private fun getWindow(): Window {
             return this.viewContext.getWindow()

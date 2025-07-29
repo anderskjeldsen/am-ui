@@ -67,14 +67,17 @@ namespace Am.Ui
                         w2.layout()
                         w2.requestRepaint()
                     }
+                    return true
                 })
 
+/*
                 b.setup((v) => {
                     v.setDefaultPadding()
                     var w2 = win
                     v.growX = 255UB
                     v.growY = 0UB
                 })
+*/
 
                 vg.addChild(b)
             }

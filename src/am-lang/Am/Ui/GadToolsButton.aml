@@ -15,7 +15,7 @@ namespace Am.Ui
         }
 
         override fun onDetach() {
-            this.detachButton(this.viewContext.getWindow())
+            this.detachButton(this.getViewContext().getWindow())
             base.onDetach()
         }
     }

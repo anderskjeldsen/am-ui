@@ -21,7 +21,7 @@ namespace Am.Ui
 
             var innerWidth = this.innerWidth()
 
-            each(this.children, c) {
+            each(this.getChildren(), c) {
                 var ch = c.minHeight() + ((c.growY.toInt() * unusedHeight.toInt()) / sumGrowY.toInt()).toShort()
                 c.layout(left, y, innerWidth.toUShort(), ch.toUShort())
                 y = y + ch + this.spacing
@@ -30,7 +30,7 @@ namespace Am.Ui
 
         fun innerMinHeight(): Short {
             var h = 0S
-            each(this.children, c) {
+            each(this.getChildren(), c) {
                 if (h > 0S) {
                     h = h + this.spacing
                 }
@@ -45,7 +45,7 @@ namespace Am.Ui
 
         fun innerMinWidth(): Short {
             var minW = 0S
-            each(this.children, c) {
+            each(this.getChildren(), c) {
                 var cMinW = c.minWidth()
                 if (cMinW > minW) {
                     minW = cMinW
@@ -60,7 +60,7 @@ namespace Am.Ui
 
         fun sumGrowY(): Short {
             var grow = 0S
-            each(this.children, c) {
+            each(this.getChildren(), c) {
                 grow = grow + c.growY.toShort()
             }
             if (grow == 0) {
