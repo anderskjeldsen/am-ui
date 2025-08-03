@@ -27,7 +27,6 @@ namespace Am.Ui
             }
             var vc = this.getViewContext()  
             if (vc != null) {
-                "vc is null".println()
                 var win = vc.getWindow()
                 var fontSize = win.getCurrentFontSize()
                 return fontSize.toShort()

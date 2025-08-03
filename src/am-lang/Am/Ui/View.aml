@@ -233,11 +233,6 @@ namespace Am.Ui
             return false
         }
 
-        fun setup(i: (it: View) => View) : View {
-            i(this)
-            return this
-        }
-
     }
 
 

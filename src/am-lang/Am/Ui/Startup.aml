@@ -28,6 +28,12 @@ namespace Am.Ui
         }
     }
 
+    class Folder(var file: File, var parent: Folder) {
+        import Am.Lang
+        import Am.IO
+
+    }
+
     class Startup {
         import Am.Lang
         import Am.Threading
@@ -35,9 +41,9 @@ namespace Am.Ui
 
         static var xxx: Int = 1
 
-        static fun listFolder(prefix: String, folder: File) {
-            ("list folder " + prefix + folder.filename).println()
-            var files = folder.listFiles()
+        static fun listFolder(prefix: String, folder: Folder) {
+            ("list folder " + prefix + folder.file.filename).println()
+            var files = folder.file.listFiles()
             var i = 0
             while(i < files.length()) {
                 var f = files[i]
@@ -48,12 +54,47 @@ namespace Am.Ui
                 i++
             }
         }
+        /*
 
-        static fun listFolderInViewGroup(win: Window, vg: ViewGroup, folder: File) {
-            var list = folder.listFiles()
+        static fun createFileButton(win: Window, vg: ViewGroup, file: File) : Button {
+            return new Button(file.getName(), (v) => {
+                if (file.isDirectory()) {
+                    Startup.listFolderInViewGroup(win, vg, new Folder(file, null))
+                    win.layout()
+                    win.requestRepaint()
+                }
+                return true
+            }).setup((v) => {
+                v.setDefaultPadding()
+                v.growX = 255UB
+                v.growY = 0UB
+            })
+        }
+        */
+
+        static fun listFolderInViewGroup(win: Window, vg: ViewGroup, folder: Folder) {
+            var list = folder.file.listFiles()
             vg.removeChildren()
             var i = 0
             var len = list.length()
+
+            if (folder.parent != null) {
+                var b = new Button("..", (v) => {
+                    Startup.listFolderInViewGroup(win, vg, folder.parent)
+                    win.layout()
+                    win.requestRepaint()
+                    return true
+                })
+
+                b.setup((v) => {
+                    v.setDefaultPadding()
+                    v.growX = 255UB
+                    v.growY = 0UB
+                })
+
+                vg.addChild(b)
+            }
+
             while(i < len) {
                 var file = list[i]
                 i++
@@ -63,21 +104,19 @@ namespace Am.Ui
                     var w2 = win
 
                     if (f2.isDirectory()) {
-                        Startup.listFolderInViewGroup(w2, vg, f2)
+                        Startup.listFolderInViewGroup(w2, vg, new Folder(f2, folder))
                         w2.layout()
                         w2.requestRepaint()
                     }
                     return true
                 })
 
-/*
                 b.setup((v) => {
                     v.setDefaultPadding()
                     var w2 = win
                     v.growX = 255UB
                     v.growY = 0UB
                 })
-*/
 
                 vg.addChild(b)
             }
@@ -98,7 +137,7 @@ namespace Am.Ui
             var vStack = new VStack(w.getScaledY(2S))
             panel.setChild(vStack)
 
-            Startup.listFolderInViewGroup(w, vStack, folder)
+            Startup.listFolderInViewGroup(w, vStack, new Folder(folder, null))
 /*
             vStack.addChild(new Button("Add label", (v) => {
                 vStack.addChild(new Label("Another label"))

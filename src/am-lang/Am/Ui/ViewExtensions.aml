@@ -1,0 +1,18 @@
+
+namespace Am.Ui 
+{
+
+    class ViewExtensions {
+        import Am.Lang
+
+        ext fun setup<T : View>(view: T, i: (it: T) => void) : T {
+            i(view)
+            return view
+        }
+
+    }
+
+
+
+}
+
