@@ -8,6 +8,15 @@ namespace Am.Ui
         val2 = 2
     }
 
+    class IntTest {
+        import Am.Lang
+        var i: Int = 1
+
+        fun test(): Int {
+            return this.i++
+        }
+    }
+
     class MyBase() {
         import Am.Lang
 
@@ -96,8 +105,7 @@ namespace Am.Ui
             }
 
             while(i < len) {
-                var file = list[i]
-                i++
+                var file = list[i++]
 
                 var b = new Button(file.getName(), (v) => {
                     var f2 = file
@@ -153,9 +161,7 @@ namespace Am.Ui
                 v.growY = 0UB
             }))
 
-            var l2 = new Label("Hello")
-
-            l2.setup((v) => {
+            var l2 = new Label("Hello").setup((v) => {
                 v.growX = 255UB
             })
 
