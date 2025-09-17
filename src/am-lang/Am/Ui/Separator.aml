@@ -1,0 +1,74 @@
+namespace Am.Ui 
+{
+
+    class Separator(var orientation: SeparatorOrientation = SeparatorOrientation.Horizontal) : View {
+        import Am.Lang
+
+        var separatorPen: UByte = 2UB
+        var thickness: Short = 1S
+
+        override fun setDefaultPadding() {
+            this.setPadding(2S)
+        }
+
+        override fun setDefaultBorder() {
+            this.setBorderWidths(0S)
+        }
+
+        override fun minHeight(): Short {
+            if (this.orientation == SeparatorOrientation.Horizontal) {
+                return this.thickness + base.minHeight()
+            } else {
+                return 20S + base.minHeight() // Minimum height for vertical separator
+            }
+        }
+
+        override fun minWidth(): Short {
+            if (this.orientation == SeparatorOrientation.Vertical) {
+                return this.thickness + base.minWidth()
+            } else {
+                return 20S + base.minWidth() // Minimum width for horizontal separator
+            }
+        }
+
+        override fun paint(graphics: Graphics) {
+            base.paint(graphics)
+
+            var innerW = this.innerWidth()
+            var innerH = this.innerHeight()
+            var x = this.margin.left + this.borderWidths.left + this.padding.left
+            var y = this.margin.top + this.borderWidths.top + this.padding.top
+
+            graphics.setForegroundPen(this.separatorPen)
+
+            if (this.orientation == SeparatorOrientation.Horizontal) {
+                // Draw horizontal line
+                var lineY = y + innerH / 2S
+                var lineStartX = x
+                var lineEndX = x + innerW - 1S
+                
+                var i = 0S
+                while (i < this.thickness) {
+                    graphics.drawLine(lineStartX, lineY + i, lineEndX, lineY + i)
+                    i = i + 1S
+                }
+            } else {
+                // Draw vertical line
+                var lineX = x + innerW / 2S
+                var lineStartY = y
+                var lineEndY = y + innerH - 1S
+                
+                var i = 0S
+                while (i < this.thickness) {
+                    graphics.drawLine(lineX + i, lineStartY, lineX + i, lineEndY)
+                    i = i + 1S
+                }
+            }
+        }
+    }
+
+    enum SeparatorOrientation {
+        Horizontal = 1
+        Vertical = 2
+    }
+}

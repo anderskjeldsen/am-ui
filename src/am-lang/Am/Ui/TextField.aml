@@ -1,0 +1,275 @@
+namespace Am.Ui 
+{
+
+    class TextField(var text: String = "", var placeholder: String = "") : View {
+        import Am.Lang
+
+        private var focused: Bool = false
+        private var cursorPosition: Int = 0
+        private var selectionStart: Int = 0
+        private var selectionEnd: Int = 0
+        var maxLength: Int = 255
+        var readOnly: Bool = false
+        var passwordMode: Bool = false
+        
+        var textPen: UByte = 1UB
+        var backgroundPen: UByte = 0UB
+        var focusedBackgroundPen: UByte = 0UB
+        var placeholderPen: UByte = 2UB
+        var selectionPen: UByte = 3UB
+        var cursorPen: UByte = 1UB
+        
+        private var borderPens: BorderPens = new BorderPens(1UB, 1UB, 2UB, 2UB)
+        private var focusedBorderPens: BorderPens = new BorderPens(2UB, 2UB, 1UB, 1UB)
+
+        fun getText(): String {
+            return this.text
+        }
+
+        fun setText(text: String) {
+            if (text.length() > this.maxLength) {
+                this.text = text.substring(0, this.maxLength)
+            } else {
+                this.text = text
+            }
+            this.cursorPosition = this.text.length()
+            this.clearSelection()
+            this.requestRepaint()
+        }
+
+        fun setFocused(focused: Bool) {
+            this.focused = focused
+            this.requestRepaint()
+        }
+
+        fun isFocused(): Bool {
+            return this.focused
+        }
+
+        fun setCursorPosition(position: Int) {
+            if (position < 0) {
+                this.cursorPosition = 0
+            } else if (position > this.text.length()) {
+                this.cursorPosition = this.text.length()
+            } else {
+                this.cursorPosition = position
+            }
+            this.requestRepaint()
+        }
+
+        fun getCursorPosition(): Int {
+            return this.cursorPosition
+        }
+
+        private fun clearSelection() {
+            this.selectionStart = this.cursorPosition
+            this.selectionEnd = this.cursorPosition
+        }
+
+        private fun hasSelection(): Bool {
+            return this.selectionStart != this.selectionEnd
+        }
+
+        fun selectAll() {
+            this.selectionStart = 0
+            this.selectionEnd = this.text.length()
+            this.cursorPosition = this.selectionEnd
+            this.requestRepaint()
+        }
+
+        fun insertText(newText: String) {
+            if (this.readOnly) {
+                return
+            }
+
+            var insertPosition = this.cursorPosition
+            if (this.hasSelection()) {
+                // Replace selection
+                var beforeSelection = this.text.substring(0, this.selectionStart)
+                var afterSelection = this.text.substring(this.selectionEnd, this.text.length())
+                this.text = beforeSelection + newText + afterSelection
+                insertPosition = this.selectionStart + newText.length()
+            } else {
+                // Insert at cursor
+                var beforeCursor = this.text.substring(0, this.cursorPosition)
+                var afterCursor = this.text.substring(this.cursorPosition, this.text.length())
+                this.text = beforeCursor + newText + afterCursor
+                insertPosition = this.cursorPosition + newText.length()
+            }
+
+            // Trim to max length
+            if (this.text.length() > this.maxLength) {
+                this.text = this.text.substring(0, this.maxLength)
+                insertPosition = if (insertPosition > this.maxLength) this.maxLength else insertPosition
+            }
+
+            this.setCursorPosition(insertPosition)
+            this.clearSelection()
+        }
+
+        fun deleteBackward() {
+            if (this.readOnly) {
+                return
+            }
+
+            if (this.hasSelection()) {
+                this.insertText("")
+            } else if (this.cursorPosition > 0) {
+                var beforeCursor = this.text.substring(0, this.cursorPosition - 1)
+                var afterCursor = this.text.substring(this.cursorPosition, this.text.length())
+                this.text = beforeCursor + afterCursor
+                this.setCursorPosition(this.cursorPosition - 1)
+            }
+        }
+
+        fun deleteForward() {
+            if (this.readOnly) {
+                return
+            }
+
+            if (this.hasSelection()) {
+                this.insertText("")
+            } else if (this.cursorPosition < this.text.length()) {
+                var beforeCursor = this.text.substring(0, this.cursorPosition)
+                var afterCursor = this.text.substring(this.cursorPosition + 1, this.text.length())
+                this.text = beforeCursor + afterCursor
+                this.requestRepaint()
+            }
+        }
+
+        override fun setDefaultPadding() {
+            this.setPadding(4S, 2S)
+        }
+
+        override fun setDefaultBorder() {
+            this.setBorderWidths(1S)
+        }
+
+        override fun minHeight(): Short {
+            var vc = this.getViewContext()
+            var fontHeight = if (vc != null) vc.getWindow().getCurrentFontSize().toShort() else 12S
+            return fontHeight + 4S + base.minHeight()
+        }
+
+        override fun minWidth(): Short {
+            return 100S + base.minWidth()
+        }
+
+        override fun paint(graphics: Graphics) {
+            base.paint(graphics)
+
+            var innerW = this.innerWidth()
+            var innerH = this.innerHeight()
+            var x1 = 0S
+            var y1 = 0S
+            var x2 = this.width.toShort() - (this.margin.right + this.margin.left + 1S)
+            var y2 = this.height.toShort() - (this.margin.bottom + this.margin.top + 1S)
+
+            // Draw background
+            var bgPen = if (this.focused) this.focusedBackgroundPen else this.backgroundPen
+            graphics.setForegroundPen(bgPen)
+            graphics.fillRect(x1, y1, x2, y2)
+
+            // Draw border
+            var borderPens = if (this.focused) this.focusedBorderPens else this.borderPens
+            this.paintNativeBorder(graphics, borderPens)
+
+            // Calculate text area
+            var textX = this.borderWidths.left + this.padding.left
+            var textY = this.borderWidths.top + this.padding.top
+            var textWidth = innerW - this.padding.left - this.padding.right
+            var textHeight = innerH - this.padding.top - this.padding.bottom
+
+            // Set clipping area for text
+            graphics.setClipArea(textX, textY, textWidth.toUShort(), textHeight.toUShort())
+
+            // Draw text or placeholder
+            var displayText = this.text
+            if (displayText.isEmpty() && !this.placeholder.isEmpty() && !this.focused) {
+                graphics.setForegroundPen(this.placeholderPen)
+                graphics.drawString(this.placeholder, textX, textY)
+            } else {
+                if (this.passwordMode) {
+                    var stars = ""
+                    var i = 0
+                    while (i < displayText.length()) {
+                        stars = stars + "*"
+                        i = i + 1
+                    }
+                    displayText = stars
+                }
+                
+                graphics.setForegroundPen(this.textPen)
+                graphics.drawString(displayText, textX, textY)
+
+                // Draw selection if focused and has selection
+                if (this.focused && this.hasSelection()) {
+                    // TODO: Calculate selection rectangle and draw it
+                    // This would require character-by-character width calculation
+                }
+
+                // Draw cursor if focused
+                if (this.focused) {
+                    // TODO: Calculate cursor position and draw a vertical line
+                    // This would require character-by-character width calculation
+                }
+            }
+
+            graphics.resetClipArea()
+        }
+
+        override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
+            if (this.contains(x, y)) {
+                if (type == MouseEventType.down && button == MouseButton.left) {
+                    this.setFocused(true)
+                    // TODO: Calculate cursor position from x coordinate
+                    // This would require character-by-character width calculation
+                    return true
+                }
+            } else {
+                if (type == MouseEventType.down) {
+                    this.setFocused(false)
+                }
+            }
+            return false
+        }
+
+        override fun onKeyboardEvent(type: KeyboardEventType, key: UShort): Bool {
+            if (!this.focused || this.readOnly) {
+                return false
+            }
+
+            if (type == KeyboardEventType.down) {
+                // Handle special keys
+                if (key == 8US) { // Backspace
+                    this.deleteBackward()
+                    return true
+                } else if (key == 127US) { // Delete
+                    this.deleteForward()
+                    return true
+                } else if (key == 37US) { // Left arrow
+                    this.setCursorPosition(this.cursorPosition - 1)
+                    this.clearSelection()
+                    return true
+                } else if (key == 39US) { // Right arrow
+                    this.setCursorPosition(this.cursorPosition + 1)
+                    this.clearSelection()
+                    return true
+                } else if (key == 36US) { // Home
+                    this.setCursorPosition(0)
+                    this.clearSelection()
+                    return true
+                } else if (key == 35US) { // End
+                    this.setCursorPosition(this.text.length())
+                    this.clearSelection()
+                    return true
+                } else if (key >= 32US && key <= 126US) { // Printable ASCII
+                    var charStr = String.fromCharCode(key.toInt())
+                    this.insertText(charStr)
+                    return true
+                }
+            }
+            return false
+        }
+    }
+}
