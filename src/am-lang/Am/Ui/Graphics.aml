@@ -5,6 +5,7 @@ namespace Am.Ui
     class Graphics {
         import Am.Lang
         import Am.Collections
+        import Am.Imaging
 
         private var xOffset: Short
         private var yOffset: Short
@@ -55,6 +56,7 @@ namespace Am.Ui
         abstract fun setFont(font: Font)
         abstract fun setClipArea(x: Short, y: Short, width: UShort, height: UShort)
         abstract fun resetClipArea()
+        abstract fun drawImage(image: Am.Imaging.Image, x: Short, y: Short, width: Short, height: Short)
     }
 
 }

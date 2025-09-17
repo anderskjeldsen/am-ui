@@ -1,0 +1,81 @@
+namespace Am.Ui 
+{
+
+    class ImageView(var image: Am.Imaging.Image) : View {
+        import Am.Lang
+        import Am.Imaging
+
+        var scaleToFit: Bool = false
+        var maintainAspectRatio: Bool = true
+
+        fun setImage(image: Am.Imaging.Image) {
+            this.image = image
+            this.requestRepaint()
+        }
+
+        fun getImage(): Am.Imaging.Image {
+            return this.image
+        }
+
+        override fun minHeight(): Short {
+            if (this.image != null) {
+                return this.image.getHeight().toShort() + base.minHeight()
+            }
+            return base.minHeight()
+        }
+
+        override fun minWidth(): Short {
+            if (this.image != null) {
+                return this.image.getWidth().toShort() + base.minWidth()
+            }
+            return base.minWidth()
+        }
+
+        override fun paint(graphics: Graphics) {
+            base.paint(graphics)
+
+            if (this.image == null) {
+                return
+            }
+
+            var innerW = this.innerWidth()
+            var innerH = this.innerHeight()
+            var imgW = this.image.getWidth().toShort()
+            var imgH = this.image.getHeight().toShort()
+
+            var drawX = 0S
+            var drawY = 0S
+            var drawW = imgW
+            var drawH = imgH
+
+            if (this.scaleToFit) {
+                if (this.maintainAspectRatio) {
+                    // Calculate scale factor to fit within bounds while maintaining aspect ratio
+                    var scaleX = innerW.toFloat() / imgW.toFloat()
+                    var scaleY = innerH.toFloat() / imgH.toFloat()
+                    var scale = if (scaleX < scaleY) scaleX else scaleY
+                    
+                    drawW = (imgW.toFloat() * scale).toShort()
+                    drawH = (imgH.toFloat() * scale).toShort()
+                    
+                    // Center the image
+                    drawX = (innerW - drawW) / 2S
+                    drawY = (innerH - drawH) / 2S
+                } else {
+                    // Stretch to fill the entire inner area
+                    drawW = innerW
+                    drawH = innerH
+                    drawX = 0S
+                    drawY = 0S
+                }
+            } else {
+                // Center the image at original size
+                drawX = (innerW - imgW) / 2S
+                drawY = (innerH - imgH) / 2S
+            }
+
+            // Draw the image using the graphics context
+            graphics.drawImage(this.image, drawX, drawY, drawW, drawH)
+        }
+    }
+}
