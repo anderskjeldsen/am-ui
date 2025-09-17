@@ -6,6 +6,37 @@
 
 am-ui is a UI library that one could use when programming AmLang. It let's you open a Screen or a Window, add some layouts, labels, buttons etc. Work in progress.
 
+## Available Views
+
+The library includes the following UI components:
+
+### Core Views
+- **View** - Base class for all UI components
+- **ViewGroup** - Container for child views
+- **Button** - Clickable button with text and event handling
+- **Label** - Text display
+- **Panel** - Basic container with background
+
+### Layout Views  
+- **HStack** - Horizontal layout container
+- **VStack** - Vertical layout container
+- **ScrollView** - Scrollable container
+- **ListView** - List of items
+
+### New Views (Recently Added)
+- **ImageView** - Display images from Am.Imaging library with scaling options
+- **ProgressBar** - Progress indicator with customizable range and styling
+- **TextField** - Text input with placeholder, selection, and focus management
+- **CheckBox** - Toggle control with label and change events
+- **Separator** - Visual divider for layouts
+
+### System Views
+- **Window** - Top-level window container
+- **Screen** - Screen management
+- **Font** - Font handling
+
+See [NEW_VIEWS.md](NEW_VIEWS.md) for detailed documentation on the recently added Views.
+
 # Am Lang Features
 AmLang is inspired by other programming languages like Kotlin, Java, C#, TypeScript, Swift etc. 
 
