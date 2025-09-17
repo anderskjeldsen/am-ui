@@ -340,3 +340,39 @@ __exit: ;
 	return __result;
 };
 
+function_result Am_Ui_ViewContextGraphics_drawImage_0(aobject * const this, aobject * image, short x, short y, short width, short height)
+{
+	function_result __result = { .has_return_value = false };
+	bool __returning = false;
+	if (this != NULL) {
+		__increase_reference_count(this);
+	}
+	if (image != NULL) {
+		__increase_reference_count(image);
+	}
+
+	aobject *window = Am_Ui_ViewContextGraphics_getWindow_0(this).return_value.value.object_value;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
+	struct RastPort *rp = window_data->window->RPort;
+
+	short tx = translated_x(this, x);
+	short ty = translated_y(this, y);
+
+	// TODO: Implement actual image drawing using Am.Imaging.Image data
+	// For now, just draw a placeholder rectangle
+	SetAPen(rp, 2); // Use pen 2 for image placeholder
+	RectFill(rp, tx, ty, tx + width - 1, ty + height - 1);
+
+__exit: ;
+	if (window != NULL) {
+		__decrease_reference_count(window);
+	}
+	if (this != NULL) {
+		__decrease_reference_count(this);
+	}
+	if (image != NULL) {
+		__decrease_reference_count(image);
+	}
+	return __result;
+};
+
