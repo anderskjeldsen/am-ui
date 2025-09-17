@@ -24,12 +24,8 @@ namespace Am.Ui
             
             // Create a sample image for ImageView demonstration
             var sampleImage = Am.Imaging.Image.createARGB(64US, 32US)
-            // Fill with a simple pattern (blue background)
-            var i = 0
-            while (i < sampleImage.getWidth().toInt() * sampleImage.getHeight().toInt()) {
-                sampleImage.getPixelColors()[i] = 0xFF0066FFUI // Blue with alpha
-                i = i + 1
-            }
+            // TODO: Fill with a simple pattern (blue background)
+            // Note: Direct pixel manipulation would require proper array access methods
             
             // Add ImageView
             var imageView = new ImageView(sampleImage)

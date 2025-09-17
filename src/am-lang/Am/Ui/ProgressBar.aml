@@ -37,11 +37,11 @@ namespace Am.Ui
             this.requestRepaint()
         }
 
-        fun getPercentage(): Float {
+        fun getPercentage(): Int {
             if (this.maximum == this.minimum) {
-                return 0.0F
+                return 0
             }
-            return (this.value - this.minimum).toFloat() / (this.maximum - this.minimum).toFloat()
+            return ((this.value - this.minimum) * 100) / (this.maximum - this.minimum)
         }
 
         override fun setDefaultPadding() {
@@ -77,8 +77,8 @@ namespace Am.Ui
             // Draw border
             this.paintNativeBorder(graphics, this.borderPens)
 
-            // Calculate progress width
-            var progressWidth = (innerW.toFloat() * this.getPercentage()).toShort()
+            // Calculate progress width using integer arithmetic
+            var progressWidth = (innerW * (this.value - this.minimum)) / (this.maximum - this.minimum)
             
             // Draw progress bar
             if (progressWidth > 0S) {
@@ -92,7 +92,7 @@ namespace Am.Ui
 
             // Draw text if enabled
             if (this.showText) {
-                var percentage = (this.getPercentage() * 100.0F).toInt()
+                var percentage = this.getPercentage()
                 var text = percentage.toString() + "%"
                 
                 graphics.setForegroundPen(this.textPen)

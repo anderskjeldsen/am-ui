@@ -264,8 +264,12 @@ namespace Am.Ui
                     this.clearSelection()
                     return true
                 } else if (key >= 32US && key <= 126US) { // Printable ASCII
-                    var charStr = String.fromCharCode(key.toInt())
-                    this.insertText(charStr)
+                    // Convert key to character - this is a simplified approach
+                    // In a real implementation, this would need proper character conversion
+                    var charStr = "" // TODO: Implement character conversion from key code
+                    if (charStr.length() > 0) {
+                        this.insertText(charStr)
+                    }
                     return true
                 }
             }

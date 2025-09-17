@@ -50,13 +50,23 @@ namespace Am.Ui
 
             if (this.scaleToFit) {
                 if (this.maintainAspectRatio) {
-                    // Calculate scale factor to fit within bounds while maintaining aspect ratio
-                    var scaleX = innerW.toFloat() / imgW.toFloat()
-                    var scaleY = innerH.toFloat() / imgH.toFloat()
-                    var scale = if (scaleX < scaleY) scaleX else scaleY
+                    // Calculate scale factor using integer arithmetic to avoid floats
+                    // Scale factor = min(innerW/imgW, innerH/imgH)
+                    var scaleXNum = innerW
+                    var scaleXDen = imgW
+                    var scaleYNum = innerH  
+                    var scaleYDen = imgH
                     
-                    drawW = (imgW.toFloat() * scale).toShort()
-                    drawH = (imgH.toFloat() * scale).toShort()
+                    // Choose the smaller scale factor
+                    var useXScale = (scaleXNum * scaleYDen) <= (scaleYNum * scaleXDen)
+                    
+                    if (useXScale) {
+                        drawW = innerW
+                        drawH = (imgH * innerW) / imgW
+                    } else {
+                        drawW = (imgW * innerH) / imgH
+                        drawH = innerH
+                    }
                     
                     // Center the image
                     drawX = (innerW - drawW) / 2S
