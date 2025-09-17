@@ -1,47 +1,160 @@
 # am-ui
 
-# What is am-ui?
+## What is am-ui?
 
-"AmLang" is a new programming language mainly targetted at niche platforms like AmigaOS (Also playing with MorphOS, Nintendo Wii Homebrew, Raspberry Pi Pico, Atari TOS). Read more about it below.
+am-ui is a cross-platform UI library written in AmLang that provides modern UI components for retro and niche platforms. It enables developers to create rich graphical applications for AmigaOS, MorphOS, and other classic computing platforms using familiar, modern programming patterns.
 
-am-ui is a UI library that one could use when programming AmLang. It let's you open a Screen or a Window, add some layouts, labels, buttons etc. Work in progress.
+### Key Features
 
-# Am Lang Features
+- **Cross-platform**: Supports AmigaOS 3.x, MorphOS, and other retro platforms
+- **Modern UI Components**: Buttons, Labels, Windows, Screens, and layout containers
+- **Layout System**: VStack and HStack for flexible, responsive layouts  
+- **Native Integration**: Uses native Intuition/GadTools APIs for authentic platform look and feel
+- **Event Handling**: Mouse and keyboard event support with callback-based interaction model
+
+### Available UI Components
+
+- **Window**: Main application windows with resize, close, and drag capabilities
+- **Screen**: Custom screens with configurable resolution and color depth
+- **Button**: Interactive buttons with click handlers and hover states
+- **Label**: Text display with font and color customization
+- **Panel**: Container with border and padding support
+- **VStack**: Vertical layout container with spacing and growth controls
+- **HStack**: Horizontal layout container with spacing and growth controls
+- **ScreenModeRequester**: Native screen mode selection dialogs
+
+## Simple Usage Example
+
+Here's a basic example of creating a window with UI components:
+
+```aml
+// Create a window
+var window = Window.openWindow(20S, 20S, 300US, 200US, null, null)
+
+// Create a vertical layout container
+var vStack = new VStack(5S) // 5 pixel spacing
+
+// Add a label
+vStack.addChild(new Label("Hello Amiga!"))
+
+// Add an interactive button
+vStack.addChild(new Button("Click Me!", (view) => {
+    // Handle button click
+    "Button was clicked!".println()
+    return true
+}).setup((button) => {
+    button.setDefaultPadding()
+    button.growX = 255UB // Fill horizontal space
+}))
+
+// Create a panel container with border and padding
+var panel = new Panel()
+panel.setDefaultBorder()
+panel.setDefaultPadding()
+panel.setChild(vStack)
+
+// Set the panel as the window's root view
+window.setRootView(panel)
+window.layout()
+window.requestRepaint()
+
+// Main event loop
+while(window.isOpen()) {
+    window.handleInput()
+}
+```
+
+## About AmLang
+
+am-ui is built with AmLang, a modern programming language designed for retro and embedded platforms.
+### AmLang Language Features
+
 AmLang is inspired by other programming languages like Kotlin, Java, C#, TypeScript, Swift etc. 
 
-- ARC (automatic reference counting)
-- classes
-- interfaces
-- namespaces
-- suspendable functions
-- lambda expressions
-- native c support, 
-- exceptions (try,catch,throw) 
-- and a lot more. 
+- **ARC (automatic reference counting)** - Memory management without garbage collection overhead
+- **Classes and interfaces** - Object-oriented programming with familiar syntax
+- **Namespaces** - Code organization and modularity
+- **Suspendable functions** - Asynchronous programming support
+- **Lambda expressions** - Functional programming constructs
+- **Native C support** - Seamless integration with existing C libraries
+- **Exceptions (try, catch, throw)** - Robust error handling
+- **And much more** - Modern language features adapted for retro platforms
 
-There are still some major features missing, like for example for-loops. I have to use while loops until I prioritize for-loops 🙂 Currently it compiles only on Mac/Linux/Windows (using Docker), but one of the ultimate goals is to re-write the compiler in its own language. The compiler doesn't generate any machine code on its own, it writes C-code and lets GCC make the machine code. Performance-wise it's not as efficient as C (obviously?), but one can easily let c/asm do the heavy lifting and use this for orchestration. 
+*Note: Some features like for-loops are still in development. While loops are currently used as an alternative.*
 
-# Requirements
-- Java 11+
-- Docker
-- Windows, MacOS, Linux
+The compiler transpiles AmLang code to C, which is then compiled with GCC for the target platform. This approach provides good performance while maintaining portability across different architectures.
 
-# Quick start (for AmigaOS3):
+## Requirements
 
-There is no "main" function in this library, but there are some examples in src/Am/Examples/Examples.aml - just rename for example main12() to main() and build.
+### Development Environment
+- **Java 11+** - Required for running the AmLang compiler
+- **Docker** - Used for cross-compilation to target platforms  
+- **Host OS**: Windows, macOS, or Linux
 
-build for AmigaOS (3.x): \
-java -jar amlc-1.jar . -acmd -bt amigaos_docker_unix-x64
+### Target Platforms
+- **AmigaOS 3.x** - Classic Amiga systems
+- **MorphOS** - PowerPC-based Amiga-compatible systems
+- Other retro platforms (in development)
 
-add more runtime logging: \
+## Getting Started
+
+### Building for AmigaOS 3.x
+
+The am-ui library includes example applications that demonstrate its capabilities. To get started:
+
+1. **Choose an example**: Look at the `Startup.aml` file which contains a file browser example
+2. **Build the application**:
+   ```bash
+   java -jar amlc-1.jar . -acmd -bt amigaos_docker_unix-x64
+   ```
+3. **Find your binary**: The compiled application will be in `builds/bin/amigaos/` as a file called "app"
+4. **Deploy**: Copy the "app" file to your Amiga environment and run it
+
+### Build Options
+
+**Enable runtime logging**:
+```bash
 java -jar amlc-1.jar . -acmd -bt amigaos_docker_unix-x64 -rl
+```
 
-add more comments in the code: \
+**Add debug comments**:
+```bash
 java -jar amlc-1.jar . -acmd -bt amigaos_docker_unix-x64 -rdc
+```
 
-Binary will end up in builds/bin/amigaos/ as a file called "app". Copy the "app" file to an Amiga environment and execute it. 
+### Command Line Options
 
-The option "-acmd" means that you allow the compiler to run commands from the package.yml file. 
+- **`-acmd`**: Allows the compiler to run commands from package.yml
+- **`-bt <target>`**: Specifies the build target platform (from package.yml)
+- **`-rl`**: Enables additional runtime logging
+- **`-rdc`**: Adds more descriptive comments in generated code
 
-The option "-bt" specifies which build target (from package.yml) you want to use (which platform to build for and how to build)
+### Available Build Targets
+
+- `amigaos_docker_unix-x64` - AmigaOS 3.x (x86-64 host)
+- `amigaos_docker_unix-arm` - AmigaOS 3.x (ARM host) 
+- `morphos-ppc_docker` - MorphOS PowerPC
+
+## Project Structure
+
+```
+src/
+├── am-lang/Am/Ui/          # AmLang UI component source files
+│   ├── Button.aml          # Interactive button component
+│   ├── Label.aml           # Text display component  
+│   ├── Window.aml          # Main window management
+│   ├── Screen.aml          # Custom screen support
+│   ├── VStack.aml          # Vertical layout container
+│   ├── HStack.aml          # Horizontal layout container
+│   ├── Panel.aml           # Container with borders/padding
+│   └── Startup.aml         # Example file browser application
+└── native-c/               # Platform-specific C implementations
+    ├── amigaos/            # AmigaOS native code
+    ├── morphos-ppc/        # MorphOS native code
+    └── libc/               # Generic C implementations
+```
+
+## Contributing
+
+am-ui is a work in progress. The library is being actively developed with new components and features being added regularly. Contributions and feedback are welcome!
 
