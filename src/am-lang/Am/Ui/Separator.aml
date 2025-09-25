@@ -1,7 +1,7 @@
 namespace Am.Ui 
 {
 
-    class Separator(var orientation: SeparatorOrientation = SeparatorOrientation.Horizontal) : View {
+    class Separator(var orientation: SeparatorOrientation) : View {
         import Am.Lang
 
         var separatorPen: UByte = 2UB
