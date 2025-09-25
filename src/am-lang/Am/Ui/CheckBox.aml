@@ -1,7 +1,7 @@
 namespace Am.Ui 
 {
 
-    class CheckBox(var text: String, var checked: Bool = false, var changeListener: (checkBox: CheckBox) => Bool = null) : View {
+    class CheckBox(var text: String, var checked: Bool, var changeListener: (checkBox: CheckBox) => Bool) : View {
         import Am.Lang
 
         private var hovered: Bool = false

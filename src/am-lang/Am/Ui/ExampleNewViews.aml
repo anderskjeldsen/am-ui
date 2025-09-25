@@ -46,7 +46,7 @@ namespace Am.Ui
             vstack.addChild(textField)
             
             // Add CheckBox
-            var checkBox = new CheckBox("Enable feature", false, fun(cb: CheckBox): Bool {
+            var checkBox = new CheckBox("Enable feature", false, (cb) => {
                 ("Checkbox toggled: " + cb.isChecked().toString()).println()
                 return true
             })
