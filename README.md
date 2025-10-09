@@ -6,6 +6,12 @@
 
 am-ui is a UI library that one could use when programming AmLang. It let's you open a Screen or a Window, add some layouts, labels, buttons etc. Work in progress.
 
+## Supported Platforms
+
+- **AmigaOS** - Native implementation using Intuition and graphics libraries
+- **MorphOS** - Native implementation for PowerPC-based MorphOS systems
+- **Linux x64** - Native implementation for Linux x86-64 systems (logging-based simulation)
+
 # Am Lang Features
 AmLang is inspired by other programming languages like Kotlin, Java, C#, TypeScript, Swift etc. 
 
@@ -26,9 +32,11 @@ There are still some major features missing, like for example for-loops. I have 
 - Docker
 - Windows, MacOS, Linux
 
-# Quick start (for AmigaOS3):
+# Quick start
 
 There is no "main" function in this library, but there are some examples in src/Am/Examples/Examples.aml - just rename for example main12() to main() and build.
+
+## For AmigaOS (3.x):
 
 build for AmigaOS (3.x): \
 java -jar amlc-1.jar . -acmd -bt amigaos_docker_unix-x64
@@ -39,7 +47,18 @@ java -jar amlc-1.jar . -acmd -bt amigaos_docker_unix-x64 -rl
 add more comments in the code: \
 java -jar amlc-1.jar . -acmd -bt amigaos_docker_unix-x64 -rdc
 
-Binary will end up in builds/bin/amigaos/ as a file called "app". Copy the "app" file to an Amiga environment and execute it. 
+Binary will end up in builds/bin/amigaos/ as a file called "app". Copy the "app" file to an Amiga environment and execute it.
+
+## For Linux x64:
+
+build for Linux x64: \
+java -jar amlc-1.jar . -acmd -bt linux-x64
+
+Binary will end up in builds/bin/linux-x64/ as a file called "app". This can be executed directly on Linux systems.
+
+Note: The linux-x64 implementation provides a logging-based simulation of UI operations. See [src/native-c/linux-x64/README.md](src/native-c/linux-x64/README.md) for more details.
+
+## Build Options
 
 The option "-acmd" means that you allow the compiler to run commands from the package.yml file. 
 
