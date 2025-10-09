@@ -28,18 +28,30 @@ There are still some major features missing, like for example for-loops. I have 
 
 # Quick start (for AmigaOS3):
 
-There is no "main" function in this library, but there are some examples in src/Am/Examples/Examples.aml - just rename for example main12() to main() and build.
+Examples are available in the examples/ directory.
 
-build for AmigaOS (3.x): \
+For example, to build and run the FileBrowser example:
+
+```bash
+cd examples/FileBrowser
 java -jar amlc-1.jar . -acmd -bt amigaos_docker_unix-x64
+```
 
-add more runtime logging: \
-java -jar amlc-1.jar . -acmd -bt amigaos_docker_unix-x64 -rl
+Binary will end up in `builds/bin/amigaos/` as a file called "app". Copy the "app" file to an Amiga environment and execute it.
 
-add more comments in the code: \
-java -jar amlc-1.jar . -acmd -bt amigaos_docker_unix-x64 -rdc
+Available build targets:
+- `amigaos_docker_unix-x64` - AmigaOS 3.x (using x64 Docker image)
+- `amigaos_docker_unix-arm` - AmigaOS 3.x (using ARM Docker image)
+- `morphos-ppc_docker` - MorphOS PPC
 
-Binary will end up in builds/bin/amigaos/ as a file called "app". Copy the "app" file to an Amiga environment and execute it. 
+Additional build options:
+- Add more runtime logging: `-rl`
+- Add more comments in the code: `-rdc`
+
+Example:
+```bash
+java -jar amlc-1.jar . -acmd -bt amigaos_docker_unix-x64 -rl -rdc
+``` 
 
 The option "-acmd" means that you allow the compiler to run commands from the package.yml file. 
 
