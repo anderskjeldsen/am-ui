@@ -28,7 +28,7 @@ There are still some major features missing, like for example for-loops. I have 
 
 # Quick start (for AmigaOS3):
 
-There is no "main" function in this library, but there are examples in the examples/ directory.
+Examples are available in the examples/ directory.
 
 For example, to build and run the FileBrowser example:
 
