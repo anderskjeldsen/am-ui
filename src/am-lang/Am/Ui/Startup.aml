@@ -36,15 +36,5 @@ namespace Am.Ui
             return base.toString()
         }
     }
-
-    class Startup {
-        import Am.Lang
-
-        static var xxx: Int = 1
-
-        static fun main() {
-            "am-ui library loaded. See examples/FileBrowser for a file browser example.".println()
-        }
-    }
 }
 
