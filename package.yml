@@ -33,6 +33,15 @@ platforms:
     gccAdditionalOptions:
       - -noixemul     
     gccAdditionalLibraries:
+  - id: linux-x64
+    extends: libc
+    gccCommand: gcc -O3
+    additionalHeaders:
+    additionalAsmSources:
+    additionalCSources: 
+    additionalIncludePaths:
+    gccAdditionalOptions:
+    gccAdditionalLibraries:
 
 buildTargets:
   - id: amigaos_docker_unix-arm
@@ -50,4 +59,6 @@ buildTargets:
     dockerBuild:
       image: amigadev/crosstools:ppc-morphos
       buildPath: /work
+  - id: linux-x64
+    platform: linux-x64
 
