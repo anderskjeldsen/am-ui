@@ -10,7 +10,7 @@ am-ui is a UI library that one could use when programming AmLang. It let's you o
 
 - **AmigaOS** - Native implementation using Intuition and graphics libraries
 - **MorphOS** - Native implementation for PowerPC-based MorphOS systems
-- **Linux x64** - Native implementation for Linux x86-64 systems (logging-based simulation)
+- **Linux x64** - Native implementation using SDL2 for actual window management and graphics rendering
 
 # Am Lang Features
 AmLang is inspired by other programming languages like Kotlin, Java, C#, TypeScript, Swift etc. 
@@ -56,7 +56,19 @@ java -jar amlc-1.jar . -acmd -bt linux-x64
 
 Binary will end up in builds/bin/linux-x64/ as a file called "app". This can be executed directly on Linux systems.
 
-Note: The linux-x64 implementation provides a logging-based simulation of UI operations. See [src/native-c/linux-x64/README.md](src/native-c/linux-x64/README.md) for more details.
+**Requirements**: SDL2 library must be installed:
+```bash
+# Ubuntu/Debian
+sudo apt-get install libsdl2-dev
+
+# Fedora  
+sudo dnf install SDL2-devel
+
+# Arch Linux
+sudo pacman -S sdl2
+```
+
+Note: The linux-x64 implementation provides real window management and graphics rendering using SDL2. See [src/native-c/linux-x64/README.md](src/native-c/linux-x64/README.md) for more details.
 
 ## Build Options
 

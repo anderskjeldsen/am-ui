@@ -57,6 +57,12 @@ function_result Am_Ui_Screen_open_0(aobject * const this, int width, int height,
 	data->height = height;
 	data->depth = depth;
 	data->displayId = displayId;
+	data->sdl_window = NULL;
+	data->sdl_renderer = NULL;
+
+	// Note: Screen in Amiga terms is like a display mode, not an actual window
+	// So we don't create SDL window here, that's done in Window.c
+	
 	this->object_properties.class_object_properties.object_data.value.custom_value = data;
 
 	printf("[linux-x64] Screen opened successfully\n");

@@ -41,7 +41,10 @@ platforms:
     additionalCSources: 
     additionalIncludePaths:
     gccAdditionalOptions:
+      - -I/usr/include/SDL2
+      - -D_REENTRANT
     gccAdditionalLibraries:
+      - SDL2
 
 buildTargets:
   - id: amigaos_docker_unix-arm
