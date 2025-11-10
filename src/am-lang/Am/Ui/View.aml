@@ -156,7 +156,9 @@ namespace Am.Ui
             var b = this.repaintRequested
             if (!b) {
                 this.repaintRequested = true
-                this.viewContext.getWindow().requestRepaint()
+                if (this.viewContext != null) {
+                    this.viewContext.getWindow().requestRepaint()
+                }
             }
         }
 
