@@ -1,7 +1,7 @@
 namespace Am.Ui 
 {
 
-    class TextField(var text: String = "", var placeholder: String = "") : View {
+    class TextField(var text: String, var placeholder: String) : View {
         import Am.Lang
 
         private var focused: Bool = false
@@ -28,7 +28,7 @@ namespace Am.Ui
 
         fun setText(text: String) {
             if (text.length() > this.maxLength) {
-                this.text = text.substring(0, this.maxLength)
+                this.text = text.substring(0UI, this.maxLength.toUInt())
             } else {
                 this.text = text
             }
@@ -85,22 +85,26 @@ namespace Am.Ui
             var insertPosition = this.cursorPosition
             if (this.hasSelection()) {
                 // Replace selection
-                var beforeSelection = this.text.substring(0, this.selectionStart)
-                var afterSelection = this.text.substring(this.selectionEnd, this.text.length())
+                var beforeSelection = this.text.substring(0UI, this.selectionStart.toUInt())
+                var afterSelection = this.text.substring(this.selectionEnd.toUInt(), this.text.length().toUInt())
                 this.text = beforeSelection + newText + afterSelection
                 insertPosition = this.selectionStart + newText.length()
             } else {
                 // Insert at cursor
-                var beforeCursor = this.text.substring(0, this.cursorPosition)
-                var afterCursor = this.text.substring(this.cursorPosition, this.text.length())
+                var beforeCursor = this.text.substring(0UI, this.cursorPosition.toUInt())
+                var afterCursor = this.text.substring(this.cursorPosition.toUInt(), this.text.length().toUInt())
                 this.text = beforeCursor + newText + afterCursor
                 insertPosition = this.cursorPosition + newText.length()
             }
 
             // Trim to max length
             if (this.text.length() > this.maxLength) {
-                this.text = this.text.substring(0, this.maxLength)
-                insertPosition = if (insertPosition > this.maxLength) this.maxLength else insertPosition
+                this.text = this.text.substring(0UI, this.maxLength.toUInt())
+                if (insertPosition > this.maxLength) {
+                    insertPosition = this.maxLength
+                } else {
+                    insertPosition = insertPosition
+                }
             }
 
             this.setCursorPosition(insertPosition)
@@ -115,8 +119,8 @@ namespace Am.Ui
             if (this.hasSelection()) {
                 this.insertText("")
             } else if (this.cursorPosition > 0) {
-                var beforeCursor = this.text.substring(0, this.cursorPosition - 1)
-                var afterCursor = this.text.substring(this.cursorPosition, this.text.length())
+                var beforeCursor = this.text.substring(0UI, (this.cursorPosition - 1).toUInt())
+                var afterCursor = this.text.substring(this.cursorPosition.toUInt(), this.text.length().toUInt())
                 this.text = beforeCursor + afterCursor
                 this.setCursorPosition(this.cursorPosition - 1)
             }
@@ -130,8 +134,8 @@ namespace Am.Ui
             if (this.hasSelection()) {
                 this.insertText("")
             } else if (this.cursorPosition < this.text.length()) {
-                var beforeCursor = this.text.substring(0, this.cursorPosition)
-                var afterCursor = this.text.substring(this.cursorPosition + 1, this.text.length())
+                var beforeCursor = this.text.substring(0UI, this.cursorPosition.toUInt())
+                var afterCursor = this.text.substring((this.cursorPosition + 1).toUInt(), this.text.length().toUInt())
                 this.text = beforeCursor + afterCursor
                 this.requestRepaint()
             }
@@ -147,7 +151,12 @@ namespace Am.Ui
 
         override fun minHeight(): Short {
             var vc = this.getViewContext()
-            var fontHeight = if (vc != null) vc.getWindow().getCurrentFontSize().toShort() else 12S
+            var fontHeight: Short = 0S
+            if (vc != null) {
+                fontHeight = vc.getWindow().getCurrentFontSize().toShort()
+            } else {
+                fontHeight = 12S
+            }
             return fontHeight + 4S + base.minHeight()
         }
 
@@ -166,12 +175,22 @@ namespace Am.Ui
             var y2 = this.height.toShort() - (this.margin.bottom + this.margin.top + 1S)
 
             // Draw background
-            var bgPen = if (this.focused) this.focusedBackgroundPen else this.backgroundPen
+            var bgPen: UByte = 0UB
+            if (this.focused) {
+                bgPen = this.focusedBackgroundPen
+            } else {
+                bgPen = this.backgroundPen
+            }
             graphics.setForegroundPen(bgPen)
             graphics.fillRect(x1, y1, x2, y2)
 
             // Draw border
-            var borderPens = if (this.focused) this.focusedBorderPens else this.borderPens
+            var borderPens: BorderPens
+            if (this.focused) {
+                borderPens = this.focusedBorderPens
+            } else {
+                borderPens = this.borderPens
+            }
             this.paintNativeBorder(graphics, borderPens)
 
             // Calculate text area
@@ -185,7 +204,7 @@ namespace Am.Ui
 
             // Draw text or placeholder
             var displayText = this.text
-            if (displayText.isEmpty() && !this.placeholder.isEmpty() && !this.focused) {
+            if (displayText.length() == 0 && !this.placeholder.length() == 0 && !this.focused) {
                 graphics.setForegroundPen(this.placeholderPen)
                 graphics.drawString(this.placeholder, textX, textY)
             } else {

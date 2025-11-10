@@ -47,6 +47,8 @@ namespace Am.Ui
         import Am.Lang
         import Am.Threading
         import Am.IO
+        import Am.Ui
+
 
         static var xxx: Int = 1
 
@@ -58,7 +60,8 @@ namespace Am.Ui
                 var f = files[i]
                 (prefix + f.filename).println()
                 if (f.isDirectory()) {
-                    Startup.listFolder(prefix + "-", f)
+                    var childFolder = new Folder(f, folder)
+                    Startup.listFolder(prefix + "-", childFolder)
                 }
                 i++
             }
@@ -96,9 +99,11 @@ namespace Am.Ui
                 })
 
                 b.setup((v) => {
+                    /*
                     v.setDefaultPadding()
                     v.growX = 255UB
                     v.growY = 0UB
+                    */
                 })
 
                 vg.addChild(b)

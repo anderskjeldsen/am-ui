@@ -45,7 +45,10 @@ namespace Am.Ui
 
         private fun getCheckBoxSize(): Short {
             var vc = this.getViewContext()
-            var fontHeight = if (vc != null) vc.getWindow().getCurrentFontSize().toShort() else 12S
+            var fontHeight = 12S
+            if (vc != null) { 
+                fontHeight = vc.getWindow().getCurrentFontSize().toShort()
+            }
             return fontHeight
         }
 
@@ -73,7 +76,10 @@ namespace Am.Ui
             var checkBoxSize = this.getCheckBoxSize()
             var label = this.ensureLabel()
             var labelHeight = label.minHeight()
-            var maxHeight = if (checkBoxSize > labelHeight) checkBoxSize else labelHeight
+            var maxHeight = labelHeight
+            if (checkBoxSize > labelHeight) {
+                maxHeight = checkBoxSize
+            }
             return maxHeight + base.minHeight()
         }
 
@@ -115,12 +121,22 @@ namespace Am.Ui
             }
 
             // Draw checkbox background
-            var bgPen = if (this.checked) this.checkedBackgroundPen else this.backgroundPen
+            var bgPen: UByte = 0UB
+            if (this.checked) {
+                bgPen = this.checkedBackgroundPen
+            } else {
+                bgPen = this.backgroundPen
+            }
             graphics.setForegroundPen(bgPen)
             graphics.fillRect(checkBoxX, checkBoxY, checkBoxX + checkBoxSize, checkBoxY + checkBoxSize)
 
             // Draw checkbox border
-            var borderPens = if (this.checked) this.checkedBorderPens else this.borderPens
+            var borderPens: BorderPens
+            if (this.checked) {
+                borderPens = this.checkedBorderPens
+            } else {
+                borderPens = this.borderPens
+            }
             graphics.setForegroundPen(borderPens.top)
             graphics.drawLine(checkBoxX, checkBoxY, checkBoxX + checkBoxSize - 1S, checkBoxY)
             
@@ -151,10 +167,10 @@ namespace Am.Ui
             }
 
             // Draw label
-            var label = this.ensureLabel()
-            label.backgroundPen = this.backgroundPen
-            label.textPen = this.textPen
-            label.paintAll(graphics)
+            var label2 = this.ensureLabel()
+            label2.backgroundPen = this.backgroundPen
+            label2.textPen = this.textPen
+            label2.paintAll(graphics)
         }
 
         override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {

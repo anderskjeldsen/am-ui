@@ -1,7 +1,7 @@
 namespace Am.Ui 
 {
 
-    class ProgressBar(var minimum: Int = 0, var maximum: Int = 100) : View {
+    class ProgressBar(var minimum: Int, var maximum: Int) : View {
         import Am.Lang
 
         private var value: Int = 0
@@ -78,7 +78,7 @@ namespace Am.Ui
             this.paintNativeBorder(graphics, this.borderPens)
 
             // Calculate progress width using integer arithmetic
-            var progressWidth = (innerW * (this.value - this.minimum)) / (this.maximum - this.minimum)
+            var progressWidth = (innerW * (this.value - this.minimum).toShort()) / (this.maximum - this.minimum).toShort()
             
             // Draw progress bar
             if (progressWidth > 0S) {

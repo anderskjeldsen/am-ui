@@ -10,7 +10,7 @@ namespace Am.Ui
         private var xOffset: Short
         private var yOffset: Short
         private var repaintAllRequested: Bool = false
-        private var clipRects: List<Rectangle> = List<Rectangle>.newList<Rectangle>()
+        private var clipRects: List<Rectangle> = new List<Rectangle>()
 //        private var clipRect: Rectangle
 
         fun translate(x: Short, y: Short) {
