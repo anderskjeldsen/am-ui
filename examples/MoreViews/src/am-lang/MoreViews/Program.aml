@@ -1,7 +1,7 @@
-namespace Am.Ui 
+namespace MoreViews 
 {
     // Example demonstrating the new Views: ImageView, ProgressBar, TextField, CheckBox, and Separator
-    class ExampleNewViews {
+    class Program {
         import Am.Ui
         import Am.Lang
         import Am.Imaging
@@ -97,7 +97,7 @@ namespace Am.Ui
         }
         
         static fun main() {
-            var window = ExampleNewViews.createExampleWindow()
+            var window = Program.createExampleWindow()
             
             // Main event loop would go here
             ("Example window created with new Views!").println()
