@@ -119,8 +119,8 @@ namespace Am.Ui
             this.close()
         }
 
-        fun onKeyboardEvent(type: KeyboardEventType, key: UShort) {
-            this.rootView?.onKeyboardEvent(type, key)
+        fun onKeyboardEvent(type: KeyboardEventType, keyCode: UShort, keyChar: UShort) {
+            this.rootView?.onKeyboardEvent(type, keyCode, keyChar)
         }
 
         fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short) {

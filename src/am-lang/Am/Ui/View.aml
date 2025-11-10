@@ -125,9 +125,6 @@ namespace Am.Ui
         }
 
         open fun onDetach() {
-            var classRef = this.getClassRef()
-            "Detaching view of type: ${classRef.getClassName()}".println()
-
             this.viewContext = null
         }
 
@@ -226,7 +223,7 @@ namespace Am.Ui
             return null
         }
 
-        open fun onKeyboardEvent(type: KeyboardEventType, key: UShort): Bool {
+        open fun onKeyboardEvent(type: KeyboardEventType, keyCode: UShort, keyChar: UShort): Bool {
             return false
         }
 
