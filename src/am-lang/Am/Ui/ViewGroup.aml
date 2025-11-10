@@ -36,6 +36,8 @@ namespace Am.Ui
         override fun onAttach(viewContext: ViewContext) {
             base.onAttach(viewContext)
             each(this.children, c) {
+                var classRef = c.getClassRef()
+                "Attaching child of type: ${classRef.getClassName()}".println()
                 c.onAttach(viewContext)
             }
         }

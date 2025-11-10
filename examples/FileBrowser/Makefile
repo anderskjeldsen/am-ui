@@ -3,10 +3,10 @@ AMLC=amlc.jar
 CMD=java -jar $(AMLC)
 
 build:
-	$(CMD) build . -acmd -bt amigaos_docker_unix-x64
+	$(CMD) build . -acmd -bt amigaos_docker
 
 build-force-deps:
-	$(CMD) build . -acmd -fld -bt amigaos_docker_unix-x64
+	$(CMD) build . -acmd -fld -bt amigaos_docker
 
 test:
-	$(CMD) test . -bt amigaos_docker_unix-x64
+	$(CMD) test . -bt amigaos_docker

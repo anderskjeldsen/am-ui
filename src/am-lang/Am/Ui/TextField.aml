@@ -200,7 +200,7 @@ namespace Am.Ui
             var textHeight = innerH - this.padding.top - this.padding.bottom
 
             // Set clipping area for text
-            graphics.setClipArea(textX, textY, textWidth.toUShort(), textHeight.toUShort())
+//            graphics.setClipArea(textX, textY, textWidth.toUShort(), textHeight.toUShort())
 
             // Draw text or placeholder
             var displayText = this.text
@@ -234,7 +234,7 @@ namespace Am.Ui
                 }
             }
 
-            graphics.resetClipArea()
+//            graphics.resetClipArea()
         }
 
         override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
@@ -254,9 +254,12 @@ namespace Am.Ui
         }
 
         override fun onKeyboardEvent(type: KeyboardEventType, key: UShort): Bool {
+//            "onKey, type $type, key $key".println()
             if (!this.focused || this.readOnly) {
                 return false
             }
+
+
 
             if (type == KeyboardEventType.down) {
                 // Handle special keys
