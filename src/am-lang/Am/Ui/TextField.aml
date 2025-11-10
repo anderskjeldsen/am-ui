@@ -1,14 +1,16 @@
 namespace Am.Ui 
 {
 
-    class TextField(var text: String, var placeholder: String) : View {
+    class TextField : View {
         import Am.Lang
 
+        private var text: String = ""
         private var focused: Bool = false
         private var cursorPosition: Int = 0
         private var selectionStart: Int = 0
         private var selectionEnd: Int = 0
         var maxLength: Int = 255
+        var placeholder: String = ""
         var readOnly: Bool = false
         var passwordMode: Bool = false
         
@@ -35,6 +37,15 @@ namespace Am.Ui
             this.cursorPosition = this.text.length()
             this.clearSelection()
             this.requestRepaint()
+        }
+
+        fun setPlaceholder(placeholder: String) {
+            this.placeholder = placeholder
+            this.requestRepaint()
+        }
+
+        fun getPlaceholder(): String {
+            return this.placeholder
         }
 
         fun setFocused(focused: Bool) {
@@ -77,22 +88,27 @@ namespace Am.Ui
             this.requestRepaint()
         }
 
+        private fun textUpdated() {
+
+        }
+
         fun insertText(newText: String) {
             if (this.readOnly) {
                 return
             }
 
             var insertPosition = this.cursorPosition
+            
             if (this.hasSelection()) {
                 // Replace selection
                 var beforeSelection = this.text.substring(0UI, this.selectionStart.toUInt())
-                var afterSelection = this.text.substring(this.selectionEnd.toUInt(), this.text.length().toUInt())
+                var afterSelection = this.text.substring(this.selectionEnd.toUInt(), (this.text.length() - this.selectionEnd).toUInt())
                 this.text = beforeSelection + newText + afterSelection
                 insertPosition = this.selectionStart + newText.length()
             } else {
                 // Insert at cursor
                 var beforeCursor = this.text.substring(0UI, this.cursorPosition.toUInt())
-                var afterCursor = this.text.substring(this.cursorPosition.toUInt(), this.text.length().toUInt())
+                var afterCursor = this.text.substring(this.cursorPosition.toUInt(), (this.text.length() - this.cursorPosition).toUInt())
                 this.text = beforeCursor + newText + afterCursor
                 insertPosition = this.cursorPosition + newText.length()
             }
@@ -102,8 +118,6 @@ namespace Am.Ui
                 this.text = this.text.substring(0UI, this.maxLength.toUInt())
                 if (insertPosition > this.maxLength) {
                     insertPosition = this.maxLength
-                } else {
-                    insertPosition = insertPosition
                 }
             }
 
@@ -120,7 +134,7 @@ namespace Am.Ui
                 this.insertText("")
             } else if (this.cursorPosition > 0) {
                 var beforeCursor = this.text.substring(0UI, (this.cursorPosition - 1).toUInt())
-                var afterCursor = this.text.substring(this.cursorPosition.toUInt(), this.text.length().toUInt())
+                var afterCursor = this.text.substring(this.cursorPosition.toUInt(), (this.text.length() - this.cursorPosition).toUInt())
                 this.text = beforeCursor + afterCursor
                 this.setCursorPosition(this.cursorPosition - 1)
             }
@@ -135,7 +149,7 @@ namespace Am.Ui
                 this.insertText("")
             } else if (this.cursorPosition < this.text.length()) {
                 var beforeCursor = this.text.substring(0UI, this.cursorPosition.toUInt())
-                var afterCursor = this.text.substring((this.cursorPosition + 1).toUInt(), this.text.length().toUInt())
+                var afterCursor = this.text.substring((this.cursorPosition + 1).toUInt(), (this.text.length() - this.cursorPosition - 1).toUInt())
                 this.text = beforeCursor + afterCursor
                 this.requestRepaint()
             }
@@ -253,8 +267,7 @@ namespace Am.Ui
             return false
         }
 
-        override fun onKeyboardEvent(type: KeyboardEventType, key: UShort): Bool {
-//            "onKey, type $type, key $key".println()
+        override fun onKeyboardEvent(type: KeyboardEventType, keyCode: UShort, keyChar: UShort): Bool {
             if (!this.focused || this.readOnly) {
                 return false
             }
@@ -262,37 +275,66 @@ namespace Am.Ui
 
 
             if (type == KeyboardEventType.down) {
-                // Handle special keys
-                if (key == 8US) { // Backspace
+                // Handle special keys - prefer keyChar for control characters
+                if (keyChar == 8US) { // Backspace (ASCII)
                     this.deleteBackward()
                     return true
-                } else if (key == 127US) { // Delete
+                } else if (keyChar == 127US) { // Delete (ASCII)
                     this.deleteForward()
                     return true
-                } else if (key == 37US) { // Left arrow
-                    this.setCursorPosition(this.cursorPosition - 1)
-                    this.clearSelection()
+                } else if (keyChar == 9US) { // Tab
+                    // Could handle tab here if needed
+                    return false
+                } else if (keyChar == 13US || keyChar == 10US) { // Return/Enter
+                    // Could handle enter here if needed
+                    return false
+                } else if (keyChar >= 32US && keyChar <= 126US) { // Printable ASCII from keyChar
+                    // Convert keyChar to string and use existing insertText method
+                    var sb = new StringBuilder()
+                    sb.addChar(keyChar)
+                    var charString = sb.toString()
+                    
+                    this.insertText(charString)
                     return true
-                } else if (key == 39US) { // Right arrow
-                    this.setCursorPosition(this.cursorPosition + 1)
-                    this.clearSelection()
-                    return true
-                } else if (key == 36US) { // Home
-                    this.setCursorPosition(0)
-                    this.clearSelection()
-                    return true
-                } else if (key == 35US) { // End
-                    this.setCursorPosition(this.text.length())
-                    this.clearSelection()
-                    return true
-                } else if (key >= 32US && key <= 126US) { // Printable ASCII
-                    // Convert key to character - this is a simplified approach
-                    // In a real implementation, this would need proper character conversion
-                    var charStr = "" // TODO: Implement character conversion from key code
-                    if (charStr.length() > 0) {
-                        this.insertText(charStr)
+                } else {
+                    // Handle special keys using keyCode (for keys that don't have ASCII equivalents)
+                    // These are AmigaOS raw key codes
+                    if (keyCode == 76US) { // Left arrow (AmigaOS raw key)
+                        this.setCursorPosition(this.cursorPosition - 1)
+                        this.clearSelection()
+                        return true
+                    } else if (keyCode == 77US) { // Right arrow (AmigaOS raw key)
+                        this.setCursorPosition(this.cursorPosition + 1)
+                        this.clearSelection()
+                        return true
+                    } else if (keyCode == 74US) { // Up arrow (could be used for Home)
+                        this.setCursorPosition(0)
+                        this.clearSelection()
+                        return true
+                    } else if (keyCode == 75US) { // Down arrow (could be used for End)
+                        this.setCursorPosition(this.text.length())
+                        this.clearSelection()
+                        return true
                     }
-                    return true
+                    
+                    // Also check if keyChar has control character values for special keys
+                    if (keyChar == 37US) { // Left arrow (if passed as ASCII)
+                        this.setCursorPosition(this.cursorPosition - 1)
+                        this.clearSelection()
+                        return true
+                    } else if (keyChar == 39US) { // Right arrow (if passed as ASCII)
+                        this.setCursorPosition(this.cursorPosition + 1)
+                        this.clearSelection()
+                        return true
+                    } else if (keyChar == 36US) { // Home (if passed as ASCII)
+                        this.setCursorPosition(0)
+                        this.clearSelection()
+                        return true
+                    } else if (keyChar == 35US) { // End (if passed as ASCII)
+                        this.setCursorPosition(this.text.length())
+                        this.clearSelection()
+                        return true
+                    }
                 }
             }
             return false

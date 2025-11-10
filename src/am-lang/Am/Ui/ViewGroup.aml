@@ -36,8 +36,6 @@ namespace Am.Ui
         override fun onAttach(viewContext: ViewContext) {
             base.onAttach(viewContext)
             each(this.children, c) {
-                var classRef = c.getClassRef()
-                "Attaching child of type: ${classRef.getClassName()}".println()
                 c.onAttach(viewContext)
             }
         }
@@ -104,9 +102,9 @@ namespace Am.Ui
             return null
         }
 
-        override fun onKeyboardEvent(type: KeyboardEventType, key: UShort): Bool {
+        override fun onKeyboardEvent(type: KeyboardEventType, keyCode: UShort, keyChar: UShort): Bool {
             each(this.children, c) {
-                var consumed = c.onKeyboardEvent(type, key)
+                var consumed = c.onKeyboardEvent(type, keyCode, keyChar)
                 if (consumed) {
                     return consumed
                 }

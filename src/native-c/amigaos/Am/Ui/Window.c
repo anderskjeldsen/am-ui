@@ -66,12 +66,10 @@ function_result Am_Ui_Window__native_init_0(aobject * const this)
 	function_result __result = { .has_return_value = false };
 	bool __returning = false;
 	// Add reference count for this in Window._native_init
-	printf("Add reference count for this in Window._native_init\n");
 	if (this != NULL) {
 		__increase_reference_count(this);
 	}
 	// TODO: implement native function Am_Ui_Window__native_init_0
-	printf("TODO: implement native function Am_Ui_Window__native_init_0\n");
 __exit: ;
 	if (this != NULL) {
 		__decrease_reference_count(this);
@@ -95,7 +93,7 @@ function_result Am_Ui_Window__native_release_0(aobject * const this)
 	free(this->object_properties.class_object_properties.object_data.value.custom_value);
 	this->object_properties.class_object_properties.object_data.value.custom_value = NULL;
 */
-	printf("TODO: implement native function Am_Ui_Window__native_release_0\n");
+
 __exit: ;
 	return __result;
 };
@@ -130,13 +128,11 @@ function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHO
 	function_result __result = { .has_return_value = false };
 	bool __returning = false;
 	// Add reference count for this in Window.open
-	printf("Add reference count for this in Window.open\n");
 	if (this != NULL) {
 		__increase_reference_count(this);
 	}
 
 	SysBase = *((struct ExecBase **)4UL);
-	printf("Intuition base: %d\n", (unsigned int) IntuitionBase);
 	if (IntuitionBase == NULL) {
 		IntuitionBase = (struct IntuitionBase *) __ensure_library("intuition.library", 0L);
 	}
@@ -170,7 +166,7 @@ function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHO
 
 	data->context_gadget = NULL;
 	CreateContext(&data->context_gadget);
-	printf("context gadget %p\n", data->context_gadget);
+//	printf("context gadget %p\n", data->context_gadget);
 
 /*
 	ULONG user_port = (ULONG) NULL;
@@ -187,7 +183,7 @@ function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHO
 		WA_DetailPen, 1,
 		WA_BlockPen, 2,
 		WA_IDCMP, IDCMP_CLOSEWINDOW | IDCMP_GADGETUP | MENUPICK | MOUSEBUTTONS | REFRESHWINDOW | IDCMP_INTUITICKS | IDCMP_NEWSIZE | IDCMP_MOUSEBUTTONS | IDCMP_RAWKEY,
-		WA_Flags, WFLG_SIZEGADGET | WFLG_ACTIVATE | WFLG_RMBTRAP | WFLG_DRAGBAR | WFLG_DEPTHGADGET | WFLG_CLOSEGADGET | WFLG_SIMPLE_REFRESH | WFLG_SIZEBBOTTOM, //WFLG_BORDERLESS WFLG_BACKDROP
+		WA_Flags, WFLG_SIZEGADGET | WFLG_ACTIVATE | WFLG_RMBTRAP | WFLG_DRAGBAR | WFLG_DEPTHGADGET | WFLG_CLOSEGADGET | WFLG_SMART_REFRESH | WFLG_SIZEBBOTTOM, //WFLG_BORDERLESS WFLG_BACKDROP
 		WA_Gadgets, 0, // (ULONG) data->context_gadget,
 		WA_Title, (ULONG) "Hello",
 		WA_MinWidth, 0,
@@ -239,7 +235,7 @@ function_result Am_Ui_Window_close_0(aobject * const this)
 	function_result __result = { .has_return_value = false };
 	bool __returning = false;
 	// Add reference count for this in Window.close
-	printf("Add reference count for this in Window.close\n");
+//	printf("Add reference count for this in Window.close\n");
 	if (this != NULL) {
 		__increase_reference_count(this);
 	}
@@ -307,35 +303,56 @@ void handle_message(aobject * this, struct IntuiMessage * msg) {
 				// Check if this is a key press (bit 7 clear) or key release (bit 7 set)
 				if (msg->Code & 0x80) {
 					// Key release event (code + 128) - ignore for now
-					printf("onKey, key release: raw code %d (press code: %d)\n", msg->Code, msg->Code & 0x7F);
+//					printf("onKey, key release: raw code %d (press code: %d)\n", msg->Code, msg->Code & 0x7F);
 					// Optionally call keyboard event handler for key release
-					// Am_Ui_Window_f_onKeyboardEvent_0(this, 2, msg->Code & 0x7F); // type 2 = key release
+					// Am_Ui_Window_f_onKeyboardEvent_0(this, 2, msg->Code & 0x7F, 0); // type 2 = key release
 					break;
 				}
 				
-				// Key press event - convert to ASCII character using MapRawKey
+				// Key press event - handle special keys first, then convert others to ASCII
 				UBYTE key_buffer[8];
 				WORD actual_length = 0;
+				UBYTE ascii_char = 0;
 				
-				// Create InputEvent structure for MapRawKey
-				struct InputEvent input_event;
-				input_event.ie_Class = IECLASS_RAWKEY;
-				input_event.ie_Code = msg->Code;
-				input_event.ie_Qualifier = msg->Qualifier;
-				input_event.ie_position.ie_addr = 0;
-				
-				// Use MapRawKey to translate raw key code to ASCII
-				actual_length = MapRawKey(&input_event, key_buffer, 8, NULL);
-				
-				if (actual_length > 0) {
-					// We got a printable character
-					UBYTE ascii_char = key_buffer[0];
-					printf("onKey, key press: raw code %d -> ASCII '%c' (%d)\n", msg->Code, ascii_char, ascii_char);
-					Am_Ui_Window_f_onKeyboardEvent_0(this, 1, ascii_char);
+				// Check for known special keys first (AmigaOS raw key codes)
+				if (msg->Code == 65) { // Backspace key on Amiga
+//					printf("onKey, key press: backspace (raw code %d)\n", msg->Code);
+					Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, 8); // Pass ASCII 8 for backspace
+				} else if (msg->Code == 70) { // Delete key on Amiga
+//					printf("onKey, key press: delete (raw code %d)\n", msg->Code);
+					Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, 127); // Pass ASCII 127 for delete
+				} else if (msg->Code == 76) { // Left arrow
+//					printf("onKey, key press: left arrow (raw code %d)\n", msg->Code);
+					Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, 0); // No ASCII equivalent
+				} else if (msg->Code == 77) { // Right arrow
+//					printf("onKey, key press: right arrow (raw code %d)\n", msg->Code);
+					Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, 0); // No ASCII equivalent
+				} else if (msg->Code == 74) { // Up arrow
+//					printf("onKey, key press: up arrow (raw code %d)\n", msg->Code);
+					Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, 0); // No ASCII equivalent
+				} else if (msg->Code == 75) { // Down arrow
+//					printf("onKey, key press: down arrow (raw code %d)\n", msg->Code);
+					Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, 0); // No ASCII equivalent
 				} else {
-					// Special key (arrow keys, function keys, etc.)
-					printf("onKey, key press: special key code %d (no ASCII equivalent)\n", msg->Code);
-					Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code);
+					// Try to convert other keys to ASCII using MapRawKey
+					struct InputEvent input_event;
+					input_event.ie_Class = IECLASS_RAWKEY;
+					input_event.ie_Code = msg->Code;
+					input_event.ie_Qualifier = msg->Qualifier;
+					input_event.ie_position.ie_addr = 0;
+					
+					actual_length = MapRawKey(&input_event, key_buffer, 8, NULL);
+					
+					if (actual_length > 0) {
+						// We got a printable character
+						ascii_char = key_buffer[0];
+//						printf("onKey, key press: raw code %d -> ASCII '%c' (%d)\n", msg->Code, ascii_char, ascii_char);
+						Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, ascii_char);
+					} else {
+						// Other special key (function keys, etc.)
+//						printf("onKey, key press: special key code %d (no ASCII equivalent)\n", msg->Code);
+						Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, 0);
+					}
 				}
 			}
 			break;
@@ -384,11 +401,15 @@ function_result Am_Ui_Window_handleInput_0(aobject * const this)
 	}
 
 	if (window_data->pending_full_refresh) {
+		WaitTOF();  // Wait for VBL to avoid raster beam interference
+		WaitTOF();
 		Am_Ui_Window_f_paint_0(this);
 	}
 	else if (window_data->pending_refresh) {
-		printf("handle pending refresh\n");
+//		printf("handle pending refresh\n");
 
+		WaitTOF();
+		WaitTOF();
 		BeginRefresh(window_data->window);
 		Am_Ui_Window_f_paint_0(this);
 		EndRefresh(window_data->window, TRUE);

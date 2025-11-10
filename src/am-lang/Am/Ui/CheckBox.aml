@@ -206,9 +206,9 @@ namespace Am.Ui
             return false
         }
 
-        override fun onKeyboardEvent(type: KeyboardEventType, key: UShort): Bool {
+        override fun onKeyboardEvent(type: KeyboardEventType, keyCode: UShort, keyChar: UShort): Bool {
             if (type == KeyboardEventType.down) {
-                if (key == 32US) { // Space key
+                if (keyChar == 32US) { // Space key
                     this.toggle()
                     return true
                 }

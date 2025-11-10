@@ -42,7 +42,8 @@ namespace MoreViews
             vstack.addChild(separator2)
             
             // Add TextField
-            var textField = new TextField("", "Enter your text here...")
+            var textField = new TextField()
+            textField.setPlaceholder("Enter your text here...")
             textField.setDefaultPadding()
             textField.setDefaultBorder()
             vstack.addChild(textField)
