@@ -40,15 +40,10 @@ platforms:
     gccAdditionalLibraries:
 
 buildTargets:
-  - id: amigaos_docker_unix-arm
+  - id: amigaos_docker
     platform: amigaos
     dockerBuild:
-      image: kjeldsenanders/dnf-dev:initial
-      buildPath: /host
-  - id: amigaos_docker_unix-x64
-    platform: amigaos
-    dockerBuild:
-      image: kjeldsenanders/dnf-dev:initial-x86
+      image: amiga-gcc:latest
       buildPath: /host
   - id: morphos-ppc_docker
     platform: morphos-ppc

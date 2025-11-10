@@ -7,7 +7,7 @@ namespace MoreViews
         import Am.Imaging
 
         static fun createExampleWindow(): Window {
-            var window = Window.openWindow(100S, 100S, 400US, 300US, null, null)
+            var window = Window.openWindow(100S, 100S, 400US, 150US, null, null)
             
             // Create main container
             var vstack = new VStack(4S)
@@ -18,11 +18,12 @@ namespace MoreViews
             var titleLabel = new Label("New UI Views Demonstration")
             titleLabel.textPen = 3UB
             vstack.addChild(titleLabel)
-            
+
+
             // Add separator
             var separator1 = new Separator(SeparatorOrientation.Horizontal)
             vstack.addChild(separator1)
-            
+
             // Create a sample image for ImageView demonstration
             var sampleImage = Image.createARGB(64US, 32US)
             // TODO: Fill with a simple pattern (blue background)
@@ -45,6 +46,7 @@ namespace MoreViews
             textField.setDefaultPadding()
             textField.setDefaultBorder()
             vstack.addChild(textField)
+/*
             
             // Add CheckBox
             var checkBox = new CheckBox("Enable feature", false, (cb) => {
@@ -66,12 +68,10 @@ namespace MoreViews
             buttonStack.setDefaultPadding()
             
             var updateButton = new Button("Update Progress", (view) => {
-                // Simulate progress update
-                /*
+                // Simulate progress update            
                 var currentValue = progressBar.getValue()
                 var newValue = (currentValue + 10) % 110
                 progressBar.setValue(newValue)
-                */
                 return true
             })
             updateButton.setDefaultPadding()
@@ -91,16 +91,24 @@ namespace MoreViews
             vstack.addChild(buttonStack)
             
             // Set the main view for the window
+            */
             window.setRootView(vstack)
             
+            window.layout()
+            window.requestRepaint()
+
             return window
         }
         
         static fun main() {
-            var window = Program.createExampleWindow()
-            
-            // Main event loop would go here
+            var w = Program.createExampleWindow()
             ("Example window created with new Views!").println()
+            
+            while(w.isOpen()) {
+                w.handleInput()
+            }
+
+            // Main event loop would go here
         }
     }
 }

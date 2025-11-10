@@ -12,11 +12,15 @@
 #include <exec/types.h>
 #include <intuition/intuition.h>
 #include <libraries/gadtools.h>
+#include <devices/keymap.h>
+#include <devices/console.h>
+#include <devices/inputevent.h>
 
 #include <proto/exec.h>
 #include <proto/intuition.h>
 #include <proto/gadtools.h>
 #include <proto/graphics.h>
+#include <proto/keymap.h>
 
 #include <libc/core_inline_functions.h>
 
@@ -182,7 +186,7 @@ function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHO
 		WA_Height, height,
 		WA_DetailPen, 1,
 		WA_BlockPen, 2,
-		WA_IDCMP, IDCMP_CLOSEWINDOW | IDCMP_GADGETUP | MENUPICK | MOUSEBUTTONS | REFRESHWINDOW | IDCMP_INTUITICKS | IDCMP_NEWSIZE | IDCMP_MOUSEBUTTONS,
+		WA_IDCMP, IDCMP_CLOSEWINDOW | IDCMP_GADGETUP | MENUPICK | MOUSEBUTTONS | REFRESHWINDOW | IDCMP_INTUITICKS | IDCMP_NEWSIZE | IDCMP_MOUSEBUTTONS | IDCMP_RAWKEY,
 		WA_Flags, WFLG_SIZEGADGET | WFLG_ACTIVATE | WFLG_RMBTRAP | WFLG_DRAGBAR | WFLG_DEPTHGADGET | WFLG_CLOSEGADGET | WFLG_SIMPLE_REFRESH | WFLG_SIZEBBOTTOM, //WFLG_BORDERLESS WFLG_BACKDROP
 		WA_Gadgets, 0, // (ULONG) data->context_gadget,
 		WA_Title, (ULONG) "Hello",
@@ -299,7 +303,41 @@ void handle_message(aobject * this, struct IntuiMessage * msg) {
 			}
 			break;
 		case IDCMP_RAWKEY:
-			Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code);
+			{
+				// Check if this is a key press (bit 7 clear) or key release (bit 7 set)
+				if (msg->Code & 0x80) {
+					// Key release event (code + 128) - ignore for now
+					printf("onKey, key release: raw code %d (press code: %d)\n", msg->Code, msg->Code & 0x7F);
+					// Optionally call keyboard event handler for key release
+					// Am_Ui_Window_f_onKeyboardEvent_0(this, 2, msg->Code & 0x7F); // type 2 = key release
+					break;
+				}
+				
+				// Key press event - convert to ASCII character using MapRawKey
+				UBYTE key_buffer[8];
+				WORD actual_length = 0;
+				
+				// Create InputEvent structure for MapRawKey
+				struct InputEvent input_event;
+				input_event.ie_Class = IECLASS_RAWKEY;
+				input_event.ie_Code = msg->Code;
+				input_event.ie_Qualifier = msg->Qualifier;
+				input_event.ie_position.ie_addr = 0;
+				
+				// Use MapRawKey to translate raw key code to ASCII
+				actual_length = MapRawKey(&input_event, key_buffer, 8, NULL);
+				
+				if (actual_length > 0) {
+					// We got a printable character
+					UBYTE ascii_char = key_buffer[0];
+					printf("onKey, key press: raw code %d -> ASCII '%c' (%d)\n", msg->Code, ascii_char, ascii_char);
+					Am_Ui_Window_f_onKeyboardEvent_0(this, 1, ascii_char);
+				} else {
+					// Special key (arrow keys, function keys, etc.)
+					printf("onKey, key press: special key code %d (no ASCII equivalent)\n", msg->Code);
+					Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code);
+				}
+			}
 			break;
 	}
 }
