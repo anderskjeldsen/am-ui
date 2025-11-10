@@ -9,7 +9,7 @@ build:
 	$(CMD) build . -bt linux-x64 -ll 5 -maxOneError -fld
 
 build-amigaos:
-	$(CMD) build . -bt amigaos-docker -ll5
+	$(CMD) build . -bt amigaos_docker -ll5
 
 build-force-deps:
 	$(CMD) build . -fld -bt linux-x64 ll 4
