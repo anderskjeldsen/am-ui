@@ -2,14 +2,15 @@ namespace Am.Ui
 {
     // Example demonstrating the new Views: ImageView, ProgressBar, TextField, CheckBox, and Separator
     class ExampleNewViews {
+        import Am.Ui
         import Am.Lang
         import Am.Imaging
 
         static fun createExampleWindow(): Window {
-            var window = new Window("New Views Example", 400US, 300US)
+            var window = Window.openWindow(100S, 100S, 400US, 300US, null, null)
             
             // Create main container
-            var vstack = new VStack()
+            var vstack = new VStack(4S)
             vstack.setDefaultPadding()
             vstack.setDefaultBorder()
             
@@ -23,7 +24,7 @@ namespace Am.Ui
             vstack.addChild(separator1)
             
             // Create a sample image for ImageView demonstration
-            var sampleImage = Am.Imaging.Image.createARGB(64US, 32US)
+            var sampleImage = Image.createARGB(64US, 32US)
             // TODO: Fill with a simple pattern (blue background)
             // Note: Direct pixel manipulation would require proper array access methods
             
@@ -61,21 +62,23 @@ namespace Am.Ui
             vstack.addChild(progressBar)
             
             // Add action buttons in horizontal layout
-            var buttonStack = new HStack()
+            var buttonStack = new HStack(8S)
             buttonStack.setDefaultPadding()
             
-            var updateButton = new Button("Update Progress", fun(view: View): Bool {
+            var updateButton = new Button("Update Progress", (view) => {
                 // Simulate progress update
+                /*
                 var currentValue = progressBar.getValue()
                 var newValue = (currentValue + 10) % 110
                 progressBar.setValue(newValue)
+                */
                 return true
             })
             updateButton.setDefaultPadding()
             updateButton.setDefaultBorder()
             buttonStack.addChild(updateButton)
             
-            var resetButton = new Button("Reset", fun(view: View): Bool {
+            var resetButton = new Button("Reset", (view) => {
                 progressBar.setValue(0)
                 textField.setText("")
                 checkBox.setChecked(false)
@@ -88,14 +91,13 @@ namespace Am.Ui
             vstack.addChild(buttonStack)
             
             // Set the main view for the window
-            window.setView(vstack)
+            window.setRootView(vstack)
             
             return window
         }
         
         static fun main() {
             var window = ExampleNewViews.createExampleWindow()
-            window.open()
             
             // Main event loop would go here
             ("Example window created with new Views!").println()

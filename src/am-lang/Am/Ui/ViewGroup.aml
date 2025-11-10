@@ -5,7 +5,7 @@ namespace Am.Ui
         import Am.Lang
         import Am.Collections
 
-        private var children: List<View> = List<View>.newList<View>()
+        private var children: List<View> = new List<View>()
         
         var font: Font
 
