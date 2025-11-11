@@ -307,7 +307,12 @@ namespace Am.Ui
                         var charWidth = graphics.calculateStringWidth(cursorChar).toShort()
                         var fontHeight = graphics.getCurrentFontSize().toShort()
                         
-                        // Draw character with cursor background and white text
+                        // Draw character with cursor background and white text                        
+                        // Fill extra lines above and below the text
+                        graphics.setForegroundPen(this.cursorPen)
+                        graphics.fillRect(cursorX, textY - 1S, cursorX + charWidth - 1S, textY - 1S) // Line above
+                        graphics.fillRect(cursorX, textY + fontHeight, cursorX + charWidth - 1S, textY + fontHeight) // Line below
+                        
                         // Set background pen to cursor color for drawString
                         graphics.setBackgroundPen(this.cursorPen)
                         graphics.setForegroundPen(2UB)
@@ -322,11 +327,11 @@ namespace Am.Ui
                             graphics.drawString(afterCursor, cursorX + charWidth, textY)
                         }
                     } else {
-                        // Cursor is at end of text - draw cursor using width of "X"
+                        // Cursor is at end of text - draw cursor using width of "X", extended 1px above and below
                         var fontHeight = graphics.getCurrentFontSize().toShort()
                         var cursorWidth = graphics.calculateStringWidth("X").toShort()
                         graphics.setForegroundPen(this.cursorPen)
-                        graphics.fillRect(cursorX, textY, cursorX + cursorWidth - 1S, textY + fontHeight - 1S)
+                        graphics.fillRect(cursorX, textY - 1S, cursorX + cursorWidth - 1S, textY + fontHeight)
                     }
                 } else {
                     // Not focused - draw text normally
