@@ -232,18 +232,61 @@ namespace Am.Ui
                     displayText = stars
                 }
                 
-                graphics.setForegroundPen(this.textPen)
-                graphics.drawString(displayText, textX, textY)
+                // Draw text with cursor if focused
+                if (this.focused && this.cursorPosition <= displayText.length()) {
+                    // Draw text before cursor
+                    if (this.cursorPosition > 0) {
+                        var beforeCursor = displayText.substring(0UI, this.cursorPosition.toUInt())
+                        graphics.setForegroundPen(this.textPen)
+                        graphics.drawString(beforeCursor, textX, textY)
+                    }
+                    
+                    // Calculate cursor X position
+                    var cursorX = textX
+                    if (this.cursorPosition > 0) {
+                        var beforeCursor = displayText.substring(0UI, this.cursorPosition.toUInt())
+                        cursorX = cursorX + graphics.calculateStringWidth(beforeCursor).toShort()
+                    }
+                    
+                    // Draw cursor character with background rectangle
+                    if (this.cursorPosition < displayText.length()) {
+                        // Get character at cursor position
+                        var cursorChar = displayText.substring(this.cursorPosition.toUInt(), 1UI)
+                        
+                        // Calculate character width
+                        var charWidth = graphics.calculateStringWidth(cursorChar).toShort()
+                        var fontHeight = graphics.getCurrentFontSize().toShort()
+                        
+                        // Fill cursor background rectangle
+                        graphics.setForegroundPen(this.textPen)
+                        graphics.fillRect(cursorX, textY, cursorX + charWidth - 1S, textY + fontHeight - 1S)
+                        
+                        // Draw character in cursor background color (assuming 0 is white/background)
+                        graphics.setForegroundPen(this.backgroundPen)
+                        graphics.drawString(cursorChar, cursorX, textY)
+                        
+                        // Draw text after cursor
+                        if (this.cursorPosition + 1 < displayText.length()) {
+                            var afterCursor = displayText.substring((this.cursorPosition + 1).toUInt(), (displayText.length() - this.cursorPosition - 1).toUInt())
+                            graphics.setForegroundPen(this.textPen)
+                            graphics.drawString(afterCursor, cursorX + charWidth, textY)
+                        }
+                    } else {
+                        // Cursor is at end of text - draw cursor using width of "X"
+                        var fontHeight = graphics.getCurrentFontSize().toShort()
+                        var cursorWidth = graphics.calculateStringWidth("X").toShort()
+                        graphics.setForegroundPen(this.cursorPen)
+                        graphics.fillRect(cursorX, textY, cursorX + cursorWidth - 1S, textY + fontHeight - 1S)
+                    }
+                } else {
+                    // Not focused - draw text normally
+                    graphics.setForegroundPen(this.textPen)
+                    graphics.drawString(displayText, textX, textY)
+                }
 
                 // Draw selection if focused and has selection
                 if (this.focused && this.hasSelection()) {
                     // TODO: Calculate selection rectangle and draw it
-                    // This would require character-by-character width calculation
-                }
-
-                // Draw cursor if focused
-                if (this.focused) {
-                    // TODO: Calculate cursor position and draw a vertical line
                     // This would require character-by-character width calculation
                 }
             }
@@ -275,7 +318,26 @@ namespace Am.Ui
 
 
             if (type == KeyboardEventType.down) {
-                // Handle special keys - prefer keyChar for control characters
+                // Handle arrow keys and navigation first (using keyCode)
+                if (keyCode == 76US) { // Left arrow (AmigaOS raw key)
+                    this.setCursorPosition(this.cursorPosition - 1)
+                    this.clearSelection()
+                    return true
+                } else if (keyCode == 77US) { // Right arrow (AmigaOS raw key)
+                    this.setCursorPosition(this.cursorPosition + 1)
+                    this.clearSelection()
+                    return true
+                } else if (keyCode == 74US) { // Up arrow (could be used for Home)
+                    this.setCursorPosition(0)
+                    this.clearSelection()
+                    return true
+                } else if (keyCode == 75US) { // Down arrow (could be used for End)
+                    this.setCursorPosition(this.text.length())
+                    this.clearSelection()
+                    return true
+                }
+                
+                // Handle special character keys using keyChar
                 if (keyChar == 8US) { // Backspace (ASCII)
                     this.deleteBackward()
                     return true
@@ -296,45 +358,25 @@ namespace Am.Ui
                     
                     this.insertText(charString)
                     return true
-                } else {
-                    // Handle special keys using keyCode (for keys that don't have ASCII equivalents)
-                    // These are AmigaOS raw key codes
-                    if (keyCode == 76US) { // Left arrow (AmigaOS raw key)
-                        this.setCursorPosition(this.cursorPosition - 1)
-                        this.clearSelection()
-                        return true
-                    } else if (keyCode == 77US) { // Right arrow (AmigaOS raw key)
-                        this.setCursorPosition(this.cursorPosition + 1)
-                        this.clearSelection()
-                        return true
-                    } else if (keyCode == 74US) { // Up arrow (could be used for Home)
-                        this.setCursorPosition(0)
-                        this.clearSelection()
-                        return true
-                    } else if (keyCode == 75US) { // Down arrow (could be used for End)
-                        this.setCursorPosition(this.text.length())
-                        this.clearSelection()
-                        return true
-                    }
-                    
-                    // Also check if keyChar has control character values for special keys
-                    if (keyChar == 37US) { // Left arrow (if passed as ASCII)
-                        this.setCursorPosition(this.cursorPosition - 1)
-                        this.clearSelection()
-                        return true
-                    } else if (keyChar == 39US) { // Right arrow (if passed as ASCII)
-                        this.setCursorPosition(this.cursorPosition + 1)
-                        this.clearSelection()
-                        return true
-                    } else if (keyChar == 36US) { // Home (if passed as ASCII)
-                        this.setCursorPosition(0)
-                        this.clearSelection()
-                        return true
-                    } else if (keyChar == 35US) { // End (if passed as ASCII)
-                        this.setCursorPosition(this.text.length())
-                        this.clearSelection()
-                        return true
-                    }
+                }
+                
+                // Also check if keyChar has control character values for special keys
+                if (keyChar == 37US) { // Left arrow (if passed as ASCII)
+                    this.setCursorPosition(this.cursorPosition - 1)
+                    this.clearSelection()
+                    return true
+                } else if (keyChar == 39US) { // Right arrow (if passed as ASCII)
+                    this.setCursorPosition(this.cursorPosition + 1)
+                    this.clearSelection()
+                    return true
+                } else if (keyChar == 36US) { // Home (if passed as ASCII)
+                    this.setCursorPosition(0)
+                    this.clearSelection()
+                    return true
+                } else if (keyChar == 35US) { // End (if passed as ASCII)
+                    this.setCursorPosition(this.text.length())
+                    this.clearSelection()
+                    return true
                 }
             }
             return false
