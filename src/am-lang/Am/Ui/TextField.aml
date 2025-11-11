@@ -19,10 +19,15 @@ namespace Am.Ui
         var focusedBackgroundPen: UByte = 0UB
         var placeholderPen: UByte = 2UB
         var selectionPen: UByte = 3UB
-        var cursorPen: UByte = 1UB
+        var cursorPen: UByte = 3UB
         
-        private var borderPens: BorderPens = new BorderPens(1UB, 1UB, 2UB, 2UB)
-        private var focusedBorderPens: BorderPens = new BorderPens(2UB, 2UB, 1UB, 1UB)
+        // Outer border: 2UB on left and upper, 1UB on lower and right
+        private var outerBorderPens: BorderPens = new BorderPens(2UB, 2UB, 1UB, 1UB)
+        private var focusedOuterBorderPens: BorderPens = new BorderPens(2UB, 2UB, 1UB, 1UB)
+        
+        // Inner border: 1UB on upper and left, 2UB on lower and right  
+        private var innerBorderPens: BorderPens = new BorderPens(1UB, 1UB, 2UB, 2UB)
+        private var focusedInnerBorderPens: BorderPens = new BorderPens(1UB, 1UB, 2UB, 2UB)
 
         fun getText(): String {
             return this.text
@@ -160,7 +165,7 @@ namespace Am.Ui
         }
 
         override fun setDefaultBorder() {
-            this.setBorderWidths(1S)
+            this.setBorderWidths(2S) // Static border width - scaling handled during drawing
         }
 
         override fun minHeight(): Short {
@@ -168,10 +173,12 @@ namespace Am.Ui
             var fontHeight: Short = 0S
             if (vc != null) {
                 fontHeight = vc.getWindow().getCurrentFontSize().toShort()
+                "font height $fontHeight".println()
             } else {
+                "font height 12".println()
                 fontHeight = 12S
             }
-            return fontHeight + 4S + base.minHeight()
+            return fontHeight + base.minHeight()
         }
 
         override fun minWidth(): Short {
@@ -198,14 +205,57 @@ namespace Am.Ui
             graphics.setForegroundPen(bgPen)
             graphics.fillRect(x1, y1, x2, y2)
 
-            // Draw border
-            var borderPens: BorderPens
+            // Draw outer border
+            var outerBorderPens: BorderPens
             if (this.focused) {
-                borderPens = this.focusedBorderPens
+                outerBorderPens = this.focusedOuterBorderPens
             } else {
-                borderPens = this.borderPens
+                outerBorderPens = this.outerBorderPens
             }
-            this.paintNativeBorder(graphics, borderPens)
+            this.paintNativeBorder(graphics, outerBorderPens)
+            
+            // Draw inner border (1 pixel inside the outer border)
+            var innerBorderPens: BorderPens
+            if (this.focused) {
+                innerBorderPens = this.focusedInnerBorderPens
+            } else {
+                innerBorderPens = this.innerBorderPens
+            }
+            
+            // Calculate inner border position using scaled pixel metrics
+            var window = this.getWindow()
+            var borderOffsetX = window.getScaledX(1S)
+            var borderOffsetY = window.getScaledY(1S)
+            var innerX1 = x1 + borderOffsetX
+            var innerY1 = y1 + borderOffsetY
+            var innerX2 = x2 - borderOffsetX
+            var innerY2 = y2 - borderOffsetY
+            
+            // Draw inner border lines manually, using pixel metrics for proper scaling
+            var scaledLineWidthX = window.getScaledX(1S)
+            var scaledLineWidthY = window.getScaledY(1S)
+            
+            // Top line (1UB)
+            graphics.setForegroundPen(innerBorderPens.top)
+            graphics.drawLine(innerX1, innerY1, innerX2, innerY1)
+            
+            // Left line (1UB) - use scaled width for proper aspect ratio
+            graphics.setForegroundPen(innerBorderPens.left)
+            for (i = 0 to scaledLineWidthY.toUInt()) {
+                var si = i.toShort()
+                graphics.drawLine(innerX1 + si, innerY1, innerX1 + si, innerY2)
+            }
+            
+            // Bottom line (2UB)
+            graphics.setForegroundPen(innerBorderPens.bottom)
+            graphics.drawLine(innerX1, innerY2, innerX2, innerY2)
+            
+            // Right line (2UB) - use scaled width for proper aspect ratio
+            graphics.setForegroundPen(innerBorderPens.right)
+            for (i = 0 to scaledLineWidthX.toUInt()) {
+                var si = i.toShort()
+                graphics.drawLine(innerX2 - si, innerY1, innerX2 - si, innerY2)
+            }
 
             // Calculate text area
             var textX = this.borderWidths.left + this.padding.left
