@@ -202,7 +202,7 @@ namespace Am.Ui
             } else {
                 bgPen = this.backgroundPen
             }
-            graphics.setForegroundPen(bgPen)
+            graphics.setForegroundPen(this.backgroundPen)
             graphics.fillRect(x1, y1, x2, y2)
 
             // Draw outer border
@@ -307,17 +307,17 @@ namespace Am.Ui
                         var charWidth = graphics.calculateStringWidth(cursorChar).toShort()
                         var fontHeight = graphics.getCurrentFontSize().toShort()
                         
-                        // Fill cursor background rectangle
-                        graphics.setForegroundPen(this.textPen)
-                        graphics.fillRect(cursorX, textY, cursorX + charWidth - 1S, textY + fontHeight - 1S)
-                        
-                        // Draw character in cursor background color (assuming 0 is white/background)
-                        graphics.setForegroundPen(this.backgroundPen)
+                        // Draw character with cursor background and white text
+                        // Set background pen to cursor color for drawString
+                        graphics.setBackgroundPen(this.cursorPen)
+                        graphics.setForegroundPen(2UB)
                         graphics.drawString(cursorChar, cursorX, textY)
+                        // Restore background pen
+                        graphics.setBackgroundPen(this.backgroundPen)
                         
                         // Draw text after cursor
                         if (this.cursorPosition + 1 < displayText.length()) {
-                            var afterCursor = displayText.substring((this.cursorPosition + 1).toUInt(), (displayText.length() - this.cursorPosition - 1).toUInt())
+                            var afterCursor = displayText.substringToEnd((this.cursorPosition + 1).toUInt())
                             graphics.setForegroundPen(this.textPen)
                             graphics.drawString(afterCursor, cursorX + charWidth, textY)
                         }
@@ -348,8 +348,62 @@ namespace Am.Ui
             if (this.contains(x, y)) {
                 if (type == MouseEventType.down && button == MouseButton.left) {
                     this.setFocused(true)
-                    // TODO: Calculate cursor position from x coordinate
-                    // This would require character-by-character width calculation
+                    
+                    // Calculate cursor position from x coordinate
+                    var textX = this.borderWidths.left + this.padding.left
+                    var relativeX = x - textX
+                    
+                    if (relativeX <= 0S) {
+                        // Click is before the text
+                        this.setCursorPosition(0)
+                    } else {
+                        // Calculate which character position corresponds to the click
+                        var displayText = this.text
+                        if (this.passwordMode) {
+                            var stars = ""
+                            var i = 0
+                            while (i < displayText.length()) {
+                                stars = stars + "*"
+                                i = i + 1
+                            }
+                            displayText = stars
+                        }
+                        
+                        var window = this.getWindow()
+                        if (window != null) {
+                            var bestPosition = 0
+                            var bestDistance = relativeX.toInt()
+                            
+                            // Check each position in the text
+                            var pos = 0
+                            while (pos <= displayText.length()) {
+                                var width = 0S
+                                if (pos > 0) {
+                                    var substring = displayText.substring(0UI, pos.toUInt())
+                                    width = window.calculateStringWidth(null, substring).toShort()
+                                }
+                                
+                                var distance = (relativeX - width).toInt()
+                                if (distance < 0) {
+                                    distance = -distance
+                                }
+                                
+                                if (distance < bestDistance) {
+                                    bestDistance = distance
+                                    bestPosition = pos
+                                }
+                                
+                                pos = pos + 1
+                            }
+                            
+                            this.setCursorPosition(bestPosition)
+                        } else {
+                            // Fallback if no graphics context
+                            this.setCursorPosition(this.text.length())
+                        }
+                    }
+                    
+                    this.clearSelection()
                     return true
                 }
             } else {
@@ -365,23 +419,21 @@ namespace Am.Ui
                 return false
             }
 
-
-
             if (type == KeyboardEventType.down) {
                 // Handle arrow keys and navigation first (using keyCode)
-                if (keyCode == 76US) { // Left arrow (AmigaOS raw key)
+                if (keyCode == 79US) { // Left arrow (AmigaOS raw key)
                     this.setCursorPosition(this.cursorPosition - 1)
                     this.clearSelection()
                     return true
-                } else if (keyCode == 77US) { // Right arrow (AmigaOS raw key)
+                } else if (keyCode == 78US) { // Right arrow (AmigaOS raw key)
                     this.setCursorPosition(this.cursorPosition + 1)
                     this.clearSelection()
                     return true
-                } else if (keyCode == 74US) { // Up arrow (could be used for Home)
+                } else if (keyCode == 76US) { // Up arrow (could be used for Home)
                     this.setCursorPosition(0)
                     this.clearSelection()
                     return true
-                } else if (keyCode == 75US) { // Down arrow (could be used for End)
+                } else if (keyCode == 77US) { // Down arrow (could be used for End)
                     this.setCursorPosition(this.text.length())
                     this.clearSelection()
                     return true
