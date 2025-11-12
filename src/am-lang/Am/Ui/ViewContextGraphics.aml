@@ -18,8 +18,14 @@ namespace Am.Ui
         native override fun getCurrentFontSize(): UByte
         native override fun setFont(font: Font)
         native override fun drawImage(image: Am.Imaging.Image, x: Short, y: Short, width: Short, height: Short)
-//        native override fun setClipArea(x: Short, y: Short, width: UShort, height: UShort)
-//        native override fun resetClipArea()
+        
+        // Native AmigaOS clipping using InstallClipRegion
+        native override fun setClipRect(clipRect: ClipRect)
+        native override fun clearClipRect()
+
+        native override fun beginPainting(clipRect: ClipRect)
+        native override fun endPainting()
+
     }
 
 

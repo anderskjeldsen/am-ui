@@ -54,13 +54,33 @@ namespace Am.Ui
         }
 
         fun setFocused(focused: Bool) {
-            this.focused = focused
-            this.requestRepaint()
+            if (this.focused != focused) {
+                ("TextField: Focus changing from " + this.focused.toString() + " to " + focused.toString()).println()
+                this.focused = focused
+                this.requestRepaint()
+            }
         }
 
         fun isFocused(): Bool {
             return this.focused
         }
+
+        /*
+        override fun layout(x: Short, y: Short, width: UShort, height: UShort) {
+            // Store focus state before layout
+            var wasFocused = this.focused
+            
+            // Call parent layout
+            base.layout(x, y, width, height)
+            
+            // Restore focus state after layout (in case it got lost)
+            if (wasFocused && !this.focused) {
+                ("TextField: Focus lost during layout, restoring").println()
+                this.focused = true
+                this.requestRepaint()
+            }
+        }
+            */
 
         fun setCursorPosition(position: Int) {
             if (position < 0) {
@@ -102,6 +122,8 @@ namespace Am.Ui
                 return
             }
 
+            ("TextField: insertText called with '" + newText + "', current text: '" + this.text + "'").println()
+
             var insertPosition = this.cursorPosition
             
             if (this.hasSelection()) {
@@ -128,12 +150,16 @@ namespace Am.Ui
 
             this.setCursorPosition(insertPosition)
             this.clearSelection()
+            ("TextField: Text updated to '" + this.text + "', requesting repaint").println()
+            this.requestRepaint()
         }
 
         fun deleteBackward() {
             if (this.readOnly) {
                 return
             }
+
+            ("TextField: deleteBackward called").println()
 
             if (this.hasSelection()) {
                 this.insertText("")
@@ -143,6 +169,7 @@ namespace Am.Ui
                 this.text = beforeCursor + afterCursor
                 this.setCursorPosition(this.cursorPosition - 1)
             }
+            this.requestRepaint()
         }
 
         fun deleteForward() {
@@ -173,9 +200,7 @@ namespace Am.Ui
             var fontHeight: Short = 0S
             if (vc != null) {
                 fontHeight = vc.getWindow().getCurrentFontSize().toShort()
-                "font height $fontHeight".println()
             } else {
-                "font height 12".println()
                 fontHeight = 12S
             }
             return fontHeight + base.minHeight()
@@ -187,6 +212,7 @@ namespace Am.Ui
 
         override fun paint(graphics: Graphics) {
             base.paint(graphics)
+            "TextField: paint called".println()
 
             var innerW = this.innerWidth()
             var innerH = this.innerHeight()
@@ -264,11 +290,27 @@ namespace Am.Ui
             var textHeight = innerH - this.padding.top - this.padding.bottom
 
             // Set clipping area for text
-//            graphics.setClipArea(textX, textY, textWidth.toUShort(), textHeight.toUShort())
+            var currentClip = graphics.getCurrentClipRect()
+            var textClipRect: ClipRect
+            
+            if (currentClip == null) {
+                ("TextField: No current clip rect, creating absolute text clip").println()
+//                ("TextField: Text area: " + textX.toString() + "," + textY.toString() + " " + textWidth.toString() + "x" + textHeight.toString()).println()
+                textClipRect = new ClipRect(textX, textY, textWidth.toUShort(), textHeight.toUShort())
+            } else {
+//                ("TextField: Current clip: " + currentClip.getX().toString() + "," + currentClip.getY().toString() + " " + currentClip.getWidth().toString() + "x" + currentClip.getHeight().toString()).println()
+//                ("TextField: Text area: " + textX.toString() + "," + textY.toString() + " " + textWidth.toString() + "x" + textHeight.toString()).println()
+                textClipRect = currentClip.createInnerClipRect(textX, textY, textWidth.toUShort(), textHeight.toUShort())
+            }
+            
+            ("TextField: Text clip rect: " + textClipRect.getX().toString() + "," + textClipRect.getY().toString() + " " + textClipRect.getWidth().toString() + "x" + textClipRect.getHeight().toString()).println()
+            
+            graphics.pushClipRect(textClipRect)
 
             // Draw text or placeholder
             var displayText = this.text
             if (displayText.length() == 0 && !this.placeholder.length() == 0 && !this.focused) {
+//                ("TextField: Drawing placeholder '" + this.placeholder + "' at " + textX.toString() + "," + textY.toString()).println()
                 graphics.setForegroundPen(this.placeholderPen)
                 graphics.drawString(this.placeholder, textX, textY)
             } else {
@@ -345,12 +387,14 @@ namespace Am.Ui
                     // This would require character-by-character width calculation
                 }
             }
-
-//            graphics.resetClipArea()
+            "TextField: Finished drawing text, popping clip rect\n".println()
+            graphics.popClipRect()
         }
 
         override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
-            if (this.contains(x, y)) {
+            var isInside = this.contains(x, y)
+            
+            if (isInside) {
                 if (type == MouseEventType.down && button == MouseButton.left) {
                     this.setFocused(true)
                     
@@ -413,6 +457,7 @@ namespace Am.Ui
                 }
             } else {
                 if (type == MouseEventType.down) {
+                    ("TextField: Losing focus due to click outside bounds").println()
                     this.setFocused(false)
                 }
             }
@@ -420,6 +465,13 @@ namespace Am.Ui
         }
 
         override fun onKeyboardEvent(type: KeyboardEventType, keyCode: UShort, keyChar: UShort): Bool {
+            // Debug: Log keyboard events for focused TextFields
+            if (this.focused) {
+                ("TextField: Received keyboard event - focused=true, keyCode=" + keyCode.toString() + ", keyChar=" + keyChar.toString()).println()
+            } else {
+                ("TextField: Ignoring keyboard event - focused=false, keyCode=" + keyCode.toString() + ", keyChar=" + keyChar.toString()).println()
+            }
+            
             if (!this.focused || this.readOnly) {
                 return false
             }

@@ -1,0 +1,75 @@
+namespace Am.Ui
+{
+    class ClipRect(private var x: Short, private var y: Short, private var width: UShort, private var height: UShort)
+    {   
+        import Am.Lang
+        // Get the X coordinate of this clip rectangle
+        fun getX() : Short {
+            return this.x
+        }
+
+        // Get the Y coordinate of this clip rectangle
+        fun getY() : Short {
+            return this.y
+        }
+
+        // Get the width of this clip rectangle
+        fun getWidth() : UShort {
+            return this.width
+        }
+
+        // Get the height of this clip rectangle
+        fun getHeight() : UShort {
+            return this.height
+        }
+
+        // Create a new ClipRect that is constrained within this ClipRect's bounds
+        fun createInnerClipRect(x: Short, y: Short, width: UShort, height: UShort): ClipRect {
+            // Calculate absolute coordinates of the requested rectangle
+            var absoluteX = this.x + x
+            var absoluteY = this.y + y
+            
+            // Calculate bounds of this ClipRect
+            var thisMaxX = this.x + this.width.toShort()
+            var thisMaxY = this.y + this.height.toShort()
+            var requestedMaxX = absoluteX + width.toShort()
+            var requestedMaxY = absoluteY + height.toShort()
+            
+            // Find intersection bounds
+            var intersectX1 = absoluteX
+            if (intersectX1 < this.x) {
+                intersectX1 = this.x
+            }
+            
+            var intersectY1 = absoluteY
+            if (intersectY1 < this.y) {
+                intersectY1 = this.y
+            }
+            
+            var intersectX2 = requestedMaxX
+            if (intersectX2 > thisMaxX) {
+                intersectX2 = thisMaxX
+            }
+            
+            var intersectY2 = requestedMaxY
+            if (intersectY2 > thisMaxY) {
+                intersectY2 = thisMaxY
+            }
+            
+            // Calculate final dimensions
+            var finalWidth = intersectX2 - intersectX1
+            var finalHeight = intersectY2 - intersectY1
+            
+            // Ensure positive dimensions
+            if (finalWidth < 0S) {
+                finalWidth = 0S
+            }
+            if (finalHeight < 0S) {
+                finalHeight = 0S
+            }
+            
+            return new ClipRect(intersectX1, intersectY1, finalWidth.toUShort(), finalHeight.toUShort())
+        }
+
+    }
+}

@@ -21,6 +21,7 @@
 #include <proto/gadtools.h>
 #include <proto/graphics.h>
 #include <proto/keymap.h>
+#include <proto/layers.h>
 
 #include <libc/core_inline_functions.h>
 
@@ -53,6 +54,11 @@ void close_window_native(aobject * const this) {
 		if (data->locked_screen != NULL) {
 			UnlockPubScreen(NULL, data->locked_screen);
 			data->locked_screen = NULL;
+		}
+
+		if (data->clip_region != NULL) {
+			DisposeRegion(data->clip_region);
+			data->clip_region = NULL;
 		}
 	}
 
@@ -139,6 +145,7 @@ function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHO
 
 	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) calloc(1, sizeof(Am_Ui_Window_data));
 	this->object_properties.class_object_properties.object_data.value.custom_value = data;
+	data->clip_region = NewRegion();
 
 	struct Screen *amiga_screen = NULL;
 	struct VisualInfo *visual_info = NULL;
@@ -205,6 +212,8 @@ function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHO
 		goto __exit;
 	}
 
+	data->window = window;
+
 	// if we want a 5 pixel padding around a view, then:
 	// 320x256: x: 5x1, y:5x1
 	// 640x256: x: 5x2, y: 5x1
@@ -217,8 +226,6 @@ function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHO
 	Am_Ui_Window_f_onResize_0(this, window->LeftEdge, window->TopEdge, window->Width, window->Height);
 
 	GT_RefreshWindow(window, NULL);
-
-	data->window = window;
 
 __exit: ;
 	if (this != NULL) {
@@ -403,16 +410,27 @@ function_result Am_Ui_Window_handleInput_0(aobject * const this)
 	if (window_data->pending_full_refresh) {
 		WaitTOF();  // Wait for VBL to avoid raster beam interference
 		WaitTOF();
+		window_data->old_clip_region = InstallClipRegion(win->RPort->Layer, window_data->clip_region);
 		Am_Ui_Window_f_paint_0(this);
+		InstallClipRegion(win->RPort->Layer, window_data->old_clip_region);
 	}
 	else if (window_data->pending_refresh) {
 //		printf("handle pending refresh\n");
 
 		WaitTOF();
 		WaitTOF();
-		BeginRefresh(window_data->window);
+		LockLayerInfo(&win->WScreen->LayerInfo);
+		window_data->old_clip_region = InstallClipRegion(win->RPort->Layer, window_data->clip_region);
+//		BeginRefresh(window_data->window);
 		Am_Ui_Window_f_paint_0(this);
+//		EndRefresh(window_data->window, TRUE);
+
+		InstallClipRegion(win->RPort->Layer, window_data->old_clip_region);	
+
+		BeginRefresh(window_data->window);
 		EndRefresh(window_data->window, TRUE);
+
+		UnlockLayerInfo(&win->WScreen->LayerInfo);
 	}
 
 /*
