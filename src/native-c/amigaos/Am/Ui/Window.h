@@ -15,6 +15,8 @@ struct _Am_Ui_Window_data {
     struct IntuiMessage refresh_msg;
 //    struct Gadget *first_gadget;
     struct Gadget *context_gadget;
+    struct Region *clip_region;
+    struct Region *old_clip_region;
     bool pending_close;
     bool pending_refresh;
     bool pending_full_refresh;

@@ -10,7 +10,7 @@ namespace Am.Ui
         private var xOffset: Short
         private var yOffset: Short
         private var repaintAllRequested: Bool = false
-        private var clipRects: List<Rectangle> = new List<Rectangle>()
+        private var clipRects: List<ClipRect> = new List<ClipRect>()
 //        private var clipRect: Rectangle
 
         fun translate(x: Short, y: Short) {
@@ -37,12 +37,91 @@ namespace Am.Ui
             this.repaintAllRequested = false
         }
 
-        fun pushClipRect(rect: Rectangle) {
-            this.clipRects.add(rect)
+        fun pushClipRect(clipRect: ClipRect) {
+            // Install the clip rectangle as-is (no automatic intersection)
+            this.clipRects.add(clipRect)
+//            this.setClipRect(clipRect)
         }
 
-        fun popClipRect(): Rectangle {
-            return this.clipRects.removeAt(this.clipRects.getSize() - 1)
+        fun popClipRect(): ClipRect {
+            if (this.clipRects.getSize() == 0) {
+                return null // Safety check
+            }
+            
+            var removed = this.clipRects.removeAt(this.clipRects.getSize() - 1)
+            if (this.clipRects.getSize() > 0) {
+                var newClip = this.clipRects.get(this.clipRects.getSize() - 1)
+//                this.setClipRect(newClip)
+            } else {
+//                this.clearClipRect()
+            }
+            
+            return removed
+        }
+
+        /*
+        private fun intersectRects(rect1: Rectangle, rect2: Rectangle): Rectangle {
+            var x1 = rect1.x
+            var y1 = rect1.y
+            var x2 = rect1.x + rect1.width.toShort()
+            var y2 = rect1.y + rect1.height.toShort()
+            
+            var ax1 = rect2.x
+            var ay1 = rect2.y
+            var ax2 = rect2.x + rect2.width.toShort()
+            var ay2 = rect2.y + rect2.height.toShort()
+            
+            // Find intersection
+            var intersectX1 = x1
+            if (ax1 > x1) {
+                intersectX1 = ax1
+            }
+            
+            var intersectY1 = y1
+            if (ay1 > y1) {
+                intersectY1 = ay1
+            }
+            
+            var intersectX2 = x2
+            if (ax2 < x2) {
+                intersectX2 = ax2
+            }
+            
+            var intersectY2 = y2
+            if (ay2 < y2) {
+                intersectY2 = ay2
+            }
+            
+            // Ensure positive dimensions
+            var width = intersectX2 - intersectX1
+            var height = intersectY2 - intersectY1
+            
+            if (width < 0S) {
+                width = 0S
+            }
+            if (height < 0S) {
+                height = 0S
+            }
+            
+            return new Rectangle(intersectX1, intersectY1, width.toUShort(), height.toUShort())
+        }
+        */
+
+        fun getCurrentClipRect(): ClipRect {
+            if (this.clipRects.getSize() > 0) {
+//                return this.clipRects.getLast()
+                return this.clipRects.get(this.clipRects.getSize() - 1)
+            }
+            return null
+        }
+
+        fun isInClipArea(x: Short, y: Short): Bool {
+            var clip = this.getCurrentClipRect()
+            if (clip == null) {
+                return true
+            }
+            return (x >= clip.x && x < clip.x + clip.width.toShort() && 
+                    y >= clip.y && y < clip.y + clip.height.toShort())
         }
 
         abstract fun setForegroundPen(pen: UByte)
@@ -54,9 +133,11 @@ namespace Am.Ui
         abstract fun calculateStringWidth(text: String): UShort
         abstract fun getCurrentFontSize(): UByte
         abstract fun setFont(font: Font)
-        abstract fun setClipArea(x: Short, y: Short, width: UShort, height: UShort)
-        abstract fun resetClipArea()
+        abstract fun setClipRect(clipRect: ClipRect)
+        abstract fun clearClipRect()
         abstract fun drawImage(image: Am.Imaging.Image, x: Short, y: Short, width: Short, height: Short)
+        abstract fun beginPainting(clipRect: ClipRect)
+        abstract fun endPainting()
     }
 
 }

@@ -55,21 +55,33 @@ namespace Am.Ui
         }
 
         override fun paintAll(graphics: Graphics) {
-            var ix = this.x + this.margin.left
-            var iy = this.y + this.margin.top
-//            ("Translate panel " + ix.toString() + "," + iy.toString()).println()
-
             var b1 = graphics.shouldRepaintAll()
             var b2 = this.getRepaintRequested()
             if (b1 || b2) {
+                var ix = this.x + this.margin.left
+                var iy = this.y + this.margin.top
+                
+                // Set clipping area to this view's bounds (excluding margins)
+                var viewWidth = this.width.toShort() - this.margin.left - this.margin.right
+                var viewHeight = this.height.toShort() - this.margin.top - this.margin.bottom
+                
+                var currentClip = graphics.getCurrentClipRect()
+                var viewClipRect: ClipRect = currentClip.createInnerClipRect(ix, iy, viewWidth.toUShort(), viewHeight.toUShort())
+                graphics.pushClipRect(viewClipRect)                
+                graphics.beginPainting(viewClipRect)
+
                 graphics.translate(ix, iy)
                 this.paint(graphics)
                 graphics.translate(-ix, -iy)
+
+                graphics.endPainting()
+                graphics.popClipRect()
             }
             this.markAsPainted()
-            ix = this.x // + this.margin.left + this.borderWidths.left + this.padding.left
-            iy = this.y // + this.margin.top + this.borderWidths.top + this.padding.top
-//            ("Translate ViewGroup children " + ix.toString() + "," + iy.toString()).println()
+            
+            // Paint children with proper translation
+            var ix = this.x
+            var iy = this.y
             graphics.translate(ix, iy)            
             this.paintChildren(graphics)
             graphics.translate(-ix, -iy)

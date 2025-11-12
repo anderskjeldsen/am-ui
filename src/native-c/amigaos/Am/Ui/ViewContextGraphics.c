@@ -3,6 +3,7 @@
 #include <amigaos/Am/Ui/ViewContextGraphics.h>
 #include <Am/Ui/Graphics.h>
 #include <Am/Ui/ViewContext.h>
+#include <Am/Ui/ClipRect.h>
 #include <Am/Lang/UByte.h>
 #include <Am/Lang/Short.h>
 
@@ -23,6 +24,9 @@
 
 
 #include <libc/core_inline_functions.h>
+
+// Forward declaration for AmigaOS layers function (not in standard headers)
+struct Region *InstallClipRegion(struct Layer *layer, struct Region *region);
 
 short translated_x(aobject *g, short x) {
 	short tx = g->object_properties.class_object_properties.properties[Am_Ui_Graphics_P_xOffset].nullable_value.value.short_value;
@@ -375,4 +379,164 @@ __exit: ;
 	}
 	return __result;
 };
+
+function_result Am_Ui_ViewContextGraphics_setClipRect_0(aobject * const this, aobject * const clipRect)
+{
+	function_result __result = { .has_return_value = false };
+	bool __returning = false;
+	if (this != NULL) {
+		__increase_reference_count(this);
+	}
+	if (clipRect != NULL) {
+		__increase_reference_count(clipRect);
+	}
+
+	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
+
+	// Clear the window's master clip region
+	ClearRegion(window_data->clip_region);
+	printf("Set clip cleared region\n");
+
+	// Add the current clipRect to the master region
+	if (clipRect != NULL) {
+		// Get the ClipRect properties (x, y, width, height)
+		short x = clipRect->object_properties.class_object_properties.properties[Am_Ui_ClipRect_P_x].nullable_value.value.short_value;
+		short y = clipRect->object_properties.class_object_properties.properties[Am_Ui_ClipRect_P_y].nullable_value.value.short_value;
+		unsigned short width = clipRect->object_properties.class_object_properties.properties[Am_Ui_ClipRect_P_width].nullable_value.value.ushort_value;
+		unsigned short height = clipRect->object_properties.class_object_properties.properties[Am_Ui_ClipRect_P_height].nullable_value.value.ushort_value;
+		
+		// Create a rectangle and OR it into the master region
+		struct Rectangle rect;
+		rect.MinX = x;
+		rect.MinY = y;
+		rect.MaxX = x + width - 1;
+		rect.MaxY = y + height - 1;
+
+		printf("Set clip adding rect %d, %d, %d, %d\n", rect.MinX, rect.MinY, rect.MaxX, rect.MaxY);
+
+		OrRectRegion(window_data->clip_region, &rect);
+
+		struct Rectangle *bounds = &window_data->clip_region->bounds;
+		printf("Set clip bounds: MinX %d, MinY %d, MaxX %d, MaxY %d\n", bounds->MinX, bounds->MinY, bounds->MaxX, bounds->MaxY);
+	}
+
+__exit: ;
+	if (window != NULL) {
+		__decrease_reference_count(window);
+	}
+	if (this != NULL) {
+		__decrease_reference_count(this);
+	}
+	if (clipRect != NULL) {
+		__decrease_reference_count(clipRect);
+	}
+	return __result;
+};
+
+function_result Am_Ui_ViewContextGraphics_clearClipRect_0(aobject * const this)
+{
+	function_result __result = { .has_return_value = false };
+	bool __returning = false;
+	if (this != NULL) {
+		__increase_reference_count(this);
+	}
+
+	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
+
+	// Clear the region
+	ClearRegion(window_data->clip_region);
+
+__exit: ;
+	if (window != NULL) {
+		__decrease_reference_count(window);
+	}
+	if (this != NULL) {
+		__decrease_reference_count(this);
+	}
+	return __result;
+};
+
+function_result Am_Ui_ViewContextGraphics_beginPainting_0(aobject * const this, aobject * const clipRect) {
+	function_result __result = { .has_return_value = false };
+	bool __returning = false;
+	if (this != NULL) {
+		__increase_reference_count(this);
+	}
+	if (clipRect != NULL) {
+		__increase_reference_count(clipRect);
+	}
+
+	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
+	
+	// Clear the window's master clip region
+	ClearRegion(window_data->clip_region);
+	printf("Set clip cleared region\n");
+
+	// Add the current clipRect to the master region
+	if (clipRect != NULL) {
+		// Get the ClipRect properties (x, y, width, height)
+		short x = clipRect->object_properties.class_object_properties.properties[Am_Ui_ClipRect_P_x].nullable_value.value.short_value;
+		short y = clipRect->object_properties.class_object_properties.properties[Am_Ui_ClipRect_P_y].nullable_value.value.short_value;
+		unsigned short width = clipRect->object_properties.class_object_properties.properties[Am_Ui_ClipRect_P_width].nullable_value.value.ushort_value;
+		unsigned short height = clipRect->object_properties.class_object_properties.properties[Am_Ui_ClipRect_P_height].nullable_value.value.ushort_value;
+		
+		// Create a rectangle and OR it into the master region
+		struct Rectangle rect;
+		rect.MinX = x;
+		rect.MinY = y;
+		rect.MaxX = x + width - 1;
+		rect.MaxY = y + height - 1;
+
+		printf("Set clip adding rect %d, %d, %d, %d\n", rect.MinX, rect.MinY, rect.MaxX, rect.MaxY);
+
+		OrRectRegion(window_data->clip_region, &rect);
+
+		struct Rectangle *bounds = &window_data->clip_region->bounds;
+		printf("Set clip bounds: MinX %d, MinY %d, MaxX %d, MaxY %d\n", bounds->MinX, bounds->MinY, bounds->MaxX, bounds->MaxY);
+
+		BeginRefresh(window_data->window);
+	}
+
+__exit: ;
+	if (window != NULL) {
+		__decrease_reference_count(window);
+	}
+	if (this != NULL) {
+		__decrease_reference_count(this);
+	}
+	if (clipRect != NULL) {
+		__decrease_reference_count(clipRect);
+	}
+	return __result;
+}
+
+function_result Am_Ui_ViewContextGraphics_endPainting_0(aobject * const this)
+{
+	function_result __result = { .has_return_value = false };
+	bool __returning = false;
+	if (this != NULL) {
+		__increase_reference_count(this);
+	}
+
+	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
+
+	// Clear the region
+	ClearRegion(window_data->clip_region);
+
+	EndRefresh(window_data->window, FALSE);
+
+__exit: ;
+	if (window != NULL) {
+		__decrease_reference_count(window);
+	}
+	if (this != NULL) {
+		__decrease_reference_count(this);
+	}
+	return __result;
+};
+
 
