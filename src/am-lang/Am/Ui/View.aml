@@ -146,20 +146,15 @@ namespace Am.Ui
                 var viewClipRect: ClipRect
                 var currentClip = graphics.getCurrentClipRect()
                 
-                viewClipRect = currentClip.createInnerClipRect(ix, iy, viewWidth.toUShort(), viewHeight.toUShort())
-                               
-//                graphics.pushClipRect(viewClipRect)
-//                ("Translate " + ix.toString() + "," + iy.toString()).println()
+                viewClipRect = currentClip.createInnerClipRect(ix, iy, viewWidth.toUShort(), viewHeight.toUShort())                              
 
                 graphics.pushClipRect(viewClipRect)
-                graphics.beginPainting(viewClipRect)
-                
+
                 graphics.translate(ix, iy)
                 this.paint(graphics)
                 this.markAsPainted()
                 graphics.translate(-ix, -iy)
                
-                graphics.endPainting()
                 graphics.popClipRect()
             }
         }

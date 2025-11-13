@@ -91,8 +91,6 @@ namespace Am.Ui
                 var windowClipRect = new ClipRect(innerX, innerY, innerWidth, innerHeight)
                 graphics.pushClipRect(windowClipRect)
                 
-                graphics.beginPainting(windowClipRect)
-
                 if (this.fillBackground) {
                     graphics.setForegroundPen(this.backgroundPen)
                     graphics.fillRect(0S + this.border.left, 0S + this.border.top, this.width.toShort() - (1S + this.border.right), this.height.toShort() - (1S + this.border.bottom))
@@ -100,7 +98,6 @@ namespace Am.Ui
                 if (this.font != null) {
                     graphics.setFont(this.font)
                 }
-                graphics.endPainting()
 
                 this.rootView.paintAll(graphics)
 

@@ -40,7 +40,8 @@ namespace Am.Ui
         fun pushClipRect(clipRect: ClipRect) {
             // Install the clip rectangle as-is (no automatic intersection)
             this.clipRects.add(clipRect)
-//            this.setClipRect(clipRect)
+            this.setClipRect(clipRect)
+//            "Set Clip Rect: ${clipRect.getX()},${clipRect.getY()},${clipRect.getWidth()},${clipRect.getHeight()}".println()
         }
 
         fun popClipRect(): ClipRect {
@@ -49,11 +50,13 @@ namespace Am.Ui
             }
             
             var removed = this.clipRects.removeAt(this.clipRects.getSize() - 1)
+//            "Pop Clip Rect: ${removed.getX()},${removed.getY()},${removed.getWidth()},${removed.getHeight()}".println()
+
             if (this.clipRects.getSize() > 0) {
                 var newClip = this.clipRects.get(this.clipRects.getSize() - 1)
-//                this.setClipRect(newClip)
+                this.setClipRect(newClip)
             } else {
-//                this.clearClipRect()
+                this.clearClipRect()
             }
             
             return removed
