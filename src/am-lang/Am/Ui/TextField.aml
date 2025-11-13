@@ -284,16 +284,9 @@ namespace Am.Ui
 
             // Set clipping area for text
             var currentClip = graphics.getCurrentClipRect()
-            var textClipRect: ClipRect
-            
-            if (currentClip == null) {
-                textClipRect = new ClipRect(textX, textY, textWidth.toUShort(), textHeight.toUShort())
-            } else {
-                textClipRect = currentClip.createInnerClipRect(textX, textY, textWidth.toUShort(), textHeight.toUShort())
-            }
+            var textClipRect = currentClip.createInnerClipRect(textX, textY, textWidth.toUShort(), textHeight.toUShort())
                        
             graphics.pushClipRect(textClipRect)
-            graphics.beginPainting(textClipRect)
 
             // Draw text or placeholder
             var displayText = this.text
@@ -374,7 +367,6 @@ namespace Am.Ui
                     // This would require character-by-character width calculation
                 }
             }
-            graphics.endPainting()
             graphics.popClipRect()
         }
 
