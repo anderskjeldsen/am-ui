@@ -491,3 +491,56 @@ __exit: ;
 	}
 	return __result;
 };
+
+function_result Am_Ui_Window_setTitleNative_0(aobject * const this, aobject * const windowTitle, aobject * const screenTitle)
+{
+	function_result __result = { .has_return_value = false };
+	bool __returning = false;
+	if (this != NULL) {
+		__increase_reference_count(this);
+	}
+	if (windowTitle != NULL) {
+		__increase_reference_count(windowTitle);
+	}
+	if (screenTitle != NULL) {
+		__increase_reference_count(screenTitle);
+	}
+
+	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
+	if (data != NULL && data->window != NULL) {
+		// Extract window title string
+		char *windowTitleStr = NULL;
+		if (windowTitle != NULL) {
+			string_holder *windowTitleSh = windowTitle->object_properties.class_object_properties.object_data.value.custom_value;
+			if (windowTitleSh != NULL && windowTitleSh->string_value != NULL) {
+				windowTitleStr = windowTitleSh->string_value;
+			}
+		}
+
+		// Extract screen title string  
+		char *screenTitleStr = NULL;
+		if (screenTitle != NULL) {
+			string_holder *screenTitleSh = screenTitle->object_properties.class_object_properties.object_data.value.custom_value;
+			if (screenTitleSh != NULL && screenTitleSh->string_value != NULL && screenTitleSh->length > 0) {
+				screenTitleStr = screenTitleSh->string_value;
+			}
+		}
+
+		// Set both titles using AmigaOS SetWindowTitles
+		// If screenTitleStr is NULL, pass (UBYTE *)-1 to leave screen title unchanged
+		SetWindowTitles(data->window, windowTitleStr, 
+			screenTitleStr);
+	}
+
+__exit: ;
+	if (this != NULL) {
+		__decrease_reference_count(this);
+	}
+	if (windowTitle != NULL) {
+		__decrease_reference_count(windowTitle);
+	}
+	if (screenTitle != NULL) {
+		__decrease_reference_count(screenTitle);
+	}
+	return __result;
+};
