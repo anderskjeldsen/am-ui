@@ -396,7 +396,6 @@ function_result Am_Ui_ViewContextGraphics_setClipRect_0(aobject * const this, ao
 
 	// Clear the window's master clip region
 	ClearRegion(window_data->clip_region);
-	printf("Set clip cleared region\n");
 
 	// Add the current clipRect to the master region
 	if (clipRect != NULL) {
@@ -413,12 +412,7 @@ function_result Am_Ui_ViewContextGraphics_setClipRect_0(aobject * const this, ao
 		rect.MaxX = x + width - 1;
 		rect.MaxY = y + height - 1;
 
-		printf("Set clip adding rect %d, %d, %d, %d\n", rect.MinX, rect.MinY, rect.MaxX, rect.MaxY);
-
 		OrRectRegion(window_data->clip_region, &rect);
-
-		struct Rectangle *bounds = &window_data->clip_region->bounds;
-		printf("Set clip bounds: MinX %d, MinY %d, MaxX %d, MaxY %d\n", bounds->MinX, bounds->MinY, bounds->MaxX, bounds->MaxY);
 	}
 
 __exit: ;
@@ -471,12 +465,11 @@ function_result Am_Ui_ViewContextGraphics_beginPainting_0(aobject * const this, 
 	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
 	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
 	
-	// Clear the window's master clip region
-	ClearRegion(window_data->clip_region);
-	printf("Set clip cleared region\n");
-
 	// Add the current clipRect to the master region
 	if (clipRect != NULL) {
+		InstallClipRegion(window_data->window->WLayer, NULL);
+		ClearRegion(window_data->clip_region);
+
 		// Get the ClipRect properties (x, y, width, height)
 		short x = clipRect->object_properties.class_object_properties.properties[Am_Ui_ClipRect_P_x].nullable_value.value.short_value;
 		short y = clipRect->object_properties.class_object_properties.properties[Am_Ui_ClipRect_P_y].nullable_value.value.short_value;
@@ -490,14 +483,9 @@ function_result Am_Ui_ViewContextGraphics_beginPainting_0(aobject * const this, 
 		rect.MaxX = x + width - 1;
 		rect.MaxY = y + height - 1;
 
-		printf("Set clip adding rect %d, %d, %d, %d\n", rect.MinX, rect.MinY, rect.MaxX, rect.MaxY);
-
 		OrRectRegion(window_data->clip_region, &rect);
-
-		struct Rectangle *bounds = &window_data->clip_region->bounds;
-		printf("Set clip bounds: MinX %d, MinY %d, MaxX %d, MaxY %d\n", bounds->MinX, bounds->MinY, bounds->MaxX, bounds->MaxY);
-
-		BeginRefresh(window_data->window);
+		InstallClipRegion(window_data->window->WLayer, window_data->clip_region);
+//		BeginRefresh(window_data->window);
 	}
 
 __exit: ;
@@ -524,10 +512,11 @@ function_result Am_Ui_ViewContextGraphics_endPainting_0(aobject * const this)
 	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
 	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
 
+	InstallClipRegion(window_data->window->WLayer, NULL);
 	// Clear the region
-	ClearRegion(window_data->clip_region);
+//	ClearRegion(window_data->clip_region);
 
-	EndRefresh(window_data->window, FALSE);
+//	EndRefresh(window_data->window, FALSE);
 
 __exit: ;
 	if (window != NULL) {

@@ -78,7 +78,6 @@ namespace Am.Ui
         */
 
         private fun paint() {
-            ("Window: Paint starting, repaintRequested=" + this.repaintRequested.toString()).println()
             var graphics = this.getGraphics()
             graphics.requestRepaintAll()
             if (this.rootView != null) {               
@@ -110,20 +109,14 @@ namespace Am.Ui
             }
             graphics.finalizeRepaintCycle()
             this.repaintRequested = false
-            ("Window: Paint complete, repaintRequested now=" + this.repaintRequested.toString()).println()
         }
 
         private fun onResize(x: Short, y: Short, width: UShort, height: UShort) {
-            ("Window: Resize event - new size: " + width.toString() + "x" + height.toString()).println()
             this.x = x
             this.y = y
             this.width = width
             this.height = height
-            ("Window: Calling layout after resize").println()
             this.layout()
-            ("Window: Calling paint after resize").println()
-            this.paint()
-            ("Window: Resize handling complete").println()
         }
 
         fun layout() {
