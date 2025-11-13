@@ -743,24 +743,28 @@ namespace Am.Ui
             if (type == KeyboardEventType.down) {
                 // Handle arrow keys and navigation first (using keyCode)
                 if (keyCode == 79US) { // Left arrow (AmigaOS raw key)
-                    this.moveCursor(this.cursorPosition - 1, false)
+                    var extendSelection = (keyChar == 1US) // keyChar=1 indicates Shift was held
+                    this.moveCursor(this.cursorPosition - 1, extendSelection)
                     return true
                 } else if (keyCode == 78US) { // Right arrow (AmigaOS raw key)
-                    this.moveCursor(this.cursorPosition + 1, false)
+                    var extendSelection = (keyChar == 1US) // keyChar=1 indicates Shift was held
+                    this.moveCursor(this.cursorPosition + 1, extendSelection)
                     return true
                 } else if (keyCode == 76US) { // Up arrow (could be used for Home)
-                    this.moveCursor(0, false)
+                    var extendSelection = (keyChar == 1US) // keyChar=1 indicates Shift was held
+                    this.moveCursor(0, extendSelection)
                     return true
                 } else if (keyCode == 77US) { // Down arrow (could be used for End)
-                    this.moveCursor(this.text.length(), false)
+                    var extendSelection = (keyChar == 1US) // keyChar=1 indicates Shift was held
+                    this.moveCursor(this.text.length(), extendSelection)
                     return true
                 } else if (keyCode == 70US) { // Delete key (AmigaOS raw key)
                     this.deleteForward()
                     return true
                 }
                 
-                // TODO: Add shift+arrow key support when modifier detection is available
-                // Example: keyCode 79US with shift modifier for shift+left arrow
+                // Shift+arrow key support is now implemented above
+                // keyChar=1 indicates Shift modifier was held during arrow key press
                 
                 // Handle special character keys using keyChar
                 if (keyChar == 8US) { // Backspace (ASCII)

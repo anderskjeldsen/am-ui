@@ -328,18 +328,38 @@ void handle_message(aobject * this, struct IntuiMessage * msg) {
 				} else if (msg->Code == 70) { // Delete key on Amiga
 //					printf("onKey, key press: delete (raw code %d)\n", msg->Code);
 					Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, 127); // Pass ASCII 127 for delete
-				} else if (msg->Code == 76) { // Left arrow
+				} else if (msg->Code == 79) { // Left arrow
 //					printf("onKey, key press: left arrow (raw code %d)\n", msg->Code);
-					Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, 0); // No ASCII equivalent
-				} else if (msg->Code == 77) { // Right arrow
+					// Check for Shift modifier (IEQUALIFIER_LSHIFT or IEQUALIFIER_RSHIFT)
+					if (msg->Qualifier & (IEQUALIFIER_LSHIFT | IEQUALIFIER_RSHIFT)) {
+						Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, 1); // Pass 1 for Shift+Left
+					} else {
+						Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, 0); // No ASCII equivalent
+					}
+				} else if (msg->Code == 78) { // Right arrow
 //					printf("onKey, key press: right arrow (raw code %d)\n", msg->Code);
-					Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, 0); // No ASCII equivalent
-				} else if (msg->Code == 74) { // Up arrow
+					// Check for Shift modifier
+					if (msg->Qualifier & (IEQUALIFIER_LSHIFT | IEQUALIFIER_RSHIFT)) {
+						Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, 1); // Pass 1 for Shift+Right
+					} else {
+						Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, 0); // No ASCII equivalent
+					}
+				} else if (msg->Code == 76) { // Up arrow
 //					printf("onKey, key press: up arrow (raw code %d)\n", msg->Code);
-					Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, 0); // No ASCII equivalent
-				} else if (msg->Code == 75) { // Down arrow
+					// Check for Shift modifier
+					if (msg->Qualifier & (IEQUALIFIER_LSHIFT | IEQUALIFIER_RSHIFT)) {
+						Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, 1); // Pass 1 for Shift+Up
+					} else {
+						Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, 0); // No ASCII equivalent
+					}
+				} else if (msg->Code == 77) { // Down arrow
 //					printf("onKey, key press: down arrow (raw code %d)\n", msg->Code);
-					Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, 0); // No ASCII equivalent
+					// Check for Shift modifier
+					if (msg->Qualifier & (IEQUALIFIER_LSHIFT | IEQUALIFIER_RSHIFT)) {
+						Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, 1); // Pass 1 for Shift+Down
+					} else {
+						Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, 0); // No ASCII equivalent
+					}
 				} else {
 					// Try to convert other keys to ASCII using MapRawKey
 					struct InputEvent input_event;
