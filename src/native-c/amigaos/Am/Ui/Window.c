@@ -404,33 +404,32 @@ function_result Am_Ui_Window_handleInput_0(aobject * const this)
 //	printf("Handling done %d\n", signals);
 
 	if (window_data->pending_resize) {
+//		window_data->old_clip_region = InstallClipRegion(win->WLayer, NULL);
 		Am_Ui_Window_f_onResize_0(this, win->LeftEdge, win->TopEdge, win->Width, win->Height);
+		window_data->pending_full_refresh = TRUE;
+		//		InstallClipRegion(win->WLayer, window_data->old_clip_region);
 	}
 
 	if (window_data->pending_full_refresh) {
 		WaitTOF();  // Wait for VBL to avoid raster beam interference
 		WaitTOF();
-		window_data->old_clip_region = InstallClipRegion(win->RPort->Layer, window_data->clip_region);
+		window_data->old_clip_region = InstallClipRegion(win->WLayer, NULL);
 		Am_Ui_Window_f_paint_0(this);
-		InstallClipRegion(win->RPort->Layer, window_data->old_clip_region);
+		InstallClipRegion(win->WLayer, window_data->old_clip_region);
 	}
 	else if (window_data->pending_refresh) {
 //		printf("handle pending refresh\n");
 
 		WaitTOF();
 		WaitTOF();
-		LockLayerInfo(&win->WScreen->LayerInfo);
-		window_data->old_clip_region = InstallClipRegion(win->RPort->Layer, window_data->clip_region);
-//		BeginRefresh(window_data->window);
-		Am_Ui_Window_f_paint_0(this);
-//		EndRefresh(window_data->window, TRUE);
-
-		InstallClipRegion(win->RPort->Layer, window_data->old_clip_region);	
-
+//		LockLayerInfo(&win->WScreen->LayerInfo);
+		window_data->old_clip_region = InstallClipRegion(win->WLayer, NULL);	
 		BeginRefresh(window_data->window);
+		Am_Ui_Window_f_paint_0(this);
 		EndRefresh(window_data->window, TRUE);
+		InstallClipRegion(win->WLayer, window_data->old_clip_region);	
 
-		UnlockLayerInfo(&win->WScreen->LayerInfo);
+//		UnlockLayerInfo(&win->WScreen->LayerInfo);
 	}
 
 /*
