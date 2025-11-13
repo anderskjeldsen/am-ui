@@ -175,6 +175,10 @@ namespace Am.Ui
             return graphics.getCurrentFontSize()
         }
 
+        native fun copyToClipboard(text: String)
+        
+        native fun pasteFromClipboard(): String
+
         private fun getGraphics(): ViewContextGraphics  {
             return this.graphics
 //            return this.viewContext.getGraphics()
