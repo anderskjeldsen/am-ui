@@ -8,7 +8,8 @@ namespace MoreViews
 
         static fun createExampleWindow(): Window {
             var window = Window.openWindow(100S, 100S, 400US, 150US, null, null)
-            
+            window.setTitle("More UI Views Example")
+            window.setScreenTitle("AmigaOS AmUI Example")
             // Create main container
             var vstack = new VStack(4S)
             vstack.setDefaultPadding()

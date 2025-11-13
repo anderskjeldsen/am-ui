@@ -19,11 +19,31 @@ namespace Am.Ui
         private var pixelScaleX: UByte
         private var pixelScaleY: UByte
         private var pixelMetrics: PixelMetrics
+        private var title: String = ""
+        private var screenTitle: String = ""
 
         var font: Font
 
         fun getRootView(): View {
             return this.rootView
+        }
+
+        fun setTitle(title: String) {
+            this.title = title
+            this.setTitleNative(this.title, this.screenTitle)
+        }
+
+        fun getTitle(): String {
+            return this.title
+        }
+
+        fun setScreenTitle(screenTitle: String) {
+            this.screenTitle = screenTitle
+            this.setTitleNative(this.title, this.screenTitle)
+        }
+
+        fun getScreenTitle(): String {
+            return this.screenTitle
         }
 
         private fun setBorder(left: Short, top: Short, right: Short, bottom: Short) {
@@ -178,6 +198,7 @@ namespace Am.Ui
         native fun handleInput()
         native fun isOpen(): Bool
         private native fun refresh()
+        private native fun setTitleNative(windowTitle: String, screenTitle: String)
 
         private native fun open(x: Short, y: Short, width: UShort, height: UShort, screen: Screen, windowManager: WindowManager)
         native fun close()
