@@ -48,7 +48,6 @@ namespace MoreViews
             textField.setDefaultPadding()
             textField.setDefaultBorder()
             vstack.addChild(textField)
-/*
             
             // Add CheckBox
             var checkBox = new CheckBox("Enable feature", false, (cb) => {
@@ -93,7 +92,7 @@ namespace MoreViews
             vstack.addChild(buttonStack)
             
             // Set the main view for the window
-            */
+
             window.setRootView(vstack)
             
             window.layout()
