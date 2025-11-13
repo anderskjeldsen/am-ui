@@ -10,6 +10,8 @@ namespace Am.Ui
         private var selectionStart: Int = 0
         private var selectionEnd: Int = 0
         private var scrollOffset: Short = 0S  // Horizontal scroll offset in pixels
+        private var isDragging: Bool = false  // Track if we're dragging to select text
+        private var dragStartPosition: Int = 0  // Track where drag selection started
         var maxLength: Int = 255
         var placeholder: String = ""
         var readOnly: Bool = false
@@ -162,13 +164,61 @@ namespace Am.Ui
             return this.cursorPosition
         }
 
+        private fun moveCursor(newPosition: Int, extendSelection: Bool) {
+            if (newPosition < 0) {
+                newPosition = 0
+            } else if (newPosition > this.text.length()) {
+                newPosition = this.text.length()
+            }
+
+            if (extendSelection) {
+                if (!this.hasSelection()) {
+                    // Start selection from current cursor position
+                    this.selectionStart = this.cursorPosition
+                }
+                this.selectionEnd = newPosition
+                this.cursorPosition = newPosition
+            } else {
+                this.cursorPosition = newPosition
+                this.clearSelection()
+            }
+            
+            this.updateScrollOffset()
+            this.requestRepaint()
+        }
+
         private fun clearSelection() {
             this.selectionStart = this.cursorPosition
             this.selectionEnd = this.cursorPosition
         }
 
         private fun hasSelection(): Bool {
-            return this.selectionStart != this.selectionEnd
+            var result = this.selectionStart != this.selectionEnd
+            return result
+        }
+
+        private fun isSelecting(): Bool {
+            return this.isDragging && this.focused
+        }
+
+        fun setSelection(start: Int, end: Int) {
+            this.selectionStart = start
+            this.selectionEnd = end
+            if (end >= start) {
+                this.cursorPosition = end
+            } else {
+                this.cursorPosition = start
+            }
+            this.updateScrollOffset()
+            this.requestRepaint()
+        }
+
+        fun getSelectionStart(): Int {
+            return this.selectionStart
+        }
+
+        fun getSelectionEnd(): Int {
+            return this.selectionEnd
         }
 
         fun selectAll() {
@@ -375,54 +425,122 @@ namespace Am.Ui
                     // Apply scroll offset to text X position
                     var scrolledTextX = textX - this.scrollOffset
                     
-                    // Draw text before cursor
-                    if (this.cursorPosition > 0) {
-                        var beforeCursor = displayText.substring(0UI, this.cursorPosition.toUInt())
-                        graphics.setForegroundPen(this.textPen)
-                        graphics.drawString(beforeCursor, scrolledTextX, textY)
+                    // Draw selection background first if there's a selection or we're actively selecting
+                    if (this.hasSelection() || this.isSelecting()) {
+                        this.drawSelection(graphics, displayText, scrolledTextX, textY)
                     }
                     
-                    // Calculate cursor X position (with scroll offset applied)
-                    var cursorX = scrolledTextX
-                    if (this.cursorPosition > 0) {
-                        var beforeCursor = displayText.substring(0UI, this.cursorPosition.toUInt())
-                        cursorX = cursorX + graphics.calculateStringWidth(beforeCursor).toShort()
-                    }
-                    
-                    // Draw cursor character with background rectangle
-                    if (this.cursorPosition < displayText.length()) {
-                        // Get character at cursor position
-                        var cursorChar = displayText.substring(this.cursorPosition.toUInt(), 1UI)
+                    // Draw text parts not covered by selection
+                    if (this.hasSelection() || this.isSelecting()) {
+                        var start = this.selectionStart
+                        var end = this.selectionEnd
                         
-                        // Calculate character width
-                        var charWidth = graphics.calculateStringWidth(cursorChar).toShort()
-                        var fontHeight = graphics.getCurrentFontSize().toShort()
+                        // Ensure start <= end
+                        if (start > end) {
+                            var temp = start
+                            start = end
+                            end = temp
+                        }
                         
-                        // Draw character with cursor background and white text                        
-                        // Fill extra lines above and below the text
-                        graphics.setForegroundPen(this.cursorPen)
-                        graphics.fillRect(cursorX, textY - 1S, cursorX + charWidth - 1S, textY - 1S) // Line above
-                        graphics.fillRect(cursorX, textY + fontHeight, cursorX + charWidth - 1S, textY + fontHeight) // Line below
-                        
-                        // Set background pen to cursor color for drawString
-                        graphics.setBackgroundPen(this.cursorPen)
-                        graphics.setForegroundPen(2UB)
-                        graphics.drawString(cursorChar, cursorX, textY)
-                        // Restore background pen
-                        graphics.setBackgroundPen(this.backgroundPen)
-                        
-                        // Draw text after cursor
-                        if (this.cursorPosition + 1 < displayText.length()) {
-                            var afterCursor = displayText.substringToEnd((this.cursorPosition + 1).toUInt())
+                        // Only draw selection parts if there's actually a selection range
+                        if (start != end) {
+                            // Draw text before selection
+                            if (start > 0) {
+                                var beforeSelection = displayText.substring(0UI, start.toUInt())
+                                graphics.setForegroundPen(this.textPen)
+                                graphics.drawString(beforeSelection, scrolledTextX, textY)
+                            }
+                            
+                            // Draw text after selection
+                            if (end < displayText.length()) {
+                                var afterSelection = displayText.substringToEnd(end.toUInt())
+                                var afterSelectionX = scrolledTextX
+                                if (end > 0) {
+                                    var beforeAfterSelection = displayText.substring(0UI, end.toUInt())
+                                    afterSelectionX = scrolledTextX + graphics.calculateStringWidth(beforeAfterSelection).toShort()
+                                }
+                                graphics.setForegroundPen(this.textPen)
+                                graphics.drawString(afterSelection, afterSelectionX, textY)
+                            }
+                        } else {
+                            // No actual selection range - draw all text normally and show cursor
                             graphics.setForegroundPen(this.textPen)
-                            graphics.drawString(afterCursor, cursorX + charWidth, textY)
+                            graphics.drawString(displayText, scrolledTextX, textY)
+                            
+                            // Draw cursor
+                            var cursorX = scrolledTextX
+                            if (this.cursorPosition > 0) {
+                                var beforeCursor = displayText.substring(0UI, this.cursorPosition.toUInt())
+                                cursorX = cursorX + graphics.calculateStringWidth(beforeCursor).toShort()
+                            }
+                            
+                            if (this.cursorPosition < displayText.length()) {
+                                // Get character at cursor position
+                                var cursorChar = displayText.substring(this.cursorPosition.toUInt(), 1UI)
+                                
+                                // Calculate character width
+                                var charWidth = graphics.calculateStringWidth(cursorChar).toShort()
+                                var fontHeight = graphics.getCurrentFontSize().toShort()
+                                
+                                // Draw character with cursor background and white text                        
+                                // Fill extra lines above and below the text
+                                graphics.setForegroundPen(this.cursorPen)
+                                graphics.fillRect(cursorX, textY - 1S, cursorX + charWidth - 1S, textY - 1S) // Line above
+                                graphics.fillRect(cursorX, textY + fontHeight, cursorX + charWidth - 1S, textY + fontHeight) // Line below
+                                
+                                // Set background pen to cursor color for drawString
+                                graphics.setBackgroundPen(this.cursorPen)
+                                graphics.setForegroundPen(2UB)
+                                graphics.drawString(cursorChar, cursorX, textY)
+                                // Restore background pen
+                                graphics.setBackgroundPen(this.backgroundPen)
+                            } else {
+                                // Cursor is at end of text - draw cursor using width of "X", extended 1px above and below
+                                var fontHeight = graphics.getCurrentFontSize().toShort()
+                                var cursorWidth = graphics.calculateStringWidth("X").toShort()
+                                graphics.setForegroundPen(this.cursorPen)
+                                graphics.fillRect(cursorX, textY - 1S, cursorX + cursorWidth - 1S, textY + fontHeight)
+                            }
                         }
                     } else {
-                        // Cursor is at end of text - draw cursor using width of "X", extended 1px above and below
-                        var fontHeight = graphics.getCurrentFontSize().toShort()
-                        var cursorWidth = graphics.calculateStringWidth("X").toShort()
-                        graphics.setForegroundPen(this.cursorPen)
-                        graphics.fillRect(cursorX, textY - 1S, cursorX + cursorWidth - 1S, textY + fontHeight)
+                        // No selection - draw all text normally
+                        graphics.setForegroundPen(this.textPen)
+                        graphics.drawString(displayText, scrolledTextX, textY)
+                        
+                        // Draw cursor
+                        var cursorX = scrolledTextX
+                        if (this.cursorPosition > 0) {
+                            var beforeCursor = displayText.substring(0UI, this.cursorPosition.toUInt())
+                            cursorX = cursorX + graphics.calculateStringWidth(beforeCursor).toShort()
+                        }
+                        
+                        if (this.cursorPosition < displayText.length()) {
+                            // Get character at cursor position
+                            var cursorChar = displayText.substring(this.cursorPosition.toUInt(), 1UI)
+                            
+                            // Calculate character width
+                            var charWidth = graphics.calculateStringWidth(cursorChar).toShort()
+                            var fontHeight = graphics.getCurrentFontSize().toShort()
+                            
+                            // Draw character with cursor background and white text                        
+                            // Fill extra lines above and below the text
+                            graphics.setForegroundPen(this.cursorPen)
+                            graphics.fillRect(cursorX, textY - 1S, cursorX + charWidth - 1S, textY - 1S) // Line above
+                            graphics.fillRect(cursorX, textY + fontHeight, cursorX + charWidth - 1S, textY + fontHeight) // Line below
+                            
+                            // Set background pen to cursor color for drawString
+                            graphics.setBackgroundPen(this.cursorPen)
+                            graphics.setForegroundPen(2UB)
+                            graphics.drawString(cursorChar, cursorX, textY)
+                            // Restore background pen
+                            graphics.setBackgroundPen(this.backgroundPen)
+                        } else {
+                            // Cursor is at end of text - draw cursor using width of "X", extended 1px above and below
+                            var fontHeight = graphics.getCurrentFontSize().toShort()
+                            var cursorWidth = graphics.calculateStringWidth("X").toShort()
+                            graphics.setForegroundPen(this.cursorPen)
+                            graphics.fillRect(cursorX, textY - 1S, cursorX + cursorWidth - 1S, textY + fontHeight)
+                        }
                     }
                 } else {
                     // Not focused - draw text normally (with scroll offset applied)
@@ -431,85 +549,190 @@ namespace Am.Ui
                     graphics.drawString(displayText, scrolledTextX, textY)
                 }
 
-                // Draw selection if focused and has selection
-                if (this.focused && this.hasSelection()) {
-                    // TODO: Calculate selection rectangle and draw it
-                    // This would require character-by-character width calculation
-                }
+                // Draw selection if focused and has selection - already handled above
             }
             graphics.popClipRect()
         }
 
+        private fun drawSelection(graphics: Graphics, displayText: String, textX: Short, textY: Short) {
+            if (!this.hasSelection() && !this.isSelecting()) {
+                return
+            }
+
+            var window = this.getWindow()
+            if (window == null) {
+                return
+            }
+
+            var start = this.selectionStart
+            var end = this.selectionEnd
+            
+            // Ensure start <= end
+            if (start > end) {
+                var temp = start
+                start = end
+                end = temp
+            }
+
+            // Get font height for drawing lines above and below
+            var fontHeight = graphics.getCurrentFontSize().toShort()
+
+            // Draw selection character by character with inverted colors
+            var i = start
+            while (i < end) {
+                if (i >= displayText.length()) {
+                    break
+                }
+
+                // Calculate position of this character
+                var charX = textX
+                if (i > 0) {
+                    var beforeChar = displayText.substring(0UI, i.toUInt())
+                    charX = textX + window.calculateStringWidth(null, beforeChar).toShort()
+                }
+
+                // Get the character
+                var char = displayText.substring(i.toUInt(), 1UI)
+                var charWidth = window.calculateStringWidth(null, char).toShort()
+
+                // Draw selection background with lines above and below (like cursor)
+                graphics.setForegroundPen(this.selectionPen)
+                graphics.fillRect(charX, textY - 1S, charX + charWidth - 1S, textY - 1S) // Line above
+                graphics.fillRect(charX, textY + fontHeight, charX + charWidth - 1S, textY + fontHeight) // Line below
+
+                // Draw character with inverted colors
+                graphics.setBackgroundPen(this.selectionPen)
+                graphics.setForegroundPen(2UB) // White text on selection background
+                graphics.drawString(char, charX, textY)
+
+                i = i + 1
+            }
+
+            // Restore background pen
+            graphics.setBackgroundPen(this.backgroundPen)
+        }
+
         override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
             var isInside = this.contains(x, y)
+//            ("TextField Mouse: type=" + type.toString() + " button=" + button.toString() + " x=" + x.toString() + " y=" + y.toString() + " inside=" + isInside.toString()).println()
+//            ("Current isDragging=" + this.isDragging.toString() + " focused=" + this.focused.toString()).println()
             
-            if (isInside) {
-                if (type == MouseEventType.down && button == MouseButton.left) {
+            if (type == MouseEventType.down && button == MouseButton.left) {
+                if (isInside) {
                     this.setFocused(true)
                     
                     // Calculate cursor position from x coordinate
                     var textX = this.borderWidths.left + this.padding.left
                     var relativeX = x - textX + this.scrollOffset // Account for scroll offset
+                    var clickPosition = this.getPositionFromX(relativeX)
                     
-                    if (relativeX <= 0S) {
-                        // Click is before the text
-                        this.setCursorPosition(0)
-                    } else {
-                        // Calculate which character position corresponds to the click
-                        var displayText = this.text
-                        if (this.passwordMode) {
-                            var stars = ""
-                            var i = 0
-                            while (i < displayText.length()) {
-                                stars = stars + "*"
-                                i = i + 1
-                            }
-                            displayText = stars
-                        }
-                        
-                        var window = this.getWindow()
-                        if (window != null) {
-                            var bestPosition = 0
-                            var bestDistance = relativeX.toInt()
-                            
-                            // Check each position in the text
-                            var pos = 0
-                            while (pos <= displayText.length()) {
-                                var width = 0S
-                                if (pos > 0) {
-                                    var substring = displayText.substring(0UI, pos.toUInt())
-                                    width = window.calculateStringWidth(null, substring).toShort()
-                                }
-                                
-                                var distance = (relativeX - width).toInt()
-                                if (distance < 0) {
-                                    distance = -distance
-                                }
-                                
-                                if (distance < bestDistance) {
-                                    bestDistance = distance
-                                    bestPosition = pos
-                                }
-                                
-                                pos = pos + 1
-                            }
-                            
-                            this.setCursorPosition(bestPosition)
-                        } else {
-                            // Fallback if no graphics context
-                            this.setCursorPosition(this.text.length())
-                        }
-                    }
-                    
+                    // Start potential drag selection
+                    this.isDragging = true
+                    this.dragStartPosition = clickPosition  // Remember where we started
+                    this.setCursorPosition(clickPosition)
                     this.clearSelection()
                     return true
-                }
-            } else {
-                if (type == MouseEventType.down) {
+                } else {
                     this.setFocused(false)
+                    this.isDragging = false
+                    return false
                 }
+            } else if (type == MouseEventType.move && this.isDragging) {
+                // Drag selection - handle even when mouse is outside the TextField area
+                if (this.focused) {
+                    var textX = this.borderWidths.left + this.padding.left
+                    var relativeX = x - textX + this.scrollOffset // Account for scroll offset
+                    var dragPosition = this.getPositionFromX(relativeX)
+                    
+//                    ("Drag: x=" + x.toString() + " textX=" + textX.toString() + " relativeX=" + relativeX.toString() + " dragPos=" + dragPosition.toString()).println()
+//                    ("Drag: dragStart=" + this.dragStartPosition.toString() + " selStart=" + this.selectionStart.toString() + " selEnd=" + this.selectionEnd.toString()).println()
+                    
+                    // Set selection from drag start position to current drag position
+                    this.selectionStart = this.dragStartPosition
+                    this.selectionEnd = dragPosition
+                    this.cursorPosition = dragPosition
+                    
+//                    ("After: selStart=" + this.selectionStart.toString() + " selEnd=" + this.selectionEnd.toString()).println()
+                    
+                    this.updateScrollOffset()
+                    this.requestRepaint()
+                    return true
+                }
+            } else if (type == MouseEventType.up && button == MouseButton.left) {
+                // Always stop dragging on mouse up, regardless of where the mouse is
+                this.isDragging = false
+                return true
             }
+            
             return false
+        }
+
+        private fun getPositionFromX(relativeX: Short): Int {
+//            ("getPositionFromX: relativeX=" + relativeX.toString()).println()
+            
+            // Handle dragging to the left of the text (should select from beginning)
+            if (relativeX <= 0S) {
+//                ("getPositionFromX: returning 0 for negative relativeX").println()
+                return 0
+            }
+
+            // Calculate which character position corresponds to the x coordinate
+            var displayText = this.text
+            if (this.passwordMode) {
+                var stars = ""
+                var i = 0
+                while (i < displayText.length()) {
+                    stars = stars + "*"
+                    i = i + 1
+                }
+                displayText = stars
+            }
+            
+            var window = this.getWindow()
+            if (window != null) {
+                var bestPosition = 0
+                var bestDistance = relativeX.toInt()
+                
+                // Check each position in the text
+                var pos = 0
+                while (pos <= displayText.length()) {
+                    var width = 0S
+                    if (pos > 0) {
+                        var substring = displayText.substring(0UI, pos.toUInt())
+                        width = window.calculateStringWidth(null, substring).toShort()
+                    }
+                    
+                    var distance = (relativeX - width).toInt()
+                    if (distance < 0) {
+                        distance = -distance
+                    }
+                    
+                    if (distance < bestDistance) {
+                        bestDistance = distance
+                        bestPosition = pos
+                    }
+                    
+                    pos = pos + 1
+                }
+                
+                // Handle dragging far to the right (should select to end)
+                if (relativeX > 0S && bestPosition == displayText.length()) {
+                    var totalWidth = 0S
+                    if (displayText.length() > 0) {
+                        totalWidth = window.calculateStringWidth(null, displayText).toShort()
+                    }
+                    if (relativeX > totalWidth) {
+//                        ("getPositionFromX: dragging beyond text, returning end position " + displayText.length().toString()).println()
+                        return displayText.length() // Select to end when dragging beyond text
+                    }
+                }
+                
+//                ("getPositionFromX: returning bestPosition=" + bestPosition.toString()).println()
+                return bestPosition
+            } else {
+                // Fallback if no graphics context
+                return this.text.length()
+            }
         }
 
         override fun onKeyboardEvent(type: KeyboardEventType, keyCode: UShort, keyChar: UShort): Bool {           
@@ -520,25 +743,24 @@ namespace Am.Ui
             if (type == KeyboardEventType.down) {
                 // Handle arrow keys and navigation first (using keyCode)
                 if (keyCode == 79US) { // Left arrow (AmigaOS raw key)
-                    this.setCursorPosition(this.cursorPosition - 1)
-                    this.clearSelection()
+                    this.moveCursor(this.cursorPosition - 1, false)
                     return true
                 } else if (keyCode == 78US) { // Right arrow (AmigaOS raw key)
-                    this.setCursorPosition(this.cursorPosition + 1)
-                    this.clearSelection()
+                    this.moveCursor(this.cursorPosition + 1, false)
                     return true
                 } else if (keyCode == 76US) { // Up arrow (could be used for Home)
-                    this.setCursorPosition(0)
-                    this.clearSelection()
+                    this.moveCursor(0, false)
                     return true
                 } else if (keyCode == 77US) { // Down arrow (could be used for End)
-                    this.setCursorPosition(this.text.length())
-                    this.clearSelection()
+                    this.moveCursor(this.text.length(), false)
                     return true
                 } else if (keyCode == 70US) { // Delete key (AmigaOS raw key)
                     this.deleteForward()
                     return true
                 }
+                
+                // TODO: Add shift+arrow key support when modifier detection is available
+                // Example: keyCode 79US with shift modifier for shift+left arrow
                 
                 // Handle special character keys using keyChar
                 if (keyChar == 8US) { // Backspace (ASCII)
@@ -546,6 +768,9 @@ namespace Am.Ui
                     return true
                 } else if (keyChar == 127US) { // Delete (ASCII)
                     this.deleteForward()
+                    return true
+                } else if (keyChar == 1US) { // Ctrl+A (Select All)
+                    this.selectAll()
                     return true
                 } else if (keyChar == 9US) { // Tab
                     // Could handle tab here if needed
@@ -565,20 +790,16 @@ namespace Am.Ui
                 
                 // Also check if keyChar has control character values for special keys
                 if (keyChar == 37US) { // Left arrow (if passed as ASCII)
-                    this.setCursorPosition(this.cursorPosition - 1)
-                    this.clearSelection()
+                    this.moveCursor(this.cursorPosition - 1, false)
                     return true
                 } else if (keyChar == 39US) { // Right arrow (if passed as ASCII)
-                    this.setCursorPosition(this.cursorPosition + 1)
-                    this.clearSelection()
+                    this.moveCursor(this.cursorPosition + 1, false)
                     return true
                 } else if (keyChar == 36US) { // Home (if passed as ASCII)
-                    this.setCursorPosition(0)
-                    this.clearSelection()
+                    this.moveCursor(0, false)
                     return true
                 } else if (keyChar == 35US) { // End (if passed as ASCII)
-                    this.setCursorPosition(this.text.length())
-                    this.clearSelection()
+                    this.moveCursor(this.text.length(), false)
                     return true
                 }
             }

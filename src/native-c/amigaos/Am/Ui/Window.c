@@ -299,7 +299,7 @@ void handle_message(aobject * this, struct IntuiMessage * msg) {
 			break;
 		case IDCMP_MOUSEMOVE:
 		case IDCMP_INTUITICKS:
-			if (msg->MouseX != window_data->last_mouse_x && msg->MouseY != window_data->last_mouse_y) {
+			if (msg->MouseX != window_data->last_mouse_x || msg->MouseY != window_data->last_mouse_y) {
 				window_data->last_mouse_x = msg->MouseX;
 				window_data->last_mouse_y = msg->MouseY;
 				Am_Ui_Window_f_onMouseEvent_0(this, 1, 0, msg->MouseX, msg->MouseY);
