@@ -2,6 +2,7 @@
 
 #include <Am/Ui/Window.h>
 #include <Am/Lang/Object.h>
+#include <Am/Lang/String.h>
 #include <Am/Ui/Screen.h>
 #include <Am/Lang/Int.h>
 
@@ -15,6 +16,7 @@
 #include <devices/keymap.h>
 #include <devices/console.h>
 #include <devices/inputevent.h>
+#include <devices/clipboard.h>
 
 #include <proto/exec.h>
 #include <proto/intuition.h>
@@ -564,3 +566,78 @@ __exit: ;
 	}
 	return __result;
 };
+
+// Simple clipboard storage - in real AmigaOS this would use clipboard.device
+static char* stored_clipboard_text = NULL;
+
+// Clipboard functionality for AmigaOS
+function_result Am_Ui_Window_copyToClipboard_0(aobject * const this, aobject * const text)
+{
+	function_result __result = { .has_return_value = false };
+	
+	if (this != NULL) {
+		__increase_reference_count(this);
+	}
+	if (text != NULL) {
+		__increase_reference_count(text);
+	}
+
+	if (text == NULL) {
+		goto __exit;
+	}
+
+	// Get the string content from the AmLang String object
+	if (text->object_properties.class_object_properties.object_data.value.custom_value != NULL) {
+		string_holder* holder = (string_holder*)text->object_properties.class_object_properties.object_data.value.custom_value;
+		if (holder->string_value != NULL) {
+			// Free previous clipboard content
+			if (stored_clipboard_text != NULL) {
+				free(stored_clipboard_text);
+			}
+			
+			// Store a copy of the text
+			stored_clipboard_text = strdup(holder->string_value);
+			printf("Copy to clipboard: '%s'\n", stored_clipboard_text);
+		}
+	}
+	
+	// TODO: Implement actual clipboard device access
+	// The AmigaOS clipboard device requires more setup
+
+__exit:
+	if (this != NULL) {
+		__decrease_reference_count(this);
+	}
+	if (text != NULL) {
+		__decrease_reference_count(text);
+	}
+	return __result;
+}
+
+// Clipboard paste functionality for AmigaOS
+function_result Am_Ui_Window_pasteFromClipboard_0(aobject * const this)
+{
+	function_result __result = { .has_return_value = true };
+	
+	if (this != NULL) {
+		__increase_reference_count(this);
+	}
+
+	// Return the stored clipboard text, or NULL if nothing was copied
+	if (stored_clipboard_text != NULL) {
+		// Create a proper AmLang String object from the stored text
+		aobject* clipboard_string = __create_string_constant(stored_clipboard_text, &__string_class_alias);
+		__result.return_value.value.object_value = clipboard_string;
+		printf("Paste from clipboard: returning '%s'\n", stored_clipboard_text);
+	} else {
+		// No text was copied yet
+		__result.return_value.value.object_value = NULL;
+		printf("Paste from clipboard: clipboard is empty\n");
+	}
+
+__exit:
+	if (this != NULL) {
+		__decrease_reference_count(this);
+	}
+	return __result;
+}

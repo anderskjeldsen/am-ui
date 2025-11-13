@@ -228,6 +228,43 @@ namespace Am.Ui
             this.requestRepaint()
         }
 
+        fun copySelectedText() {
+            if (!this.hasSelection()) {
+                return
+            }
+            
+            var start = this.selectionStart
+            var end = this.selectionEnd
+            
+            // Ensure start <= end
+            if (start > end) {
+                var temp = start
+                start = end
+                end = temp
+            }
+            
+            var selectedText = this.text.substring(start.toUInt(), (end - start).toUInt())
+            
+            // Get the window and copy to clipboard
+            var window = this.getWindow()
+            if (window != null) {
+                window.copyToClipboard(selectedText)
+            }
+        }
+
+        fun pasteText() {
+            // Get the window and paste from clipboard
+            var window = this.getWindow()
+            if (window != null) {
+                var clipboardText = window.pasteFromClipboard()
+                if (clipboardText != null) {
+                    // insertText() already handles selection replacement properly
+                    this.insertText(clipboardText)
+                }
+                // If clipboardText is null, do nothing (clipboard is empty)
+            }
+        }
+
         private fun textUpdated() {
 
         }
@@ -241,10 +278,20 @@ namespace Am.Ui
             
             if (this.hasSelection()) {
                 // Replace selection
-                var beforeSelection = this.text.substring(0UI, this.selectionStart.toUInt())
-                var afterSelection = this.text.substring(this.selectionEnd.toUInt(), (this.text.length() - this.selectionEnd).toUInt())
+                var start = this.selectionStart
+                var end = this.selectionEnd
+                
+                // Ensure start <= end
+                if (start > end) {
+                    var temp = start
+                    start = end
+                    end = temp
+                }
+                
+                var beforeSelection = this.text.substring(0UI, start.toUInt())
+                var afterSelection = this.text.substring(end.toUInt(), (this.text.length() - end).toUInt())
                 this.text = beforeSelection + newText + afterSelection
-                insertPosition = this.selectionStart + newText.length()
+                insertPosition = start + newText.length()
             } else {
                 // Insert at cursor
                 var beforeCursor = this.text.substring(0UI, this.cursorPosition.toUInt())
@@ -775,6 +822,14 @@ namespace Am.Ui
                     return true
                 } else if (keyChar == 1US) { // Ctrl+A (Select All)
                     this.selectAll()
+                    return true
+                } else if (keyChar == 3US) { // Ctrl+C (Copy)
+                    if (this.hasSelection()) {
+                        this.copySelectedText()
+                    }
+                    return true
+                } else if (keyChar == 22US) { // Ctrl+V (Paste)
+                    this.pasteText()
                     return true
                 } else if (keyChar == 9US) { // Tab
                     // Could handle tab here if needed
