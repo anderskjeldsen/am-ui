@@ -2,6 +2,7 @@
 
 #include <Am/Ui/Window.h>
 #include <Am/Lang/Object.h>
+#include <Am/Lang/String.h>
 #include <Am/Ui/Screen.h>
 #include <Am/Lang/Int.h>
 
@@ -12,11 +13,17 @@
 #include <exec/types.h>
 #include <intuition/intuition.h>
 #include <libraries/gadtools.h>
+#include <devices/keymap.h>
+#include <devices/console.h>
+#include <devices/inputevent.h>
+#include <devices/clipboard.h>
 
 #include <proto/exec.h>
 #include <proto/intuition.h>
 #include <proto/gadtools.h>
 #include <proto/graphics.h>
+#include <proto/keymap.h>
+#include <proto/layers.h>
 
 #include <libc/core_inline_functions.h>
 
@@ -50,6 +57,11 @@ void close_window_native(aobject * const this) {
 			UnlockPubScreen(NULL, data->locked_screen);
 			data->locked_screen = NULL;
 		}
+
+		if (data->clip_region != NULL) {
+			DisposeRegion(data->clip_region);
+			data->clip_region = NULL;
+		}
 	}
 
 	free(this->object_properties.class_object_properties.object_data.value.custom_value);
@@ -62,12 +74,10 @@ function_result Am_Ui_Window__native_init_0(aobject * const this)
 	function_result __result = { .has_return_value = false };
 	bool __returning = false;
 	// Add reference count for this in Window._native_init
-	printf("Add reference count for this in Window._native_init\n");
 	if (this != NULL) {
 		__increase_reference_count(this);
 	}
 	// TODO: implement native function Am_Ui_Window__native_init_0
-	printf("TODO: implement native function Am_Ui_Window__native_init_0\n");
 __exit: ;
 	if (this != NULL) {
 		__decrease_reference_count(this);
@@ -91,7 +101,7 @@ function_result Am_Ui_Window__native_release_0(aobject * const this)
 	free(this->object_properties.class_object_properties.object_data.value.custom_value);
 	this->object_properties.class_object_properties.object_data.value.custom_value = NULL;
 */
-	printf("TODO: implement native function Am_Ui_Window__native_release_0\n");
+
 __exit: ;
 	return __result;
 };
@@ -126,19 +136,18 @@ function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHO
 	function_result __result = { .has_return_value = false };
 	bool __returning = false;
 	// Add reference count for this in Window.open
-	printf("Add reference count for this in Window.open\n");
 	if (this != NULL) {
 		__increase_reference_count(this);
 	}
 
 	SysBase = *((struct ExecBase **)4UL);
-	printf("Intuition base: %d\n", (unsigned int) IntuitionBase);
 	if (IntuitionBase == NULL) {
 		IntuitionBase = (struct IntuitionBase *) __ensure_library("intuition.library", 0L);
 	}
 
 	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) calloc(1, sizeof(Am_Ui_Window_data));
 	this->object_properties.class_object_properties.object_data.value.custom_value = data;
+	data->clip_region = NewRegion();
 
 	struct Screen *amiga_screen = NULL;
 	struct VisualInfo *visual_info = NULL;
@@ -166,7 +175,7 @@ function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHO
 
 	data->context_gadget = NULL;
 	CreateContext(&data->context_gadget);
-	printf("context gadget %p\n", data->context_gadget);
+//	printf("context gadget %p\n", data->context_gadget);
 
 /*
 	ULONG user_port = (ULONG) NULL;
@@ -182,8 +191,8 @@ function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHO
 		WA_Height, height,
 		WA_DetailPen, 1,
 		WA_BlockPen, 2,
-		WA_IDCMP, IDCMP_CLOSEWINDOW | IDCMP_GADGETUP | MENUPICK | MOUSEBUTTONS | REFRESHWINDOW | IDCMP_INTUITICKS | IDCMP_NEWSIZE | IDCMP_MOUSEBUTTONS,
-		WA_Flags, WFLG_SIZEGADGET | WFLG_ACTIVATE | WFLG_RMBTRAP | WFLG_DRAGBAR | WFLG_DEPTHGADGET | WFLG_CLOSEGADGET | WFLG_SIMPLE_REFRESH | WFLG_SIZEBBOTTOM, //WFLG_BORDERLESS WFLG_BACKDROP
+		WA_IDCMP, IDCMP_CLOSEWINDOW | IDCMP_GADGETUP | MENUPICK | MOUSEBUTTONS | REFRESHWINDOW | IDCMP_INTUITICKS | IDCMP_NEWSIZE | IDCMP_MOUSEBUTTONS | IDCMP_RAWKEY,
+		WA_Flags, WFLG_SIZEGADGET | WFLG_ACTIVATE | WFLG_RMBTRAP | WFLG_DRAGBAR | WFLG_DEPTHGADGET | WFLG_CLOSEGADGET | WFLG_SMART_REFRESH | WFLG_SIZEBBOTTOM, //WFLG_BORDERLESS WFLG_BACKDROP
 		WA_Gadgets, 0, // (ULONG) data->context_gadget,
 		WA_Title, (ULONG) "Hello",
 		WA_MinWidth, 0,
@@ -205,6 +214,8 @@ function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHO
 		goto __exit;
 	}
 
+	data->window = window;
+
 	// if we want a 5 pixel padding around a view, then:
 	// 320x256: x: 5x1, y:5x1
 	// 640x256: x: 5x2, y: 5x1
@@ -217,8 +228,6 @@ function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHO
 	Am_Ui_Window_f_onResize_0(this, window->LeftEdge, window->TopEdge, window->Width, window->Height);
 
 	GT_RefreshWindow(window, NULL);
-
-	data->window = window;
 
 __exit: ;
 	if (this != NULL) {
@@ -235,7 +244,7 @@ function_result Am_Ui_Window_close_0(aobject * const this)
 	function_result __result = { .has_return_value = false };
 	bool __returning = false;
 	// Add reference count for this in Window.close
-	printf("Add reference count for this in Window.close\n");
+//	printf("Add reference count for this in Window.close\n");
 	if (this != NULL) {
 		__increase_reference_count(this);
 	}
@@ -292,14 +301,89 @@ void handle_message(aobject * this, struct IntuiMessage * msg) {
 			break;
 		case IDCMP_MOUSEMOVE:
 		case IDCMP_INTUITICKS:
-			if (msg->MouseX != window_data->last_mouse_x && msg->MouseY != window_data->last_mouse_y) {
+			if (msg->MouseX != window_data->last_mouse_x || msg->MouseY != window_data->last_mouse_y) {
 				window_data->last_mouse_x = msg->MouseX;
 				window_data->last_mouse_y = msg->MouseY;
 				Am_Ui_Window_f_onMouseEvent_0(this, 1, 0, msg->MouseX, msg->MouseY);
 			}
 			break;
 		case IDCMP_RAWKEY:
-			Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code);
+			{
+				// Check if this is a key press (bit 7 clear) or key release (bit 7 set)
+				if (msg->Code & 0x80) {
+					// Key release event (code + 128) - ignore for now
+//					printf("onKey, key release: raw code %d (press code: %d)\n", msg->Code, msg->Code & 0x7F);
+					// Optionally call keyboard event handler for key release
+					// Am_Ui_Window_f_onKeyboardEvent_0(this, 2, msg->Code & 0x7F, 0); // type 2 = key release
+					break;
+				}
+				
+				// Key press event - handle special keys first, then convert others to ASCII
+				UBYTE key_buffer[8];
+				WORD actual_length = 0;
+				UBYTE ascii_char = 0;
+				
+				// Check for known special keys first (AmigaOS raw key codes)
+				if (msg->Code == 65) { // Backspace key on Amiga
+//					printf("onKey, key press: backspace (raw code %d)\n", msg->Code);
+					Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, 8); // Pass ASCII 8 for backspace
+				} else if (msg->Code == 70) { // Delete key on Amiga
+//					printf("onKey, key press: delete (raw code %d)\n", msg->Code);
+					Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, 127); // Pass ASCII 127 for delete
+				} else if (msg->Code == 79) { // Left arrow
+//					printf("onKey, key press: left arrow (raw code %d)\n", msg->Code);
+					// Check for Shift modifier (IEQUALIFIER_LSHIFT or IEQUALIFIER_RSHIFT)
+					if (msg->Qualifier & (IEQUALIFIER_LSHIFT | IEQUALIFIER_RSHIFT)) {
+						Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, 1); // Pass 1 for Shift+Left
+					} else {
+						Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, 0); // No ASCII equivalent
+					}
+				} else if (msg->Code == 78) { // Right arrow
+//					printf("onKey, key press: right arrow (raw code %d)\n", msg->Code);
+					// Check for Shift modifier
+					if (msg->Qualifier & (IEQUALIFIER_LSHIFT | IEQUALIFIER_RSHIFT)) {
+						Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, 1); // Pass 1 for Shift+Right
+					} else {
+						Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, 0); // No ASCII equivalent
+					}
+				} else if (msg->Code == 76) { // Up arrow
+//					printf("onKey, key press: up arrow (raw code %d)\n", msg->Code);
+					// Check for Shift modifier
+					if (msg->Qualifier & (IEQUALIFIER_LSHIFT | IEQUALIFIER_RSHIFT)) {
+						Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, 1); // Pass 1 for Shift+Up
+					} else {
+						Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, 0); // No ASCII equivalent
+					}
+				} else if (msg->Code == 77) { // Down arrow
+//					printf("onKey, key press: down arrow (raw code %d)\n", msg->Code);
+					// Check for Shift modifier
+					if (msg->Qualifier & (IEQUALIFIER_LSHIFT | IEQUALIFIER_RSHIFT)) {
+						Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, 1); // Pass 1 for Shift+Down
+					} else {
+						Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, 0); // No ASCII equivalent
+					}
+				} else {
+					// Try to convert other keys to ASCII using MapRawKey
+					struct InputEvent input_event;
+					input_event.ie_Class = IECLASS_RAWKEY;
+					input_event.ie_Code = msg->Code;
+					input_event.ie_Qualifier = msg->Qualifier;
+					input_event.ie_position.ie_addr = 0;
+					
+					actual_length = MapRawKey(&input_event, key_buffer, 8, NULL);
+					
+					if (actual_length > 0) {
+						// We got a printable character
+						ascii_char = key_buffer[0];
+//						printf("onKey, key press: raw code %d -> ASCII '%c' (%d)\n", msg->Code, ascii_char, ascii_char);
+						Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, ascii_char);
+					} else {
+						// Other special key (function keys, etc.)
+//						printf("onKey, key press: special key code %d (no ASCII equivalent)\n", msg->Code);
+						Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, 0);
+					}
+				}
+			}
 			break;
 	}
 }
@@ -342,18 +426,32 @@ function_result Am_Ui_Window_handleInput_0(aobject * const this)
 //	printf("Handling done %d\n", signals);
 
 	if (window_data->pending_resize) {
+//		window_data->old_clip_region = InstallClipRegion(win->WLayer, NULL);
 		Am_Ui_Window_f_onResize_0(this, win->LeftEdge, win->TopEdge, win->Width, win->Height);
+		window_data->pending_full_refresh = TRUE;
+		//		InstallClipRegion(win->WLayer, window_data->old_clip_region);
 	}
 
 	if (window_data->pending_full_refresh) {
+		WaitTOF();  // Wait for VBL to avoid raster beam interference
+		WaitTOF();
+		window_data->old_clip_region = InstallClipRegion(win->WLayer, NULL);
 		Am_Ui_Window_f_paint_0(this);
+		InstallClipRegion(win->WLayer, window_data->old_clip_region);
 	}
 	else if (window_data->pending_refresh) {
-		printf("handle pending refresh\n");
+//		printf("handle pending refresh\n");
 
+		WaitTOF();
+		WaitTOF();
+//		LockLayerInfo(&win->WScreen->LayerInfo);
+		window_data->old_clip_region = InstallClipRegion(win->WLayer, NULL);	
 		BeginRefresh(window_data->window);
 		Am_Ui_Window_f_paint_0(this);
 		EndRefresh(window_data->window, TRUE);
+		InstallClipRegion(win->WLayer, window_data->old_clip_region);	
+
+//		UnlockLayerInfo(&win->WScreen->LayerInfo);
 	}
 
 /*
@@ -415,3 +513,131 @@ __exit: ;
 	}
 	return __result;
 };
+
+function_result Am_Ui_Window_setTitleNative_0(aobject * const this, aobject * const windowTitle, aobject * const screenTitle)
+{
+	function_result __result = { .has_return_value = false };
+	bool __returning = false;
+	if (this != NULL) {
+		__increase_reference_count(this);
+	}
+	if (windowTitle != NULL) {
+		__increase_reference_count(windowTitle);
+	}
+	if (screenTitle != NULL) {
+		__increase_reference_count(screenTitle);
+	}
+
+	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
+	if (data != NULL && data->window != NULL) {
+		// Extract window title string
+		char *windowTitleStr = NULL;
+		if (windowTitle != NULL) {
+			string_holder *windowTitleSh = windowTitle->object_properties.class_object_properties.object_data.value.custom_value;
+			if (windowTitleSh != NULL && windowTitleSh->string_value != NULL) {
+				windowTitleStr = windowTitleSh->string_value;
+			}
+		}
+
+		// Extract screen title string  
+		char *screenTitleStr = NULL;
+		if (screenTitle != NULL) {
+			string_holder *screenTitleSh = screenTitle->object_properties.class_object_properties.object_data.value.custom_value;
+			if (screenTitleSh != NULL && screenTitleSh->string_value != NULL && screenTitleSh->length > 0) {
+				screenTitleStr = screenTitleSh->string_value;
+			}
+		}
+
+		// Set both titles using AmigaOS SetWindowTitles
+		// If screenTitleStr is NULL, pass (UBYTE *)-1 to leave screen title unchanged
+		SetWindowTitles(data->window, windowTitleStr, 
+			screenTitleStr);
+	}
+
+__exit: ;
+	if (this != NULL) {
+		__decrease_reference_count(this);
+	}
+	if (windowTitle != NULL) {
+		__decrease_reference_count(windowTitle);
+	}
+	if (screenTitle != NULL) {
+		__decrease_reference_count(screenTitle);
+	}
+	return __result;
+};
+
+// Simple clipboard storage - in real AmigaOS this would use clipboard.device
+static char* stored_clipboard_text = NULL;
+
+// Clipboard functionality for AmigaOS
+function_result Am_Ui_Window_copyToClipboard_0(aobject * const this, aobject * const text)
+{
+	function_result __result = { .has_return_value = false };
+	
+	if (this != NULL) {
+		__increase_reference_count(this);
+	}
+	if (text != NULL) {
+		__increase_reference_count(text);
+	}
+
+	if (text == NULL) {
+		goto __exit;
+	}
+
+	// Get the string content from the AmLang String object
+	if (text->object_properties.class_object_properties.object_data.value.custom_value != NULL) {
+		string_holder* holder = (string_holder*)text->object_properties.class_object_properties.object_data.value.custom_value;
+		if (holder->string_value != NULL) {
+			// Free previous clipboard content
+			if (stored_clipboard_text != NULL) {
+				free(stored_clipboard_text);
+			}
+			
+			// Store a copy of the text
+			stored_clipboard_text = strdup(holder->string_value);
+			printf("Copy to clipboard: '%s'\n", stored_clipboard_text);
+		}
+	}
+	
+	// TODO: Implement actual clipboard device access
+	// The AmigaOS clipboard device requires more setup
+
+__exit:
+	if (this != NULL) {
+		__decrease_reference_count(this);
+	}
+	if (text != NULL) {
+		__decrease_reference_count(text);
+	}
+	return __result;
+}
+
+// Clipboard paste functionality for AmigaOS
+function_result Am_Ui_Window_pasteFromClipboard_0(aobject * const this)
+{
+	function_result __result = { .has_return_value = true };
+	
+	if (this != NULL) {
+		__increase_reference_count(this);
+	}
+
+	// Return the stored clipboard text, or NULL if nothing was copied
+	if (stored_clipboard_text != NULL) {
+		// Create a proper AmLang String object from the stored text
+		aobject* clipboard_string = __create_string_constant(stored_clipboard_text, &__string_class_alias);
+		__result.return_value.value.object_value = clipboard_string;
+		printf("Paste from clipboard: returning '%s'\n", stored_clipboard_text);
+	} else {
+		// No text was copied yet
+		__result.return_value.value.object_value = NULL;
+		printf("Paste from clipboard: clipboard is empty\n");
+	}
+
+__exit:
+	if (this != NULL) {
+		__decrease_reference_count(this);
+	}
+	return __result;
+}

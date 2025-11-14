@@ -4,10 +4,18 @@ version: 0.1.0
 type: library
 dependencies:
   - id: am-lang-core
+#    realm: github
+#    type: git-repo
+#    tag: latest
+#    url: https://github.com/anderskjeldsen/am-lang-core.git
+    type: local
+    path: ../am-lang-core
+  - id: am-imaging
     realm: github
     type: git-repo
     tag: latest
-    url: https://github.com/anderskjeldsen/am-lang-core.git
+    url: https://github.com/anderskjeldsen/am-imaging.git
+
 platforms:
   - id: libc
     abstract: true
@@ -21,8 +29,9 @@ platforms:
     additionalIncludePaths:
     gccAdditionalOptions:
       - -noixemul     
+      - -UHAVE_TIMEGM
     gccAdditionalLibraries:
-      - socket
+#      - socket
   - id: morphos-ppc
     extends: libc
     gccCommand: ppc-morphos-gcc -O3
@@ -35,15 +44,10 @@ platforms:
     gccAdditionalLibraries:
 
 buildTargets:
-  - id: amigaos_docker_unix-arm
+  - id: amigaos_docker
     platform: amigaos
     dockerBuild:
-      image: kjeldsenanders/dnf-dev:initial
-      buildPath: /host
-  - id: amigaos_docker_unix-x64
-    platform: amigaos
-    dockerBuild:
-      image: kjeldsenanders/dnf-dev:initial-x86
+      image: amiga-gcc:latest
       buildPath: /host
   - id: morphos-ppc_docker
     platform: morphos-ppc

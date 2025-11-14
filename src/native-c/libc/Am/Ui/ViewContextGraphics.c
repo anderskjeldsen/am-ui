@@ -7,4 +7,5 @@
 #include <Am/Lang/Short.h>
 #include <libc/core_inline_functions.h>
 
-
+// This file exists for libc compatibility but contains no implementations
+// All ViewContextGraphics functions are implemented in the AmigaOS version

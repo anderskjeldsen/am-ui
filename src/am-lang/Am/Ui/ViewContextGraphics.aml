@@ -4,6 +4,7 @@ namespace Am.Ui
 
     native class ViewContextGraphics(private var viewContext: ViewContext) : Graphics {
         import Am.Lang
+        import Am.Imaging
         private fun getWindow(): Window {
             return this.viewContext.getWindow()
         }
@@ -16,8 +17,15 @@ namespace Am.Ui
         native override fun calculateStringWidth(text: String): UShort
         native override fun getCurrentFontSize(): UByte
         native override fun setFont(font: Font)
-//        native override fun setClipArea(x: Short, y: Short, width: UShort, height: UShort)
-//        native override fun resetClipArea()
+        native override fun drawImage(image: Am.Imaging.Image, x: Short, y: Short, width: Short, height: Short)
+        
+        // Native AmigaOS clipping using InstallClipRegion
+        native override fun setClipRect(clipRect: ClipRect)
+        native override fun clearClipRect()
+
+        native override fun beginPainting(clipRect: ClipRect)
+        native override fun endPainting()
+
     }
 
 

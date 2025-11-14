@@ -1,0 +1,107 @@
+namespace Am.Ui 
+{
+
+    class ProgressBar(var minimum: Int, var maximum: Int) : View {
+        import Am.Lang
+
+        private var value: Int = 0
+        var showText: Bool = true
+        var textPen: UByte = 1UB
+        var backgroundPen: UByte = 0UB
+        var progressPen: UByte = 3UB
+        private var borderPens: BorderPens = new BorderPens(1UB, 1UB, 2UB, 2UB)
+
+        fun setValue(value: Int) {
+            if (value < this.minimum) {
+                this.value = this.minimum
+            } else if (value > this.maximum) {
+                this.value = this.maximum
+            } else {
+                this.value = value
+            }
+            this.requestRepaint()
+        }
+
+        fun getValue(): Int {
+            return this.value
+        }
+
+        fun setRange(minimum: Int, maximum: Int) {
+            this.minimum = minimum
+            this.maximum = maximum
+            if (this.value < this.minimum) {
+                this.value = this.minimum
+            } else if (this.value > this.maximum) {
+                this.value = this.maximum
+            }
+            this.requestRepaint()
+        }
+
+        fun getPercentage(): Int {
+            if (this.maximum == this.minimum) {
+                return 0
+            }
+            return ((this.value - this.minimum) * 100) / (this.maximum - this.minimum)
+        }
+
+        override fun setDefaultPadding() {
+            this.setPadding(2S)
+        }
+
+        override fun setDefaultBorder() {
+            this.setBorderWidths(1S)
+        }
+
+        override fun minHeight(): Short {
+            return 20S + base.minHeight()
+        }
+
+        override fun minWidth(): Short {
+            return 100S + base.minWidth()
+        }
+
+        override fun paint(graphics: Graphics) {
+            base.paint(graphics)
+
+            var innerW = this.innerWidth()
+            var innerH = this.innerHeight()
+            var x1 = 0S
+            var y1 = 0S
+            var x2 = this.width.toShort() - (this.margin.right + this.margin.left + 1S)
+            var y2 = this.height.toShort() - (this.margin.bottom + this.margin.top + 1S)
+
+            // Draw background
+            graphics.setForegroundPen(this.backgroundPen)
+            graphics.fillRect(x1, y1, x2, y2)
+
+            // Draw border
+            this.paintNativeBorder(graphics, this.borderPens)
+
+            // Calculate progress width using integer arithmetic
+            var progressWidth = (innerW * (this.value - this.minimum).toShort()) / (this.maximum - this.minimum).toShort()
+            
+            // Draw progress bar
+            if (progressWidth > 0S) {
+                graphics.setForegroundPen(this.progressPen)
+                var progressX1 = this.borderWidths.left + this.padding.left
+                var progressY1 = this.borderWidths.top + this.padding.top
+                var progressX2 = progressX1 + progressWidth
+                var progressY2 = progressY1 + innerH - this.padding.top - this.padding.bottom
+                graphics.fillRect(progressX1, progressY1, progressX2, progressY2)
+            }
+
+            // Draw text if enabled
+            if (this.showText) {
+                var percentage = this.getPercentage()
+                var text = percentage.toString() + "%"
+                
+                graphics.setForegroundPen(this.textPen)
+                var textWidth = graphics.calculateStringWidth(text)
+                var textX = (innerW - textWidth.toShort()) / 2S + this.borderWidths.left + this.padding.left
+                var textY = (innerH - graphics.getCurrentFontSize().toShort()) / 2S + this.borderWidths.top + this.padding.top
+                
+                graphics.drawString(text, textX, textY)
+            }
+        }
+    }
+}

@@ -19,11 +19,31 @@ namespace Am.Ui
         private var pixelScaleX: UByte
         private var pixelScaleY: UByte
         private var pixelMetrics: PixelMetrics
+        private var title: String = ""
+        private var screenTitle: String = ""
 
         var font: Font
 
         fun getRootView(): View {
             return this.rootView
+        }
+
+        fun setTitle(title: String) {
+            this.title = title
+            this.setTitleNative(this.title, this.screenTitle)
+        }
+
+        fun getTitle(): String {
+            return this.title
+        }
+
+        fun setScreenTitle(screenTitle: String) {
+            this.screenTitle = screenTitle
+            this.setTitleNative(this.title, this.screenTitle)
+        }
+
+        fun getScreenTitle(): String {
+            return this.screenTitle
         }
 
         private fun setBorder(left: Short, top: Short, right: Short, bottom: Short) {
@@ -80,18 +100,29 @@ namespace Am.Ui
         private fun paint() {
             var graphics = this.getGraphics()
             graphics.requestRepaintAll()
-            if (this.rootView != null) {
-//                ("X offset: " + this.graphics.xOffset.toString()).println()
-//                if (this.repaintRequested) {
-                    if (this.fillBackground) {
-                        graphics.setForegroundPen(this.backgroundPen)
-                        graphics.fillRect(0S + this.border.left, 0S + this.border.top, this.width.toShort() - (1S + this.border.right), this.height.toShort() - (1S + this.border.bottom))
-                    }
-//                }
+            if (this.rootView != null) {               
+                // Set up clipping for the inner window area (excluding borders)
+                var innerX = this.border.left
+                var innerY = this.border.top
+                var innerWidth = this.width - (this.border.left + this.border.right).toUShort()
+                var innerHeight = this.height - (this.border.top + this.border.bottom).toUShort()
+//                ("Window setting clip: x=" + innerX.toString() + " y=" + innerY.toString() + " w=" + innerWidth.toString() + " h=" + innerHeight.toString()).println()
+                
+                var windowClipRect = new ClipRect(innerX, innerY, innerWidth, innerHeight)
+                graphics.pushClipRect(windowClipRect)
+                
+                if (this.fillBackground) {
+                    graphics.setForegroundPen(this.backgroundPen)
+                    graphics.fillRect(0S + this.border.left, 0S + this.border.top, this.width.toShort() - (1S + this.border.right), this.height.toShort() - (1S + this.border.bottom))
+                }
                 if (this.font != null) {
                     graphics.setFont(this.font)
                 }
+
                 this.rootView.paintAll(graphics)
+
+                graphics.popClipRect()                
+                // Restore clipping state
             }
             graphics.finalizeRepaintCycle()
             this.repaintRequested = false
@@ -103,7 +134,6 @@ namespace Am.Ui
             this.width = width
             this.height = height
             this.layout()
-            this.paint()
         }
 
         fun layout() {
@@ -119,8 +149,8 @@ namespace Am.Ui
             this.close()
         }
 
-        fun onKeyboardEvent(type: KeyboardEventType, key: UShort) {
-            this.rootView?.onKeyboardEvent(type, key)
+        fun onKeyboardEvent(type: KeyboardEventType, keyCode: UShort, keyChar: UShort) {
+            this.rootView?.onKeyboardEvent(type, keyCode, keyChar)
         }
 
         fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short) {
@@ -145,6 +175,10 @@ namespace Am.Ui
             return graphics.getCurrentFontSize()
         }
 
+        native fun copyToClipboard(text: String)
+        
+        native fun pasteFromClipboard(): String
+
         private fun getGraphics(): ViewContextGraphics  {
             return this.graphics
 //            return this.viewContext.getGraphics()
@@ -168,6 +202,7 @@ namespace Am.Ui
         native fun handleInput()
         native fun isOpen(): Bool
         private native fun refresh()
+        private native fun setTitleNative(windowTitle: String, screenTitle: String)
 
         private native fun open(x: Short, y: Short, width: UShort, height: UShort, screen: Screen, windowManager: WindowManager)
         native fun close()

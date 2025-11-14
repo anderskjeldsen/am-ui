@@ -1,5 +1,4 @@
-
-id: file-browser
+id: more-views
 version: 1.0.0
 type: application
 dependencies:
@@ -8,6 +7,9 @@ dependencies:
     type: git-repo
     tag: latest
     url: https://github.com/anderskjeldsen/am-lang-core.git
+  - id: am-imaging
+    type: local
+    path: ../../../am-imaging/
   - id: am-ui
     type: local
     path: ../../

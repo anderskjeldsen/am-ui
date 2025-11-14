@@ -138,13 +138,24 @@ namespace Am.Ui
             if (b1 || b2) {
                 var ix = this.x + this.margin.left
                 var iy = this.y + this.margin.top
+                
+                // Set clipping area to this view's bounds (excluding margins)
+                var viewWidth = this.width.toShort() - this.margin.left - this.margin.right
+                var viewHeight = this.height.toShort() - this.margin.top - this.margin.bottom
+                
+                var viewClipRect: ClipRect
+                var currentClip = graphics.getCurrentClipRect()
+                
+                viewClipRect = currentClip.createInnerClipRect(ix, iy, viewWidth.toUShort(), viewHeight.toUShort())                              
 
-//                ("Translate " + ix.toString() + "," + iy.toString()).println()
+                graphics.pushClipRect(viewClipRect)
 
                 graphics.translate(ix, iy)
                 this.paint(graphics)
                 this.markAsPainted()
                 graphics.translate(-ix, -iy)
+               
+                graphics.popClipRect()
             }
         }
 
@@ -156,7 +167,9 @@ namespace Am.Ui
             var b = this.repaintRequested
             if (!b) {
                 this.repaintRequested = true
-                this.viewContext.getWindow().requestRepaint()
+                if (this.viewContext != null) {
+                    this.viewContext.getWindow().requestRepaint()
+                }
             }
         }
 
@@ -221,7 +234,7 @@ namespace Am.Ui
             return null
         }
 
-        open fun onKeyboardEvent(type: KeyboardEventType, key: UShort): Bool {
+        open fun onKeyboardEvent(type: KeyboardEventType, keyCode: UShort, keyChar: UShort): Bool {
             return false
         }
 

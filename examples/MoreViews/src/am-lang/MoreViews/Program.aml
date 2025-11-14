@@ -1,0 +1,115 @@
+namespace MoreViews 
+{
+    // Example demonstrating the new Views: ImageView, ProgressBar, TextField, CheckBox, and Separator
+    class Program {
+        import Am.Ui
+        import Am.Lang
+        import Am.Imaging
+
+        static fun createExampleWindow(): Window {
+            var window = Window.openWindow(100S, 100S, 400US, 150US, null, null)
+            window.setTitle("More UI Views Example")
+            window.setScreenTitle("AmigaOS AmUI Example")
+            // Create main container
+            var vstack = new VStack(4S)
+            vstack.setDefaultPadding()
+            vstack.setDefaultBorder()
+            
+            // Add title label
+            var titleLabel = new Label("New UI Views Demonstration")
+            titleLabel.textPen = 3UB
+            vstack.addChild(titleLabel)
+
+
+            // Add separator
+            var separator1 = new Separator(SeparatorOrientation.Horizontal)
+            vstack.addChild(separator1)
+
+            // Create a sample image for ImageView demonstration
+            var sampleImage = Image.createARGB(64US, 32US)
+            // TODO: Fill with a simple pattern (blue background)
+            // Note: Direct pixel manipulation would require proper array access methods
+            
+            // Add ImageView
+            var imageView = new ImageView(sampleImage)
+            imageView.scaleToFit = true
+            imageView.maintainAspectRatio = true
+            imageView.setDefaultPadding()
+            imageView.setDefaultBorder()
+            vstack.addChild(imageView)
+            
+            // Add another separator
+            var separator2 = new Separator(SeparatorOrientation.Horizontal)
+            vstack.addChild(separator2)
+            
+            // Add TextField
+            var textField = new TextField()
+            textField.setPlaceholder("Enter your text here...")
+            textField.setDefaultPadding()
+            textField.setDefaultBorder()
+            vstack.addChild(textField)
+            
+            // Add CheckBox
+            var checkBox = new CheckBox("Enable feature", false, (cb) => {
+                ("Checkbox toggled: " + cb.isChecked().toString()).println()
+                return true
+            })
+            checkBox.setDefaultPadding()
+            vstack.addChild(checkBox)
+            
+            // Add ProgressBar
+            var progressBar = new ProgressBar(0, 100)
+            progressBar.setValue(75) // 75% complete
+            progressBar.setDefaultPadding()
+            progressBar.setDefaultBorder()
+            vstack.addChild(progressBar)
+            
+            // Add action buttons in horizontal layout
+            var buttonStack = new HStack(8S)
+            buttonStack.setDefaultPadding()
+            
+            var updateButton = new Button("Update Progress", (view) => {
+                // Simulate progress update            
+                var currentValue = progressBar.getValue()
+                var newValue = (currentValue + 10) % 110
+                progressBar.setValue(newValue)
+                return true
+            })
+            updateButton.setDefaultPadding()
+            updateButton.setDefaultBorder()
+            buttonStack.addChild(updateButton)
+            
+            var resetButton = new Button("Reset", (view) => {
+                progressBar.setValue(0)
+                textField.setText("")
+                checkBox.setChecked(false)
+                return true
+            })
+            resetButton.setDefaultPadding()
+            resetButton.setDefaultBorder()
+            buttonStack.addChild(resetButton)
+            
+            vstack.addChild(buttonStack)
+            
+            // Set the main view for the window
+
+            window.setRootView(vstack)
+            
+            window.layout()
+            window.requestRepaint()
+
+            return window
+        }
+        
+        static fun main() {
+            var w = Program.createExampleWindow()
+            ("Example window created with new Views!").println()
+            
+            while(w.isOpen()) {
+                w.handleInput()
+            }
+
+            // Main event loop would go here
+        }
+    }
+}

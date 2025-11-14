@@ -3,6 +3,7 @@
 #include <amigaos/Am/Ui/ViewContextGraphics.h>
 #include <Am/Ui/Graphics.h>
 #include <Am/Ui/ViewContext.h>
+#include <Am/Ui/ClipRect.h>
 #include <Am/Lang/UByte.h>
 #include <Am/Lang/Short.h>
 
@@ -23,6 +24,9 @@
 
 
 #include <libc/core_inline_functions.h>
+
+// Forward declaration for AmigaOS layers function (not in standard headers)
+struct Region *InstallClipRegion(struct Layer *layer, struct Region *region);
 
 short translated_x(aobject *g, short x) {
 	short tx = g->object_properties.class_object_properties.properties[Am_Ui_Graphics_P_xOffset].nullable_value.value.short_value;
@@ -339,4 +343,190 @@ __exit: ;
 	}
 	return __result;
 };
+
+function_result Am_Ui_ViewContextGraphics_drawImage_0(aobject * const this, aobject * image, short x, short y, short width, short height)
+{
+	function_result __result = { .has_return_value = false };
+	bool __returning = false;
+	if (this != NULL) {
+		__increase_reference_count(this);
+	}
+	if (image != NULL) {
+		__increase_reference_count(image);
+	}
+
+	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
+	struct RastPort *rp = window_data->window->RPort;
+
+	short tx = translated_x(this, x);
+	short ty = translated_y(this, y);
+
+	// TODO: Implement actual image drawing using Am.Imaging.Image data
+	// For now, just draw a placeholder rectangle
+	SetAPen(rp, 2); // Use pen 2 for image placeholder
+	RectFill(rp, tx, ty, tx + width - 1, ty + height - 1);
+
+__exit: ;
+	if (window != NULL) {
+		__decrease_reference_count(window);
+	}
+	if (this != NULL) {
+		__decrease_reference_count(this);
+	}
+	if (image != NULL) {
+		__decrease_reference_count(image);
+	}
+	return __result;
+};
+
+function_result Am_Ui_ViewContextGraphics_setClipRect_0(aobject * const this, aobject * const clipRect)
+{
+	function_result __result = { .has_return_value = false };
+	bool __returning = false;
+	if (this != NULL) {
+		__increase_reference_count(this);
+	}
+	if (clipRect != NULL) {
+		__increase_reference_count(clipRect);
+	}
+
+	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
+	
+	// Add the current clipRect to the master region
+	if (clipRect != NULL) {
+		InstallClipRegion(window_data->window->WLayer, NULL);
+		ClearRegion(window_data->clip_region);
+
+		// Get the ClipRect properties (x, y, width, height)
+		short x = clipRect->object_properties.class_object_properties.properties[Am_Ui_ClipRect_P_x].nullable_value.value.short_value;
+		short y = clipRect->object_properties.class_object_properties.properties[Am_Ui_ClipRect_P_y].nullable_value.value.short_value;
+		unsigned short width = clipRect->object_properties.class_object_properties.properties[Am_Ui_ClipRect_P_width].nullable_value.value.ushort_value;
+		unsigned short height = clipRect->object_properties.class_object_properties.properties[Am_Ui_ClipRect_P_height].nullable_value.value.ushort_value;
+		
+		// Create a rectangle and OR it into the master region
+		struct Rectangle rect;
+		rect.MinX = x;
+		rect.MinY = y;
+		rect.MaxX = x + width - 1;
+		rect.MaxY = y + height - 1;
+
+		OrRectRegion(window_data->clip_region, &rect);
+		InstallClipRegion(window_data->window->WLayer, window_data->clip_region);
+//		BeginRefresh(window_data->window);
+	}
+
+__exit: ;
+	if (window != NULL) {
+		__decrease_reference_count(window);
+	}
+	if (this != NULL) {
+		__decrease_reference_count(this);
+	}
+	if (clipRect != NULL) {
+		__decrease_reference_count(clipRect);
+	}
+	return __result;
+};
+
+function_result Am_Ui_ViewContextGraphics_clearClipRect_0(aobject * const this)
+{
+	function_result __result = { .has_return_value = false };
+	bool __returning = false;
+	if (this != NULL) {
+		__increase_reference_count(this);
+	}
+
+	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
+
+	InstallClipRegion(window_data->window->WLayer, NULL);
+
+__exit: ;
+	if (window != NULL) {
+		__decrease_reference_count(window);
+	}
+	if (this != NULL) {
+		__decrease_reference_count(this);
+	}
+	return __result;
+};
+
+function_result Am_Ui_ViewContextGraphics_beginPainting_0(aobject * const this, aobject * const clipRect) {
+	function_result __result = { .has_return_value = false };
+	bool __returning = false;
+	if (this != NULL) {
+		__increase_reference_count(this);
+	}
+	if (clipRect != NULL) {
+		__increase_reference_count(clipRect);
+	}
+
+	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
+	
+	// Add the current clipRect to the master region
+	if (clipRect != NULL) {
+		InstallClipRegion(window_data->window->WLayer, NULL);
+		ClearRegion(window_data->clip_region);
+
+		// Get the ClipRect properties (x, y, width, height)
+		short x = clipRect->object_properties.class_object_properties.properties[Am_Ui_ClipRect_P_x].nullable_value.value.short_value;
+		short y = clipRect->object_properties.class_object_properties.properties[Am_Ui_ClipRect_P_y].nullable_value.value.short_value;
+		unsigned short width = clipRect->object_properties.class_object_properties.properties[Am_Ui_ClipRect_P_width].nullable_value.value.ushort_value;
+		unsigned short height = clipRect->object_properties.class_object_properties.properties[Am_Ui_ClipRect_P_height].nullable_value.value.ushort_value;
+		
+		// Create a rectangle and OR it into the master region
+		struct Rectangle rect;
+		rect.MinX = x;
+		rect.MinY = y;
+		rect.MaxX = x + width - 1;
+		rect.MaxY = y + height - 1;
+
+		OrRectRegion(window_data->clip_region, &rect);
+		InstallClipRegion(window_data->window->WLayer, window_data->clip_region);
+//		BeginRefresh(window_data->window);
+	}
+
+__exit: ;
+	if (window != NULL) {
+		__decrease_reference_count(window);
+	}
+	if (this != NULL) {
+		__decrease_reference_count(this);
+	}
+	if (clipRect != NULL) {
+		__decrease_reference_count(clipRect);
+	}
+	return __result;
+}
+
+function_result Am_Ui_ViewContextGraphics_endPainting_0(aobject * const this)
+{
+	function_result __result = { .has_return_value = false };
+	bool __returning = false;
+	if (this != NULL) {
+		__increase_reference_count(this);
+	}
+
+	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
+
+	InstallClipRegion(window_data->window->WLayer, NULL);
+	// Clear the region
+//	ClearRegion(window_data->clip_region);
+
+//	EndRefresh(window_data->window, FALSE);
+
+__exit: ;
+	if (window != NULL) {
+		__decrease_reference_count(window);
+	}
+	if (this != NULL) {
+		__decrease_reference_count(this);
+	}
+	return __result;
+};
+
 

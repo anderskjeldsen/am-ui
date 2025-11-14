@@ -1,0 +1,219 @@
+namespace Am.Ui 
+{
+
+    class CheckBox(var text: String, var checked: Bool, var changeListener: (checkBox: CheckBox) => Bool) : View {
+        import Am.Lang
+
+        private var hovered: Bool = false
+        private var active: Bool = false
+        private var label: Label
+        
+        var textPen: UByte = 1UB
+        var backgroundPen: UByte = 0UB
+        var checkMarkPen: UByte = 1UB
+        var checkedBackgroundPen: UByte = 0UB
+        
+        private var borderPens: BorderPens = new BorderPens(1UB, 1UB, 2UB, 2UB)
+        private var checkedBorderPens: BorderPens = new BorderPens(2UB, 2UB, 1UB, 1UB)
+
+        fun isChecked(): Bool {
+            return this.checked
+        }
+
+        fun setChecked(checked: Bool) {
+            if (this.checked != checked) {
+                this.checked = checked
+                this.requestRepaint()
+                
+                var cl = this.changeListener
+                if (cl != null) {
+                    cl(this)
+                }
+            }
+        }
+
+        fun toggle() {
+            this.setChecked(!this.checked)
+        }
+
+        private fun ensureLabel(): Label {
+            if (this.label == null) {
+                this.label = new Label(this.text)
+            }
+            return this.label
+        }
+
+        private fun getCheckBoxSize(): Short {
+            var vc = this.getViewContext()
+            var fontHeight = 12S
+            if (vc != null) { 
+                fontHeight = vc.getWindow().getCurrentFontSize().toShort()
+            }
+            return fontHeight
+        }
+
+        override fun setDefaultPadding() {
+            this.setPadding(2S)
+        }
+
+        override fun setDefaultBorder() {
+            this.setBorderWidths(0S)
+        }
+
+        override fun onAttach(viewContext: ViewContext) {
+            base.onAttach(viewContext)
+            var label = this.ensureLabel()
+            label.onAttach(viewContext)
+        }
+
+        override fun onDetach() {
+            base.onDetach()
+            var label = this.ensureLabel()
+            label.onDetach()
+        }
+
+        override fun minHeight(): Short {
+            var checkBoxSize = this.getCheckBoxSize()
+            var label = this.ensureLabel()
+            var labelHeight = label.minHeight()
+            var maxHeight = labelHeight
+            if (checkBoxSize > labelHeight) {
+                maxHeight = checkBoxSize
+            }
+            return maxHeight + base.minHeight()
+        }
+
+        override fun minWidth(): Short {
+            var checkBoxSize = this.getCheckBoxSize()
+            var label = this.ensureLabel()
+            var spacing = 4S
+            return checkBoxSize + spacing + label.minWidth() + base.minWidth()
+        }
+
+        override fun layout(x: Short, y: Short, width: UShort, height: UShort) {
+            base.layout(x, y, width, height)
+            
+            var label = this.ensureLabel()
+            var checkBoxSize = this.getCheckBoxSize()
+            var spacing = 4S
+            
+            // Position label to the right of checkbox
+            var labelX = this.margin.left + this.borderWidths.left + this.padding.left + checkBoxSize + spacing
+            var labelY = this.margin.top + this.borderWidths.top + this.padding.top
+            var labelWidth = this.innerWidth() - checkBoxSize - spacing
+            var labelHeight = label.minHeight()
+            
+            label.layout(labelX, labelY, labelWidth.toUShort(), labelHeight.toUShort())
+        }
+
+        override fun paint(graphics: Graphics) {
+            base.paint(graphics)
+
+            var checkBoxSize = this.getCheckBoxSize()
+            var checkBoxX = this.margin.left + this.borderWidths.left + this.padding.left
+            var checkBoxY = this.margin.top + this.borderWidths.top + this.padding.top
+            
+            // Adjust Y to center checkbox with text
+            var label = this.ensureLabel()
+            var labelHeight = label.minHeight()
+            if (labelHeight > checkBoxSize) {
+                checkBoxY = checkBoxY + (labelHeight - checkBoxSize) / 2S
+            }
+
+            // Draw checkbox background
+            var bgPen: UByte = 0UB
+            if (this.checked) {
+                bgPen = this.checkedBackgroundPen
+            } else {
+                bgPen = this.backgroundPen
+            }
+            graphics.setForegroundPen(bgPen)
+            graphics.fillRect(checkBoxX, checkBoxY, checkBoxX + checkBoxSize, checkBoxY + checkBoxSize)
+
+            // Draw checkbox border
+            var borderPens: BorderPens
+            if (this.checked) {
+                borderPens = this.checkedBorderPens
+            } else {
+                borderPens = this.borderPens
+            }
+            graphics.setForegroundPen(borderPens.top)
+            graphics.drawLine(checkBoxX, checkBoxY, checkBoxX + checkBoxSize - 1S, checkBoxY)
+            
+            graphics.setForegroundPen(borderPens.left)
+            graphics.drawLine(checkBoxX, checkBoxY, checkBoxX, checkBoxY + checkBoxSize - 1S)
+            
+            graphics.setForegroundPen(borderPens.right)
+            graphics.drawLine(checkBoxX + checkBoxSize - 1S, checkBoxY, checkBoxX + checkBoxSize - 1S, checkBoxY + checkBoxSize - 1S)
+            
+            graphics.setForegroundPen(borderPens.bottom)
+            graphics.drawLine(checkBoxX, checkBoxY + checkBoxSize - 1S, checkBoxX + checkBoxSize - 1S, checkBoxY + checkBoxSize - 1S)
+
+            // Draw checkmark if checked
+            if (this.checked) {
+                graphics.setForegroundPen(this.checkMarkPen)
+                
+                // Draw a simple checkmark
+                var margin = 2S
+                var startX = checkBoxX + margin
+                var startY = checkBoxY + checkBoxSize / 2S
+                var midX = checkBoxX + checkBoxSize / 2S
+                var midY = checkBoxY + checkBoxSize - margin - 1S
+                var endX = checkBoxX + checkBoxSize - margin - 1S
+                var endY = checkBoxY + margin
+                
+                graphics.drawLine(startX, startY, midX, midY)
+                graphics.drawLine(midX, midY, endX, endY)
+            }
+
+            // Draw label
+            var label2 = this.ensureLabel()
+            label2.backgroundPen = this.backgroundPen
+            label2.textPen = this.textPen
+            label2.paintAll(graphics)
+        }
+
+        override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
+            var wasHovered = this.hovered
+
+            if (this.contains(x, y)) {
+                this.hovered = true
+
+                if (type == MouseEventType.up && button == MouseButton.left) {
+                    this.active = false
+                    this.toggle()
+                    this.requestRepaint()
+                    return true
+                } else if (type == MouseEventType.down && button == MouseButton.left) {
+                    this.active = true
+                    this.requestRepaint()
+                    return true
+                } else if (type == MouseEventType.move) {
+                    if (!wasHovered && this.active) {
+                        this.requestRepaint()
+                    }
+                }
+            } else {
+                this.hovered = false
+
+                if (type == MouseEventType.up && this.active) {
+                    this.active = false
+                    this.requestRepaint()
+                } else if (wasHovered && this.active) {
+                    this.requestRepaint()
+                }
+            }
+            return false
+        }
+
+        override fun onKeyboardEvent(type: KeyboardEventType, keyCode: UShort, keyChar: UShort): Bool {
+            if (type == KeyboardEventType.down) {
+                if (keyChar == 32US) { // Space key
+                    this.toggle()
+                    return true
+                }
+            }
+            return false
+        }
+    }
+}
