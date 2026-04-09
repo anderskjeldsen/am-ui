@@ -10,17 +10,22 @@
 #include <amigaos/amiga.h>
 #include <amigaos/Am/Ui/Window.h>
 #include <amigaos/Am/Ui/Screen.h>
+#include <amigaos/Am/Ui/Bitmap.h>
+#include <Am/Ui/Bitmap.h>
 #include <libc/Am/Lang/String.h>
 
 #include <exec/types.h>
 #include <intuition/intuition.h>
 #include <libraries/gadtools.h>
 #include <graphics/gfx.h>
+#include <graphics/scale.h>
+#include <cybergraphics/cybergraphics.h>
 
 #include <proto/exec.h>
 #include <proto/intuition.h>
 #include <proto/gadtools.h>
 #include <proto/graphics.h>
+#include <proto/cybergraphics.h>
 
 
 #include <libc/core_inline_functions.h>
@@ -522,6 +527,103 @@ function_result Am_Ui_ViewContextGraphics_endPainting_0(aobject * const this)
 __exit: ;
 	if (window != NULL) {
 		__decrease_reference_count(window);
+	}
+	if (this != NULL) {
+		__decrease_reference_count(this);
+	}
+	return __result;
+};
+
+// ---------------------------------------------------------------------------
+// drawBitmap: blit a Bitmap to the window RastPort, scaling if necessary.
+//
+// When source size == dest size: BltBitMapRastPort (fast, no copy).
+// When scaling is needed: allocate a temporary bitmap, BitMapScale into it,
+//   then BltBitMapRastPort the result, then free the temp bitmap.
+// ---------------------------------------------------------------------------
+
+function_result Am_Ui_ViewContextGraphics_drawBitmap_0(aobject * const this,
+                                                         aobject * bitmap,
+                                                         short x, short y,
+                                                         short destWidth, short destHeight)
+{
+	function_result __result = { .has_return_value = false };
+	bool __returning = false;
+	if (this != NULL) {
+		__increase_reference_count(this);
+	}
+	if (bitmap != NULL) {
+		__increase_reference_count(bitmap);
+	}
+
+	if (bitmap == NULL) goto __exit;
+
+	{
+		Am_Ui_Bitmap_data * const bitmapData =
+			(Am_Ui_Bitmap_data *)bitmap->object_properties.class_object_properties.object_data.value.custom_value;
+		if (bitmapData == NULL || bitmapData->bitmap == NULL) goto __exit;
+
+		aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
+		Am_Ui_Window_data * const window_data =
+			(Am_Ui_Window_data * const)window->object_properties.class_object_properties.object_data.value.custom_value;
+		struct RastPort * const rp = window_data->window->RPort;
+
+		short tx = translated_x(this, x);
+		short ty = translated_y(this, y);
+
+		unsigned short srcW = bitmap->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_width].nullable_value.value.ushort_value;
+		unsigned short srcH = bitmap->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_height].nullable_value.value.ushort_value;
+
+		if (destWidth == (short)srcW && destHeight == (short)srcH) {
+			/* 1:1 blit — no scaling needed */
+			BltBitMapRastPort(bitmapData->bitmap, 0, 0,
+			                  rp, tx, ty,
+			                  srcW, srcH, 0xC0);
+		} else {
+			/* Scale into a temporary bitmap, then blit to screen */
+			ULONG depth = GetBitMapAttr(bitmapData->bitmap, BMA_DEPTH);
+			struct BitMap *scaledBitmap =
+				AllocBitMap(destWidth, destHeight, depth,
+				            BMF_CLEAR | BMF_MINPLANES, bitmapData->bitmap);
+			if (scaledBitmap != NULL) {
+				struct BitScaleArgs bsa;
+				memset(&bsa, 0, sizeof(bsa));
+				bsa.bsa_SrcBitMap    = bitmapData->bitmap;
+				bsa.bsa_DestBitMap   = scaledBitmap;
+				bsa.bsa_SrcX         = 0;
+				bsa.bsa_SrcY         = 0;
+				bsa.bsa_SrcWidth     = srcW;
+				bsa.bsa_SrcHeight    = srcH;
+				bsa.bsa_XSrcFactor   = srcW;
+				bsa.bsa_YSrcFactor   = srcH;
+				bsa.bsa_DestX        = 0;
+				bsa.bsa_DestY        = 0;
+				bsa.bsa_DestWidth    = destWidth;
+				bsa.bsa_DestHeight   = destHeight;
+				bsa.bsa_XDestFactor  = destWidth;
+				bsa.bsa_YDestFactor  = destHeight;
+				bsa.bsa_Flags        = 0;
+				BitMapScale(&bsa);
+				BltBitMapRastPort(scaledBitmap, 0, 0,
+				                  rp, tx, ty,
+				                  destWidth, destHeight, 0xC0);
+				FreeBitMap(scaledBitmap);
+			} else {
+				/* Fallback: blit unscaled if we ran out of memory */
+				BltBitMapRastPort(bitmapData->bitmap, 0, 0,
+				                  rp, tx, ty,
+				                  srcW, srcH, 0xC0);
+			}
+		}
+
+		if (window != NULL) {
+			__decrease_reference_count(window);
+		}
+	}
+
+__exit: ;
+	if (bitmap != NULL) {
+		__decrease_reference_count(bitmap);
 	}
 	if (this != NULL) {
 		__decrease_reference_count(this);

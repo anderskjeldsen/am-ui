@@ -1,0 +1,77 @@
+namespace Am.Ui
+{
+    // Renders a Bitmap within the view's bounds, scaling to fit when requested.
+    class BitmapView(var bitmap: Bitmap) : View {
+        import Am.Lang
+
+        var scaleToFit: Bool = true
+        var maintainAspectRatio: Bool = true
+
+        fun setBitmap(bitmap: Bitmap) {
+            this.bitmap = bitmap
+            this.requestRepaint()
+        }
+
+        override fun minWidth(): Short {
+            if (this.bitmap != null) {
+                return this.bitmap.getWidth().toShort() + base.minWidth()
+            }
+            return base.minWidth()
+        }
+
+        override fun minHeight(): Short {
+            if (this.bitmap != null) {
+                return this.bitmap.getHeight().toShort() + base.minHeight()
+            }
+            return base.minHeight()
+        }
+
+        override fun paint(graphics: Graphics) {
+            base.paint(graphics)
+
+            if (this.bitmap == null) {
+                return
+            }
+
+            var innerW = this.innerWidth()
+            var innerH = this.innerHeight()
+            var bmpW = this.bitmap.getWidth().toShort()
+            var bmpH = this.bitmap.getHeight().toShort()
+
+            var drawX = 0S
+            var drawY = 0S
+            var drawW = bmpW
+            var drawH = bmpH
+
+            if (this.scaleToFit) {
+                if (this.maintainAspectRatio) {
+                    // Pick the scale factor that fits both dimensions
+                    var useXScale = (innerW * bmpH) <= (innerH * bmpW)
+
+                    if (useXScale) {
+                        drawW = innerW
+                        drawH = (bmpH * innerW) / bmpW
+                    } else {
+                        drawW = (bmpW * innerH) / bmpH
+                        drawH = innerH
+                    }
+
+                    // Center within inner area
+                    drawX = (innerW - drawW) / 2S
+                    drawY = (innerH - drawH) / 2S
+                } else {
+                    drawW = innerW
+                    drawH = innerH
+                    drawX = 0S
+                    drawY = 0S
+                }
+            } else {
+                // Original size, centred
+                drawX = (innerW - bmpW) / 2S
+                drawY = (innerH - bmpH) / 2S
+            }
+
+            graphics.drawBitmap(this.bitmap, drawX, drawY, drawW, drawH)
+        }
+    }
+}

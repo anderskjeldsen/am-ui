@@ -9,6 +9,8 @@
 #include <morphos-ppc/morphos.h>
 #include <morphos-ppc/Am/Ui/Window.h>
 #include <morphos-ppc/Am/Ui/Screen.h>
+#include <morphos-ppc/Am/Ui/Bitmap.h>
+#include <Am/Ui/Bitmap.h>
 #include <libc/Am/Lang/String.h>
 
 #include <exec/types.h>
@@ -376,3 +378,15 @@ __exit: ;
 	return __result;
 };
 
+
+// drawBitmap: MorphOS stub (Bitmap true-colour support is AmigaOS-only for now)
+function_result Am_Ui_ViewContextGraphics_drawBitmap_0(aobject * const this,
+                                                         aobject * bitmap,
+                                                         short x, short y,
+                                                         short destWidth, short destHeight)
+{
+	function_result __result = { .has_return_value = false };
+	bool __returning = false;
+__exit: ;
+	return __result;
+};
