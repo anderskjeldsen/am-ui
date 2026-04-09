@@ -1,12 +1,8 @@
-id: more-views
+id: image-viewer
 version: 1.0.0
 type: application
 dependencies:
   - id: am-lang-core
-#    realm: github
-#    type: git-repo
-#    tag: latest
-#    url: https://github.com/anderskjeldsen/am-lang-core.git
     type: local
     path: ../../../am-lang-core
   - id: am-imaging
@@ -15,6 +11,9 @@ dependencies:
   - id: am-ui
     type: local
     path: ../../
+  - id: am-png
+    type: local
+    path: ../../../am-png
 platforms:
   - id: libc
     abstract: true
@@ -25,7 +24,7 @@ platforms:
     linkerCommand: m68k-amigaos-gcc
     additionalHeaders:
     additionalAsmSources:
-    additionalCSources: 
+    additionalCSources:
     additionalIncludePaths:
     gccAdditionalOptions:
       - -noixemul
@@ -37,7 +36,7 @@ platforms:
     gccCommand: ppc-morphos-gcc -O3
     additionalHeaders:
     additionalAsmSources:
-    additionalCSources: 
+    additionalCSources:
     additionalIncludePaths:
     gccAdditionalOptions:
       - -noixemul

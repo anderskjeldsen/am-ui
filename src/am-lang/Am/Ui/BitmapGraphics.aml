@@ -1,34 +1,33 @@
-
-namespace Am.Ui 
+namespace Am.Ui
 {
-
-    native class ViewContextGraphics(private var viewContext: ViewContext) : Graphics {
+    // A Graphics context backed by a Bitmap's RastPort.
+    // Allows drawing onto an off-screen Bitmap using the same Graphics API
+    // used for on-screen rendering.
+    // Use RenderableBitmap as the entry point rather than constructing this directly.
+    native class BitmapGraphics(private var bitmap: Bitmap) : Graphics {
         import Am.Lang
         import Am.Imaging
-        private fun getWindow(): Window {
-            return this.viewContext.getWindow()
-        }
+
+        // Called once after construction to wire the RastPort to the bitmap.
+        native fun attach()
+
         native override fun setForegroundPen(pen: UByte)
         native override fun setBackgroundPen(pen: UByte)
         native override fun drawLine(x: Short, y: Short, x2: Short, y2: Short)
-        native override fun eraseRect(x: Short, y: Short, x2: Short, y2: Short)
         native override fun fillRect(x: Short, y: Short, x2: Short, y2: Short)
+        native override fun eraseRect(x: Short, y: Short, x2: Short, y2: Short)
         native override fun drawString(text: String, x: Short, y: Short)
         native override fun calculateStringWidth(text: String): UShort
         native override fun getCurrentFontSize(): UByte
         native override fun setFont(font: Font)
         native override fun drawImage(image: Am.Imaging.Image, x: Short, y: Short, width: Short, height: Short)
         native override fun drawBitmap(bitmap: Bitmap, x: Short, y: Short, destWidth: Short, destHeight: Short)
-        
-        // Native AmigaOS clipping using InstallClipRegion
+
+        // Clipping is not supported on plain off-screen bitmaps (no Layer).
+        // These are intentional no-ops.
         native override fun setClipRect(clipRect: ClipRect)
         native override fun clearClipRect()
-
         native override fun beginPainting(clipRect: ClipRect)
         native override fun endPainting()
-
     }
-
-
 }
-

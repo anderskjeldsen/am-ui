@@ -5,7 +5,10 @@
 #include <Am/Ui/ViewContext.h>
 #include <Am/Lang/UByte.h>
 #include <Am/Lang/Short.h>
+#include <Am/Ui/Bitmap.h>
 #include <libc/core_inline_functions.h>
 
-// This file exists for libc compatibility but contains no implementations
-// All ViewContextGraphics functions are implemented in the AmigaOS version
+// All ViewContextGraphics implementations live in the platform-specific native
+// files (amigaos / morphos-ppc). This file is intentionally empty to avoid
+// duplicate symbol errors when both libc and platform objects are linked.
+

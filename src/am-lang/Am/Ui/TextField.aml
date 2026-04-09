@@ -708,7 +708,7 @@ namespace Am.Ui
             } else if (this.isDragging && type == MouseEventType.up && button == MouseButton.left) {
                 // Always stop dragging on mouse up, regardless of where the mouse is
                 this.isDragging = false
-                return true
+                return isInside
             }
             
             return false

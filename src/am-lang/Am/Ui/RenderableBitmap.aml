@@ -1,0 +1,51 @@
+namespace Am.Ui
+{
+    // Combines a Bitmap with a BitmapGraphics rendering context.
+    // Use this when you need to draw onto an off-screen bitmap.
+    //
+    // Example:
+    //   var rb = RenderableBitmap.empty(320us, 200us)
+    //   rb.graphics.fillRect(0s, 0s, 319s, 199s)
+    //   view.setBitmap(rb.getBitmap())
+    class RenderableBitmap {
+        import Am.Lang
+        import Am.Imaging
+
+        private var bitmap: Bitmap
+        var graphics: BitmapGraphics
+
+        // Factory: allocate a blank renderable bitmap of the given size.
+        static fun empty(width: UShort, height: UShort): RenderableBitmap {
+            var rb = new RenderableBitmap()
+            rb.bitmap = Bitmap.empty(width, height)
+            rb.graphics = new BitmapGraphics(rb.bitmap)
+            rb.graphics.attach()
+            return rb
+        }
+
+        // Factory: create a renderable bitmap from an image.
+        static fun fromImage(image: Am.Imaging.Image): RenderableBitmap {
+            var rb = new RenderableBitmap()
+            rb.bitmap = Bitmap.fromImage(image)
+            rb.graphics = new BitmapGraphics(rb.bitmap)
+            rb.graphics.attach()
+            return rb
+        }
+
+        fun getBitmap(): Bitmap {
+            return this.bitmap
+        }
+
+        fun getGraphics(): BitmapGraphics {
+            return this.graphics
+        }
+
+        fun getWidth(): UShort {
+            return this.bitmap.getWidth()
+        }
+
+        fun getHeight(): UShort {
+            return this.bitmap.getHeight()
+        }
+    }
+}

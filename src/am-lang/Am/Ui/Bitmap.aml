@@ -1,0 +1,46 @@
+namespace Am.Ui
+{
+    // A hardware bitmap backed by a native AmigaOS struct BitMap (CyberGraphX true color).
+    // Create via the static factory methods rather than constructing directly.
+    native class Bitmap {
+        import Am.Lang
+        import Am.Imaging
+
+        var width: UShort
+        var height: UShort
+        var pixelFormat: BitmapPixelFormat
+
+        // Create an empty (cleared) true-colour bitmap.
+        private native fun createEmpty(width: UShort, height: UShort)
+
+        // Populate the bitmap from an Am.Imaging.Image.
+        // Supports ARGB images; uses CyberGraphX WritePixelArray on AmigaOS.
+        private native fun createFromImage(image: Am.Imaging.Image)
+
+        fun getWidth(): UShort {
+            return this.width
+        }
+
+        fun getHeight(): UShort {
+            return this.height
+        }
+
+        fun getPixelFormat(): BitmapPixelFormat {
+            return this.pixelFormat
+        }
+
+        // Factory: allocate a blank bitmap of the given size.
+        static fun empty(width: UShort, height: UShort): Bitmap {
+            var bmp = new Bitmap()
+            bmp.createEmpty(width, height)
+            return bmp
+        }
+
+        // Factory: create a bitmap from an image.
+        static fun fromImage(image: Am.Imaging.Image): Bitmap {
+            var bmp = new Bitmap()
+            bmp.createFromImage(image)
+            return bmp
+        }
+    }
+}
