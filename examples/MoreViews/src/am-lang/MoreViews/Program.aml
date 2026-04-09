@@ -51,7 +51,7 @@ namespace MoreViews
             
             // Add CheckBox
             var checkBox = new CheckBox("Enable feature", false, (cb) => {
-                ("Checkbox toggled: " + cb.isChecked().toString()).println()
+//                ("Checkbox toggled: " + cb.isChecked().toString()).println()
                 return true
             })
             checkBox.setDefaultPadding()
