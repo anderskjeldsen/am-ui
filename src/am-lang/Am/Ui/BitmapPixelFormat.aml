@@ -1,0 +1,7 @@
+namespace Am.Ui
+{
+    // Pixel format for Bitmap. ZRGB = 32-bit, first byte unused (0x00RRGGBB).
+    enum BitmapPixelFormat {
+        ZRGB = 1
+    }
+}

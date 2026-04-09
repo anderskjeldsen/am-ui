@@ -139,6 +139,7 @@ namespace Am.Ui
         abstract fun setClipRect(clipRect: ClipRect)
         abstract fun clearClipRect()
         abstract fun drawImage(image: Am.Imaging.Image, x: Short, y: Short, width: Short, height: Short)
+        abstract fun drawBitmap(bitmap: Bitmap, x: Short, y: Short, destWidth: Short, destHeight: Short)
         abstract fun beginPainting(clipRect: ClipRect)
         abstract fun endPainting()
     }
