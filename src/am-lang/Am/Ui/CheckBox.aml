@@ -5,7 +5,7 @@ namespace Am.Ui
         import Am.Lang
 
         private var hovered: Bool = false
-        private var active: Bool = false
+        private var active: Bool = false // we have clicked it, but not released it
         private var label: Label
         
         var textPen: UByte = 1UB
