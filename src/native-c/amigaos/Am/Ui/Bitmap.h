@@ -7,8 +7,9 @@
 
 // Native backing data for Am.Ui.Bitmap on AmigaOS.
 // bitmap: the hardware BitMap (allocated via CyberGraphX/AllocBitMap)
-// Note: Bitmap does not own a RastPort; BitmapGraphics owns the RastPort
-// and wires it to this bitmap in BitmapGraphics.attach().
+// Note: Bitmap does not own a RastPort.
+// Layer-backed graphics contexts (through RenderableBitmap/LayerGraphics)
+// create/wire the RastPort when needed.
 typedef struct _Am_Ui_Bitmap_data Am_Ui_Bitmap_data;
 struct _Am_Ui_Bitmap_data {
     struct BitMap *bitmap;
