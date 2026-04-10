@@ -19,7 +19,7 @@ namespace ImageViewer
 
             // Convert the image to a hardware bitmap (CyberGraphX true colour).
             var bitmap = Bitmap.fromImage(image)
-
+            "bitmap initialized"
             // Open a window sized to the image (capped at a sensible maximum).
             var winW = imgW
             var winH = imgH

@@ -29,6 +29,13 @@ namespace Am.Ui
             return this.pixelFormat
         }
 
+        // Create a BitmapGraphics context attached to this bitmap.
+        fun createGraphics(): BitmapGraphics {
+            var graphics = new BitmapGraphics(this)
+            graphics.attach()
+            return graphics
+        }
+
         // Factory: allocate a blank bitmap of the given size.
         static fun empty(width: UShort, height: UShort): Bitmap {
             var bmp = new Bitmap()
@@ -37,7 +44,7 @@ namespace Am.Ui
         }
 
         // Factory: create a bitmap from an image.
-        static fun fromImage(image: Am.Imaging.Image): Bitmap {
+        static fun fromImage(image: Image): Bitmap {
             var bmp = new Bitmap()
             bmp.createFromImage(image)
             return bmp
