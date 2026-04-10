@@ -1,15 +1,18 @@
 #include <libc/core.h>
-#include <Am/Ui/BitmapGraphics.h>
-#include <amigaos/Am/Ui/BitmapGraphics.h>
+#include <Am/Ui/LayerGraphics.h>
+#include <amigaos/Am/Ui/LayerGraphics.h>
+#include <Am/Ui/RenderableBitmap.h>
+#include <amigaos/Am/Ui/RenderableBitmap.h>
 #include <Am/Ui/Bitmap.h>
 #include <amigaos/Am/Ui/Bitmap.h>
 #include <Am/Ui/Font.h>
+#include <Am/Ui/ClipRect.h>
 #include <Am/Imaging/Image.h>
 #include <libc/Am/Lang/String.h>
-#include <amigaos/amiga.h>
 
 #include <exec/types.h>
 #include <graphics/gfx.h>
+#include <graphics/layers.h>
 #include <graphics/rastport.h>
 #include <graphics/scale.h>
 #include <graphics/text.h>
@@ -17,41 +20,75 @@
 
 #include <proto/exec.h>
 #include <proto/graphics.h>
+#include <proto/layers.h>
 #include <proto/cybergraphics.h>
 
 #include <libc/core_inline_functions.h>
 
-// ---------------------------------------------------------------------------
-// Helpers: read xOffset/yOffset from the Graphics base
-// (same defines as ViewContextGraphics uses: Am_Ui_Graphics_P_xOffset/yOffset)
-// ---------------------------------------------------------------------------
-
-static short bg_translated_x(aobject *g, short x)
-{
+short lg_translated_x(aobject *g, short x) {
     short tx = g->object_properties.class_object_properties.properties[Am_Ui_Graphics_P_xOffset].nullable_value.value.short_value;
     return tx + x;
 }
 
-static short bg_translated_y(aobject *g, short y)
-{
+short lg_translated_y(aobject *g, short y) {
     short ty = g->object_properties.class_object_properties.properties[Am_Ui_Graphics_P_yOffset].nullable_value.value.short_value;
     return ty + y;
 }
 
-// Retrieve the native RastPort from this BitmapGraphics object.
-static struct RastPort *get_rp(aobject *this)
+static Am_Ui_RenderableBitmap_data *get_renderable_bitmap_data(aobject *this)
 {
-    Am_Ui_BitmapGraphics_data *data =
-        (Am_Ui_BitmapGraphics_data *)this->object_properties.class_object_properties.object_data.value.custom_value;
-    if (data == NULL) return NULL;
-    return &data->rastport;
+    if (this == NULL) return NULL;
+    aobject *rb = this->object_properties.class_object_properties.properties[Am_Ui_LayerGraphics_P_renderableBitmap]
+        .nullable_value.value.object_value;
+    if (rb == NULL) return NULL;
+    return (Am_Ui_RenderableBitmap_data *)rb->object_properties.class_object_properties.object_data.value.custom_value;
 }
 
-// ---------------------------------------------------------------------------
-// Lifecycle
-// ---------------------------------------------------------------------------
+static struct RastPort *get_rp(aobject *this)
+{
+    Am_Ui_RenderableBitmap_data *rbData = get_renderable_bitmap_data(this);
+    if (rbData == NULL || rbData->layer == NULL || rbData->rastport.BitMap == NULL) return NULL;
+    return &rbData->rastport;
+}
 
-function_result Am_Ui_BitmapGraphics__native_init_0(aobject * const this)
+static struct Layer *get_layer(aobject *this)
+{
+    Am_Ui_RenderableBitmap_data *rbData = get_renderable_bitmap_data(this);
+    if (rbData == NULL) return NULL;
+    return rbData->layer;
+}
+
+static void apply_clip_rect(aobject *this, aobject *clipRect)
+{
+    if (this == NULL) return;
+    if (clipRect == NULL) return;
+
+    Am_Ui_LayerGraphics_data *gData =
+        (Am_Ui_LayerGraphics_data *)this->object_properties.class_object_properties.object_data.value.custom_value;
+    if (gData == NULL || gData->clip_region == NULL) return;
+
+    struct Layer *layer = get_layer(this);
+    if (layer == NULL) return;
+
+    InstallClipRegion(layer, NULL);
+    ClearRegion(gData->clip_region);
+
+    short x = clipRect->object_properties.class_object_properties.properties[Am_Ui_ClipRect_P_x].nullable_value.value.short_value;
+    short y = clipRect->object_properties.class_object_properties.properties[Am_Ui_ClipRect_P_y].nullable_value.value.short_value;
+    unsigned short width = clipRect->object_properties.class_object_properties.properties[Am_Ui_ClipRect_P_width].nullable_value.value.ushort_value;
+    unsigned short height = clipRect->object_properties.class_object_properties.properties[Am_Ui_ClipRect_P_height].nullable_value.value.ushort_value;
+
+    struct Rectangle rect;
+    rect.MinX = x;
+    rect.MinY = y;
+    rect.MaxX = x + width - 1;
+    rect.MaxY = y + height - 1;
+
+    OrRectRegion(gData->clip_region, &rect);
+    InstallClipRegion(layer, gData->clip_region);
+}
+
+function_result Am_Ui_LayerGraphics__native_init_0(aobject * const this)
 {
     function_result __result = { .has_return_value = false };
     bool __returning = false;
@@ -59,12 +96,13 @@ function_result Am_Ui_BitmapGraphics__native_init_0(aobject * const this)
         __increase_reference_count(this);
     }
 
-    Am_Ui_BitmapGraphics_data *data = AllocVec(sizeof(Am_Ui_BitmapGraphics_data), MEMF_CLEAR | MEMF_ANY);
+    Am_Ui_LayerGraphics_data *data = AllocVec(sizeof(Am_Ui_LayerGraphics_data), MEMF_CLEAR | MEMF_ANY);
     if (data == NULL) {
-        __throw_simple_exception("AllocVec failed in Am_Ui_BitmapGraphics__native_init_0",
-                                 "in Am_Ui_BitmapGraphics__native_init_0", &__result);
+        __throw_simple_exception("AllocVec failed in Am_Ui_LayerGraphics__native_init_0",
+                                 "in Am_Ui_LayerGraphics__native_init_0", &__result);
         goto __exit;
     }
+    data->clip_region = NewRegion();
     this->object_properties.class_object_properties.object_data.value.custom_value = data;
 
 __exit: ;
@@ -74,14 +112,18 @@ __exit: ;
     return __result;
 }
 
-function_result Am_Ui_BitmapGraphics__native_release_0(aobject * const this)
+function_result Am_Ui_LayerGraphics__native_release_0(aobject * const this)
 {
     function_result __result = { .has_return_value = false };
     bool __returning = false;
 
-    Am_Ui_BitmapGraphics_data *data =
-        (Am_Ui_BitmapGraphics_data *)this->object_properties.class_object_properties.object_data.value.custom_value;
+    Am_Ui_LayerGraphics_data *data =
+        (Am_Ui_LayerGraphics_data *)this->object_properties.class_object_properties.object_data.value.custom_value;
     if (data != NULL) {
+        if (data->clip_region != NULL) {
+            DisposeRegion(data->clip_region);
+            data->clip_region = NULL;
+        }
         FreeVec(data);
         this->object_properties.class_object_properties.object_data.value.custom_value = NULL;
     }
@@ -90,7 +132,7 @@ __exit: ;
     return __result;
 }
 
-function_result Am_Ui_BitmapGraphics__native_mark_children_0(aobject * const this)
+function_result Am_Ui_LayerGraphics__native_mark_children_0(aobject * const this)
 {
     function_result __result = { .has_return_value = false };
     bool __returning = false;
@@ -98,46 +140,7 @@ __exit: ;
     return __result;
 }
 
-// ---------------------------------------------------------------------------
-// attach(): wire the RastPort to the Bitmap
-// Called once after creating a BitmapGraphics for a bitmap.
-// ---------------------------------------------------------------------------
-
-function_result Am_Ui_BitmapGraphics_attach_0(aobject * const this)
-{
-    function_result __result = { .has_return_value = false };
-    bool __returning = false;
-    if (this != NULL) {
-        __increase_reference_count(this);
-    }
-
-    Am_Ui_BitmapGraphics_data *data =
-        (Am_Ui_BitmapGraphics_data *)this->object_properties.class_object_properties.object_data.value.custom_value;
-    if (data == NULL) goto __exit;
-
-    // bitmap is property 4 of BitmapGraphics (Graphics has 0-3)
-    aobject *bitmapObj = this->object_properties.class_object_properties.properties[Am_Ui_BitmapGraphics_P_bitmap].nullable_value.value.object_value;
-    if (bitmapObj == NULL) goto __exit;
-
-    Am_Ui_Bitmap_data *bitmapData =
-        (Am_Ui_Bitmap_data *)bitmapObj->object_properties.class_object_properties.object_data.value.custom_value;
-    if (bitmapData == NULL || bitmapData->bitmap == NULL) goto __exit;
-
-    InitRastPort(&data->rastport);
-    data->rastport.BitMap = bitmapData->bitmap;
-
-__exit: ;
-    if (this != NULL) {
-        __decrease_reference_count(this);
-    }
-    return __result;
-}
-
-// ---------------------------------------------------------------------------
-// Drawing primitives
-// ---------------------------------------------------------------------------
-
-function_result Am_Ui_BitmapGraphics_setForegroundPen_0(aobject * const this, unsigned char pen)
+function_result Am_Ui_LayerGraphics_setForegroundPen_0(aobject * const this, unsigned char pen)
 {
     function_result __result = { .has_return_value = false };
     bool __returning = false;
@@ -147,7 +150,7 @@ __exit: ;
     return __result;
 }
 
-function_result Am_Ui_BitmapGraphics_setBackgroundPen_0(aobject * const this, unsigned char pen)
+function_result Am_Ui_LayerGraphics_setBackgroundPen_0(aobject * const this, unsigned char pen)
 {
     function_result __result = { .has_return_value = false };
     bool __returning = false;
@@ -157,43 +160,43 @@ __exit: ;
     return __result;
 }
 
-function_result Am_Ui_BitmapGraphics_drawLine_0(aobject * const this, short x, short y, short x2, short y2)
+function_result Am_Ui_LayerGraphics_drawLine_0(aobject * const this, short x, short y, short x2, short y2)
 {
     function_result __result = { .has_return_value = false };
     bool __returning = false;
     struct RastPort *rp = get_rp(this);
     if (rp == NULL) goto __exit;
-    Move(rp, bg_translated_x(this, x), bg_translated_y(this, y));
-    Draw(rp, bg_translated_x(this, x2), bg_translated_y(this, y2));
+    Move(rp, lg_translated_x(this, x), lg_translated_y(this, y));
+    Draw(rp, lg_translated_x(this, x2), lg_translated_y(this, y2));
 __exit: ;
     return __result;
 }
 
-function_result Am_Ui_BitmapGraphics_fillRect_0(aobject * const this, short x, short y, short x2, short y2)
+function_result Am_Ui_LayerGraphics_fillRect_0(aobject * const this, short x, short y, short x2, short y2)
 {
     function_result __result = { .has_return_value = false };
     bool __returning = false;
     struct RastPort *rp = get_rp(this);
     if (rp == NULL) goto __exit;
-    RectFill(rp, bg_translated_x(this, x), bg_translated_y(this, y),
-                 bg_translated_x(this, x2), bg_translated_y(this, y2));
+    RectFill(rp, lg_translated_x(this, x), lg_translated_y(this, y),
+                 lg_translated_x(this, x2), lg_translated_y(this, y2));
 __exit: ;
     return __result;
 }
 
-function_result Am_Ui_BitmapGraphics_eraseRect_0(aobject * const this, short x, short y, short x2, short y2)
+function_result Am_Ui_LayerGraphics_eraseRect_0(aobject * const this, short x, short y, short x2, short y2)
 {
     function_result __result = { .has_return_value = false };
     bool __returning = false;
     struct RastPort *rp = get_rp(this);
     if (rp == NULL) goto __exit;
-    EraseRect(rp, bg_translated_x(this, x), bg_translated_y(this, y),
-                  bg_translated_x(this, x2), bg_translated_y(this, y2));
+    EraseRect(rp, lg_translated_x(this, x), lg_translated_y(this, y),
+                  lg_translated_x(this, x2), lg_translated_y(this, y2));
 __exit: ;
     return __result;
 }
 
-function_result Am_Ui_BitmapGraphics_drawString_0(aobject * const this, aobject *text, short x, short y)
+function_result Am_Ui_LayerGraphics_drawString_0(aobject * const this, aobject *text, short x, short y)
 {
     function_result __result = { .has_return_value = false };
     bool __returning = false;
@@ -206,7 +209,7 @@ function_result Am_Ui_BitmapGraphics_drawString_0(aobject * const this, aobject 
         string_holder *sh = text->object_properties.class_object_properties.object_data.value.custom_value;
         struct TextFont *tf = rp->Font;
         short baseline = tf ? tf->tf_Baseline : 0;
-        Move(rp, bg_translated_x(this, x), bg_translated_y(this, y + baseline));
+        Move(rp, lg_translated_x(this, x), lg_translated_y(this, y + baseline));
         Text(rp, sh->string_value, sh->length);
     }
 __exit: ;
@@ -216,7 +219,7 @@ __exit: ;
     return __result;
 }
 
-function_result Am_Ui_BitmapGraphics_calculateStringWidth_0(aobject * const this, aobject *text)
+function_result Am_Ui_LayerGraphics_calculateStringWidth_0(aobject * const this, aobject *text)
 {
     function_result __result = { .has_return_value = true };
     bool __returning = false;
@@ -235,7 +238,7 @@ __exit: ;
     return __result;
 }
 
-function_result Am_Ui_BitmapGraphics_getCurrentFontSize_0(aobject * const this)
+function_result Am_Ui_LayerGraphics_getCurrentFontSize_0(aobject * const this)
 {
     function_result __result = { .has_return_value = true };
     bool __returning = false;
@@ -247,7 +250,7 @@ __exit: ;
     return __result;
 }
 
-function_result Am_Ui_BitmapGraphics_setFont_0(aobject * const this, aobject *font)
+function_result Am_Ui_LayerGraphics_setFont_0(aobject * const this, aobject *font)
 {
     function_result __result = { .has_return_value = false };
     bool __returning = false;
@@ -266,12 +269,8 @@ __exit: ;
     return __result;
 }
 
-// ---------------------------------------------------------------------------
-// drawImage: blit an Am.Imaging.Image into the bitmap via WritePixelArray
-// ---------------------------------------------------------------------------
-
-function_result Am_Ui_BitmapGraphics_drawImage_0(aobject * const this, aobject *image,
-                                                  short x, short y, short width, short height)
+function_result Am_Ui_LayerGraphics_drawImage_0(aobject * const this, aobject *image,
+                                                 short x, short y, short width, short height)
 {
     function_result __result = { .has_return_value = false };
     bool __returning = false;
@@ -282,7 +281,7 @@ function_result Am_Ui_BitmapGraphics_drawImage_0(aobject * const this, aobject *
     if (rp == NULL || image == NULL) goto __exit;
     {
         int pixFmt = image->object_properties.class_object_properties.properties[Am_Imaging_Image_P_pixelFormat].nullable_value.value.int_value;
-        if (pixFmt == 2) { /* ARGB */
+        if (pixFmt == 2) {
             aobject *pixelColorsObj =
                 image->object_properties.class_object_properties.properties[Am_Imaging_Image_P_pixelColors].nullable_value.value.object_value;
             unsigned short imgW = image->object_properties.class_object_properties.properties[Am_Imaging_Image_P_width].nullable_value.value.ushort_value;
@@ -291,7 +290,7 @@ function_result Am_Ui_BitmapGraphics_drawImage_0(aobject * const this, aobject *
                 unsigned int *pixels = (unsigned int *)(void *)&ah[1];
                 WritePixelArray(pixels, 0, 0, imgW * 4,
                                 rp,
-                                bg_translated_x(this, x), bg_translated_y(this, y),
+                                lg_translated_x(this, x), lg_translated_y(this, y),
                                 width, height,
                                 RECTFMT_ARGB);
             }
@@ -304,13 +303,9 @@ __exit: ;
     return __result;
 }
 
-// ---------------------------------------------------------------------------
-// drawBitmap: blit another Bitmap, scaling if necessary
-// ---------------------------------------------------------------------------
-
-function_result Am_Ui_BitmapGraphics_drawBitmap_0(aobject * const this, aobject *bitmap,
-                                                    short x, short y,
-                                                    short destWidth, short destHeight)
+function_result Am_Ui_LayerGraphics_drawBitmap_0(aobject * const this, aobject *bitmap,
+                                                  short x, short y,
+                                                  short destWidth, short destHeight)
 {
     function_result __result = { .has_return_value = false };
     bool __returning = false;
@@ -326,8 +321,8 @@ function_result Am_Ui_BitmapGraphics_drawBitmap_0(aobject * const this, aobject 
 
         unsigned short srcW = bitmap->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_width].nullable_value.value.ushort_value;
         unsigned short srcH = bitmap->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_height].nullable_value.value.ushort_value;
-        short tx = bg_translated_x(this, x);
-        short ty = bg_translated_y(this, y);
+        short tx = lg_translated_x(this, x);
+        short ty = lg_translated_y(this, y);
 
         if (destWidth == (short)srcW && destHeight == (short)srcH) {
             BltBitMapRastPort(bitmapData->bitmap, 0, 0, rp, tx, ty, srcW, srcH, 0xC0);
@@ -359,38 +354,64 @@ __exit: ;
     return __result;
 }
 
-// ---------------------------------------------------------------------------
-// Clipping / painting lifecycle — no-ops (no Layer on off-screen bitmaps)
-// ---------------------------------------------------------------------------
-
-function_result Am_Ui_BitmapGraphics_setClipRect_0(aobject * const this, aobject * const clipRect)
+function_result Am_Ui_LayerGraphics_setClipRect_0(aobject * const this, aobject * const clipRect)
 {
     function_result __result = { .has_return_value = false };
     bool __returning = false;
+    if (clipRect != NULL) {
+        __increase_reference_count(clipRect);
+    }
+
+    apply_clip_rect(this, clipRect);
+
+__exit: ;
+    if (clipRect != NULL) {
+        __decrease_reference_count(clipRect);
+    }
+    return __result;
+}
+
+function_result Am_Ui_LayerGraphics_clearClipRect_0(aobject * const this)
+{
+    function_result __result = { .has_return_value = false };
+    bool __returning = false;
+
+    struct Layer *layer = get_layer(this);
+    if (layer != NULL) {
+        InstallClipRegion(layer, NULL);
+    }
+
 __exit: ;
     return __result;
 }
 
-function_result Am_Ui_BitmapGraphics_clearClipRect_0(aobject * const this)
+function_result Am_Ui_LayerGraphics_beginPainting_0(aobject * const this, aobject * const clipRect)
 {
     function_result __result = { .has_return_value = false };
     bool __returning = false;
+    if (clipRect != NULL) {
+        __increase_reference_count(clipRect);
+    }
+
+    apply_clip_rect(this, clipRect);
+
 __exit: ;
+    if (clipRect != NULL) {
+        __decrease_reference_count(clipRect);
+    }
     return __result;
 }
 
-function_result Am_Ui_BitmapGraphics_beginPainting_0(aobject * const this, aobject * const clipRect)
+function_result Am_Ui_LayerGraphics_endPainting_0(aobject * const this)
 {
     function_result __result = { .has_return_value = false };
     bool __returning = false;
-__exit: ;
-    return __result;
-}
 
-function_result Am_Ui_BitmapGraphics_endPainting_0(aobject * const this)
-{
-    function_result __result = { .has_return_value = false };
-    bool __returning = false;
+    struct Layer *layer = get_layer(this);
+    if (layer != NULL) {
+        InstallClipRegion(layer, NULL);
+    }
+
 __exit: ;
     return __result;
 }

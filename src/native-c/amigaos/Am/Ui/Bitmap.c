@@ -81,9 +81,6 @@ __exit: ;
 // ---------------------------------------------------------------------------
 static struct BitMap *alloc_truecolor_bitmap(ULONG width, ULONG height)
 {
-    if (CyberGfxBase == NULL)
-        CyberGfxBase = (struct Library *)__ensure_library("cybergraphics.library", 40L);
-
     // Request a CGX-capable 24-bit bitmap; BMF_MINPLANES lets the system
     // choose the real depth.  Passing NULL as the friend bitmap means we get
     // a system-default true-colour format.
@@ -110,10 +107,12 @@ function_result Am_Ui_Bitmap_createEmpty_0(aobject * const this,
         (Am_Ui_Bitmap_data *)this->object_properties.class_object_properties.object_data.value.custom_value;
     if (data == NULL) goto __exit;
 
-    // Free any previously allocated bitmap
+    // One AmLang Bitmap maps to exactly one native BitMap.
+    // Do not replace an existing native bitmap once created.
     if (data->bitmap != NULL) {
-        FreeBitMap(data->bitmap);
-        data->bitmap = NULL;
+        __throw_simple_exception("Bitmap already has a native BitMap",
+                                 "in Am_Ui_Bitmap_f_createEmpty_0", &__result);
+        goto __exit;
     }
 
     data->bitmap = alloc_truecolor_bitmap(width, height);
@@ -155,12 +154,25 @@ function_result Am_Ui_Bitmap_createFromImage_0(aobject * const this,
 
     Am_Ui_Bitmap_data *data =
         (Am_Ui_Bitmap_data *)this->object_properties.class_object_properties.object_data.value.custom_value;
-    if (data == NULL || image == NULL) goto __exit;
+    if (data == NULL) {
+        __throw_simple_exception("Bitmap not initialized",
+                                 "in Am_Ui_Bitmap_f_createFromImage_0", &__result);
+        goto __exit;
 
-    // Free any previously allocated bitmap
+    }
+
+    if (image == NULL) {
+        __throw_simple_exception("Image argument is NULL",
+                                 "in Am_Ui_Bitmap_f_createFromImage_0", &__result);
+        goto __exit;
+    }
+
+    // One AmLang Bitmap maps to exactly one native BitMap.
+    // Do not replace an existing native bitmap once created.
     if (data->bitmap != NULL) {
-        FreeBitMap(data->bitmap);
-        data->bitmap = NULL;
+        __throw_simple_exception("Bitmap already has a native BitMap",
+                                 "in Am_Ui_Bitmap_f_createFromImage_0", &__result);
+        goto __exit;
     }
 
     {
