@@ -16,7 +16,7 @@
 #include <graphics/rastport.h>
 #include <graphics/scale.h>
 #include <graphics/text.h>
-#include <cybergraphics/cybergraphics.h>
+#include <cybergraphx/cybergraphics.h>
 
 #include <proto/exec.h>
 #include <proto/graphics.h>

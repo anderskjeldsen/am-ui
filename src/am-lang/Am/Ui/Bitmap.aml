@@ -11,11 +11,12 @@ namespace Am.Ui
         var pixelFormat: BitmapPixelFormat
 
         // Create an empty (cleared) true-colour bitmap.
-        private native fun createEmpty(width: UShort, height: UShort)
+        // window is used to obtain a friend bitmap matching the screen's pixel format.
+        private native fun createEmpty(width: UShort, height: UShort, window: Window)
 
         // Populate the bitmap from an Am.Imaging.Image.
-        // Supports ARGB images; uses CyberGraphX WritePixelArray on AmigaOS.
-        private native fun createFromImage(image: Am.Imaging.Image)
+        // window is used to obtain a friend bitmap matching the screen's pixel format.
+        private native fun createFromImage(image: Am.Imaging.Image, window: Window)
 
         fun getWidth(): UShort {
             return this.width
@@ -30,16 +31,16 @@ namespace Am.Ui
         }
 
         // Factory: allocate a blank bitmap of the given size.
-        static fun empty(width: UShort, height: UShort): Bitmap {
+        static fun empty(width: UShort, height: UShort, window: Window): Bitmap {
             var bmp = new Bitmap()
-            bmp.createEmpty(width, height)
+            bmp.createEmpty(width, height, window)
             return bmp
         }
 
         // Factory: create a bitmap from an image.
-        static fun fromImage(image: Image): Bitmap {
+        static fun fromImage(image: Image, window: Window): Bitmap {
             var bmp = new Bitmap()
-            bmp.createFromImage(image)
+            bmp.createFromImage(image, window)
             return bmp
         }
     }
