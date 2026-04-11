@@ -11,16 +11,16 @@ namespace Am.Ui
         // Wire native layer state to the current bitmap.
         private native fun attachLayer()
 
-        static fun empty(width: UShort, height: UShort): RenderableBitmap {
+        static fun empty(width: UShort, height: UShort, window: Window): RenderableBitmap {
             var rb = new RenderableBitmap()
-            rb.bitmap = Bitmap.empty(width, height)
+            rb.bitmap = Bitmap.empty(width, height, window)
             rb.attachLayer()
             return rb
         }
 
-        static fun fromImage(image: Image): RenderableBitmap {
+        static fun fromImage(image: Image, window: Window): RenderableBitmap {
             var rb = new RenderableBitmap()
-            rb.bitmap = Bitmap.fromImage(image)
+            rb.bitmap = Bitmap.fromImage(image, window)
             rb.attachLayer()
             return rb
         }

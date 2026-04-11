@@ -19,7 +19,7 @@
 #include <libraries/gadtools.h>
 #include <graphics/gfx.h>
 #include <graphics/scale.h>
-#include <cybergraphics/cybergraphics.h>
+#include <cybergraphx/cybergraphics.h>
 
 #include <proto/exec.h>
 #include <proto/intuition.h>

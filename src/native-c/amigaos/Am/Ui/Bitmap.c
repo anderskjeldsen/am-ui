@@ -7,10 +7,13 @@
 #include <exec/memory.h>
 #include <graphics/gfx.h>
 #include <graphics/scale.h>
-#include <cybergraphics/cybergraphics.h>
+#include <cybergraphx/cybergraphics.h>
+#include <intuition/intuition.h>
 #include <stdio.h>
 
 #include <amigaos/amiga.h>
+#include <amigaos/Am/Ui/Window.h>
+#include <Am/Ui/Window.h>
 
 #include <proto/exec.h>
 #include <proto/graphics.h>
@@ -74,16 +77,27 @@ __exit: ;
 }
 
 // ---------------------------------------------------------------------------
-// Helper: allocate a CyberGraphX true-colour BitMap and wire up a RastPort
+// Helper: get the friend BitMap from a window's screen
 // ---------------------------------------------------------------------------
-static struct BitMap *alloc_truecolor_bitmap(ULONG width, ULONG height)
+static struct BitMap *get_friend_bitmap(aobject *windowObj)
 {
-    // Request a CGX-capable 24-bit bitmap; BMF_MINPLANES lets the system
-    // choose the real depth.  Passing NULL as the friend bitmap means we get
-    // a system-default true-colour format.
-    struct BitMap *bm = AllocBitMap(width, height, 24,
-                                    BMF_CLEAR | BMF_MINPLANES, NULL);
-    return bm;
+    if (windowObj == NULL) return NULL;
+    Am_Ui_Window_data *wd =
+        (Am_Ui_Window_data *)windowObj->object_properties.class_object_properties.object_data.value.custom_value;
+    if (wd == NULL) return NULL;
+    // Prefer the window's own screen; fall back to locked_screen.
+    struct Screen *scr = wd->window ? wd->window->WScreen : wd->locked_screen;
+    return scr ? scr->RastPort.BitMap : NULL;
+}
+
+// ---------------------------------------------------------------------------
+// Helper: allocate a CyberGraphX true-colour BitMap
+// ---------------------------------------------------------------------------
+static struct BitMap *alloc_truecolor_bitmap(ULONG width, ULONG height, struct BitMap *friendBitMap)
+{
+    // BMF_MINPLANES + a CGX friend bitmap ensures we get a chunky true-colour
+    // bitmap in the same pixel format as the display hardware.
+    return AllocBitMap(width, height, 24, BMF_CLEAR | BMF_MINPLANES, friendBitMap);
 }
 
 // ---------------------------------------------------------------------------
@@ -92,7 +106,8 @@ static struct BitMap *alloc_truecolor_bitmap(ULONG width, ULONG height)
 
 function_result Am_Ui_Bitmap_createEmpty_0(aobject * const this,
                                             unsigned short width,
-                                            unsigned short height)
+                                            unsigned short height,
+                                            aobject *window)
 {
     function_result __result = { .has_return_value = false };
     bool __returning = false;
@@ -112,7 +127,7 @@ function_result Am_Ui_Bitmap_createEmpty_0(aobject * const this,
         goto __exit;
     }
 
-    data->bitmap = alloc_truecolor_bitmap(width, height);
+    data->bitmap = alloc_truecolor_bitmap(width, height, get_friend_bitmap(window));
     if (data->bitmap == NULL) {
         __throw_simple_exception("AllocBitMap failed in createEmpty",
                                  "in Am_Ui_Bitmap_f_createEmpty_0", &__result);
@@ -138,7 +153,8 @@ __exit: ;
 // ---------------------------------------------------------------------------
 
 function_result Am_Ui_Bitmap_createFromImage_0(aobject * const this,
-                                               aobject * image)
+                                               aobject * image,
+                                               aobject * window)
 {
     function_result __result = { .has_return_value = false };
     bool __returning = false;
@@ -204,7 +220,7 @@ function_result Am_Ui_Bitmap_createFromImage_0(aobject * const this,
 
         printf("[Bitmap.createFromImage] step 10: allocate native bitmap\n");
         fflush(stdout);
-        data->bitmap = alloc_truecolor_bitmap(width, height);
+        data->bitmap = alloc_truecolor_bitmap(width, height, get_friend_bitmap(window));
         if (data->bitmap == NULL) {
             printf("[Bitmap.createFromImage] step 11: alloc_truecolor_bitmap failed -> throw\n");
             fflush(stdout);

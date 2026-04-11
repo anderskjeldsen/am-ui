@@ -10,7 +10,7 @@
 #include <exec/types.h>
 #include <intuition/intuition.h>
 #include <intuition/screens.h>
-#include <cybergraphics/cybergraphics.h>
+#include <cybergraphx/cybergraphics.h>
 
 #include <proto/exec.h>
 #include <proto/intuition.h>

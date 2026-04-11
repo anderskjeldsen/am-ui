@@ -17,9 +17,6 @@ namespace ImageViewer
             var imgH = image.getHeight()
             "Loaded image: ${imgW.toString()}x${imgH.toString()}".println()
 
-            // Convert the image to a hardware bitmap (CyberGraphX true colour).
-            var bitmap = Bitmap.fromImage(image)
-            "bitmap initialized"
             // Open a window sized to the image (capped at a sensible maximum).
             var winW = imgW
             var winH = imgH
@@ -30,10 +27,15 @@ namespace ImageViewer
             window.setTitle("Image Viewer")
             window.setScreenTitle("AmUI Image Viewer")
 
+            // Convert the image to a hardware bitmap (CyberGraphX true colour).
+            // The window is needed to obtain the screen's friend BitMap so
+            // AllocBitMap returns a chunky (CGX) bitmap as expected.
+            var bitmap = Bitmap.fromImage(image, window)
+
             // BitmapView renders the bitmap, scaling to fit while maintaining aspect ratio.
             var bitmapView = new BitmapView(bitmap)
-            bitmapView.scaleToFit = true
-            bitmapView.maintainAspectRatio = true
+            bitmapView.scaleToFit = false
+            bitmapView.maintainAspectRatio = false
 
             window.setRootView(bitmapView)
             window.layout()

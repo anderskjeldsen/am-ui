@@ -33,7 +33,8 @@ __exit: ;
 
 function_result Am_Ui_Bitmap_createEmpty_0(aobject * const this,
                                             unsigned short width,
-                                            unsigned short height)
+                                            unsigned short height,
+                                            aobject * window)
 {
     function_result __result = { .has_return_value = false };
     bool __returning = false;
@@ -42,7 +43,8 @@ __exit: ;
 }
 
 function_result Am_Ui_Bitmap_createFromImage_0(aobject * const this,
-                                               aobject * image)
+                                               aobject * image,
+                                               aobject * window)
 {
     function_result __result = { .has_return_value = false };
     bool __returning = false;
