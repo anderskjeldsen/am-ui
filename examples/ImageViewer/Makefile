@@ -5,13 +5,17 @@ CMD=java -jar $(AMLC)
 clean:
 	$(CMD) clean . -bt amigaos_docker
 
-build:
+builds/bin/amigaos/image.png: assets/image.png
+	mkdir -p builds/bin/amigaos
+	cp assets/image.png builds/bin/amigaos/image.png
+
+build: builds/bin/amigaos/image.png
 	$(CMD) build . -bt amigaos_docker
 
-build-rl:
+build-rl: builds/bin/amigaos/image.png
 	$(CMD) build . -bt amigaos_docker -rl
 
-build-force-deps:
+build-force-deps: builds/bin/amigaos/image.png
 	$(CMD) build . -fld -bt amigaos_docker
 
 test:
