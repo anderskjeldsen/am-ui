@@ -1,0 +1,47 @@
+id: draw-pixels
+version: 1.0.0
+type: application
+dependencies:
+  - id: am-lang-core
+    type: local
+    path: ../../../am-lang-core
+  - id: am-ui
+    type: local
+    path: ../../
+platforms:
+  - id: libc
+    abstract: true
+  - id: amigaos
+    extends: libc
+    gccCommand: m68k-amigaos-gcc -O3
+    asmCommand: vasmm68k_mot
+    linkerCommand: m68k-amigaos-gcc
+    additionalHeaders:
+    additionalAsmSources:
+    additionalCSources:
+    additionalIncludePaths:
+    gccAdditionalOptions:
+      - -noixemul
+    gccAdditionalLibraries:
+    additionalLinkerFlags:
+      - -noixemul
+  - id: morphos-ppc
+    extends: libc
+    gccCommand: ppc-morphos-gcc -O3
+    additionalHeaders:
+    additionalAsmSources:
+    additionalCSources:
+    additionalIncludePaths:
+    gccAdditionalOptions:
+      - -noixemul
+buildTargets:
+  - id: amigaos_docker
+    platform: amigaos
+    dockerBuild:
+      image: amiga-gcc:latest
+      buildPath: /host
+  - id: morphos-ppc_docker
+    platform: morphos-ppc
+    dockerBuild:
+      image: amigadev/crosstools:ppc-morphos
+      buildPath: /work
