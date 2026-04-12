@@ -13,8 +13,9 @@ namespace Mesh3D
             var bufW = 320
             var bufH = 240
 
-            // Load the texture from the working directory
-            var texture = PngLoader.load(new File("image.png"))
+            // Load textures into an array (index matches poly.textureIndex)
+            var textures = new Image[1]
+            textures[0UI] = PngLoader.load(new File("image.png"))
 
             // Build a quad mesh: 4 vertices, 2 triangles, 4 UV coords
             //
@@ -83,7 +84,7 @@ namespace Mesh3D
                 Renderer3D.clearBuffers(canvas.pixels, zbuffer, bufSize)
 
                 // Render all polygons
-                Renderer3D.render(mesh, texture, canvas.pixels, zbuffer, bufW, bufH)
+                Renderer3D.drawPolygons(mesh, textures, canvas.pixels, zbuffer, bufW, bufH)
 
                 // Push pixels to screen
                 canvas.flush()

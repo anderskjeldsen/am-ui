@@ -18,109 +18,12 @@ namespace Mesh3D
             }
         }
 
-        // Sample a texel at (u,v) in [0,1] from texture and apply diffuse light factor.
-        static fun sampleTexture(texture: Image, u: Double, v: Double, light: Double): UInt {
-            var uc = u
-            if (uc < 0.0) { uc = 0.0 }
-            if (uc >= 1.0) { uc = 0.9999 }
-            var vc = v
-            if (vc < 0.0) { vc = 0.0 }
-            if (vc >= 1.0) { vc = 0.9999 }
-
-            var tw = texture.getWidth()
-            var th = texture.getHeight()
-            var tx = (uc * tw.toDouble()).toUShort()
-            var ty = (vc * th.toDouble()).toUShort()
-            var color = texture.getPixelColor(tx, ty)
-
-            // Extract RGB channels using division/modulo (no bitwise ops needed)
-            var r = (color / 0x10000UI) % 0x100UI
-            var g = (color / 0x100UI) % 0x100UI
-            var b = color % 0x100UI
-
-            var lc = light
-            if (lc < 0.15) { lc = 0.15 }
-            if (lc > 1.0) { lc = 1.0 }
-
-            var rl = (r.toDouble() * lc).toUInt()
-            var gl = (g.toDouble() * lc).toUInt()
-            var bl = (b.toDouble() * lc).toUInt()
-            return 0xFF000000UI + rl * 0x10000UI + gl * 0x100UI + bl
-        }
-
-        // Rasterize a textured triangle using barycentric coordinates.
-        // ax/ay/az are screen-space x,y and camera-space z; au/av are UV [0,1].
-        static fun drawTriangle(
-            ax: Double, ay: Double, az: Double, au: Double, av: Double,
-            bx: Double, by: Double, bz: Double, bu: Double, bv: Double,
-            cx: Double, cy: Double, cz: Double, cu: Double, cv: Double,
-            texture: Image, light: Double,
-            pixels: UInt[], zbuffer: Double[],
-            bufW: Int, bufH: Int
-        ) {
-            // Integer bounding box, clamped to screen
-            var minX = ax
-            if (bx < minX) { minX = bx }
-            if (cx < minX) { minX = cx }
-            var maxX = ax
-            if (bx > maxX) { maxX = bx }
-            if (cx > maxX) { maxX = cx }
-            var minY = ay
-            if (by < minY) { minY = by }
-            if (cy < minY) { minY = cy }
-            var maxY = ay
-            if (by > maxY) { maxY = by }
-            if (cy > maxY) { maxY = cy }
-
-            var x0 = minX.toInt()
-            var x1 = maxX.toInt()
-            var y0 = minY.toInt()
-            var y1 = maxY.toInt()
-            if (x0 < 0) { x0 = 0 }
-            if (y0 < 0) { y0 = 0 }
-            if (x1 >= bufW) { x1 = bufW - 1 }
-            if (y1 >= bufH) { y1 = bufH - 1 }
-
-            // Barycentric denominator (precomputed constants for the triangle)
-            var denom = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy)
-            if (denom > -0.0001 && denom < 0.0001) { return }
-            var invDenom = 1.0 / denom
-
-            var e00 = by - cy
-            var e01 = cx - bx
-            var e10 = cy - ay
-            var e11 = ax - cx
-
-            var py = y0
-            while (py <= y1) {
-                var px = x0
-                while (px <= x1) {
-                    var fpx = px.toDouble() + 0.5
-                    var fpy = py.toDouble() + 0.5
-                    var w0 = (e00 * (fpx - cx) + e01 * (fpy - cy)) * invDenom
-                    var w1 = (e10 * (fpx - cx) + e11 * (fpy - cy)) * invDenom
-                    var w2 = 1.0 - w0 - w1
-                    if (w0 >= 0.0 && w1 >= 0.0 && w2 >= 0.0) {
-                        var pz = w0 * az + w1 * bz + w2 * cz
-                        var idx = py * bufW + px
-                        if (pz < zbuffer[idx]) {
-                            zbuffer[idx] = pz
-                            var pu = w0 * au + w1 * bu + w2 * cu
-                            var pv = w0 * av + w1 * bv + w2 * cv
-                            pixels[idx.toUInt()] = Renderer3D.sampleTexture(texture, pu, pv, light)
-                        }
-                    }
-                    px = px + 1
-                }
-                py = py + 1
-            }
-        }
-
-        // Render all polygons of mesh into pixels/zbuffer.
-        // Screen is bufW x bufH. Camera at origin, looking down +Z.
-        static fun render(
+        // Draw all polygons of mesh into pixels/zbuffer.
+        // textures is an Image[] indexed by poly.textureIndex.
+        // All rasterization is inlined — no per-polygon function calls.
+        static fun drawPolygons(
             mesh: Mesh,
-            texture: Image,
+            textures: Image[],
             pixels: UInt[],
             zbuffer: Double[],
             bufW: Int, bufH: Int
@@ -153,7 +56,7 @@ namespace Mesh3D
                 var ti1 = poly.textureVertex2Index.toInt()
                 var ti2 = poly.textureVertex3Index.toInt()
 
-                // Local → world space (rotate then translate)
+                // Local → world (rotate then translate)
                 var lv0 = verts.getVector(vi0)
                 var lv1 = verts.getVector(vi1)
                 var lv2 = verts.getVector(vi2)
@@ -161,40 +64,125 @@ namespace Mesh3D
                 var wv1 = rotMat.transformVector(lv1).add(meshPos)
                 var wv2 = rotMat.transformVector(lv2).add(meshPos)
 
-                // Skip polygon if any vertex is behind the near plane
+                // Skip if any vertex is behind the near plane
                 if (wv0.z <= 0.1 || wv1.z <= 0.1 || wv2.z <= 0.1) {
                     continue
                 }
 
-                // Face normal for diffuse lighting (world space)
+                // Face normal → diffuse lighting
                 var edge0: Vector3 = { x: wv1.x - wv0.x, y: wv1.y - wv0.y, z: wv1.z - wv0.z }
                 var edge1: Vector3 = { x: wv2.x - wv0.x, y: wv2.y - wv0.y, z: wv2.z - wv0.z }
                 var normal = edge0.cross(edge1).normalize()
-
                 var ndotl = normal.dot(lightDir)
-                if (ndotl < 0.0) { ndotl = -ndotl }   // double-sided
-                var light = 0.2 + ndotl * 0.8          // ambient + diffuse
+                if (ndotl < 0.0) { ndotl = -ndotl }
+                var light = 0.2 + ndotl * 0.8
+                if (light < 0.15) { light = 0.15 }
+                if (light > 1.0) { light = 1.0 }
 
-                // Perspective project to screen space (Y flipped: +Y is down on screen)
-                var sx0 = wv0.x * pd / wv0.z + halfW
-                var sy0 = -(wv0.y * pd / wv0.z) + halfH
-                var sx1 = wv1.x * pd / wv1.z + halfW
-                var sy1 = -(wv1.y * pd / wv1.z) + halfH
-                var sx2 = wv2.x * pd / wv2.z + halfW
-                var sy2 = -(wv2.y * pd / wv2.z) + halfH
+                // Perspective project (Y flipped: screen +Y is down)
+                var ax = wv0.x * pd / wv0.z + halfW
+                var ay = -(wv0.y * pd / wv0.z) + halfH
+                var az = wv0.z
+                var bx = wv1.x * pd / wv1.z + halfW
+                var by = -(wv1.y * pd / wv1.z) + halfH
+                var bz = wv1.z
+                var cx = wv2.x * pd / wv2.z + halfW
+                var cy = -(wv2.y * pd / wv2.z) + halfH
+                var cz = wv2.z
 
-                // Texture coordinates
+                // Texture UVs
                 var tv0 = tverts.getVector(ti0)
                 var tv1 = tverts.getVector(ti1)
                 var tv2 = tverts.getVector(ti2)
+                var au = tv0.x
+                var av = tv0.y
+                var bu = tv1.x
+                var bv = tv1.y
+                var cu = tv2.x
+                var cv = tv2.y
 
-                Renderer3D.drawTriangle(
-                    sx0, sy0, wv0.z, tv0.x, tv0.y,
-                    sx1, sy1, wv1.z, tv1.x, tv1.y,
-                    sx2, sy2, wv2.z, tv2.x, tv2.y,
-                    texture, light,
-                    pixels, zbuffer, bufW, bufH
-                )
+                // Pick texture for this polygon; access pixel data directly
+                var texIdx = poly.textureIndex.toInt()
+                var texture = textures[texIdx.toUInt()]
+                var texPixels = texture.getPixelColors()
+                var tw = texture.getWidth().toInt()
+                var th = texture.getHeight().toInt()
+
+                // Bounding box clamped to screen
+                var minX = ax
+                if (bx < minX) { minX = bx }
+                if (cx < minX) { minX = cx }
+                var maxX = ax
+                if (bx > maxX) { maxX = bx }
+                if (cx > maxX) { maxX = cx }
+                var minY = ay
+                if (by < minY) { minY = by }
+                if (cy < minY) { minY = cy }
+                var maxY = ay
+                if (by > maxY) { maxY = by }
+                if (cy > maxY) { maxY = cy }
+
+                var x0 = minX.toInt()
+                var x1 = maxX.toInt()
+                var y0 = minY.toInt()
+                var y1 = maxY.toInt()
+                if (x0 < 0) { x0 = 0 }
+                if (y0 < 0) { y0 = 0 }
+                if (x1 >= bufW) { x1 = bufW - 1 }
+                if (y1 >= bufH) { y1 = bufH - 1 }
+
+                // Barycentric setup
+                var denom = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy)
+                if (denom > -0.0001 && denom < 0.0001) { continue }
+                var invDenom = 1.0 / denom
+                var e00 = by - cy
+                var e01 = cx - bx
+                var e10 = cy - ay
+                var e11 = ax - cx
+
+                // Rasterize
+                var py = y0
+                while (py <= y1) {
+                    var px = x0
+                    while (px <= x1) {
+                        var fpx = px.toDouble() + 0.5
+                        var fpy = py.toDouble() + 0.5
+                        var w0 = (e00 * (fpx - cx) + e01 * (fpy - cy)) * invDenom
+                        var w1 = (e10 * (fpx - cx) + e11 * (fpy - cy)) * invDenom
+                        var w2 = 1.0 - w0 - w1
+                        if (w0 >= 0.0 && w1 >= 0.0 && w2 >= 0.0) {
+                            var pz = w0 * az + w1 * bz + w2 * cz
+                            var idx = py * bufW + px
+                            if (pz < zbuffer[idx]) {
+                                zbuffer[idx] = pz
+
+                                // Interpolate UV and clamp
+                                var pu = w0 * au + w1 * bu + w2 * cu
+                                var pv = w0 * av + w1 * bv + w2 * cv
+                                if (pu < 0.0) { pu = 0.0 }
+                                if (pu >= 1.0) { pu = 0.9999 }
+                                if (pv < 0.0) { pv = 0.0 }
+                                if (pv >= 1.0) { pv = 0.9999 }
+
+                                // Fetch texel directly from pixel array
+                                var tpx = (pu * tw.toDouble()).toInt()
+                                var tpy = (pv * th.toDouble()).toInt()
+                                var rawColor = texPixels[(tpy * tw + tpx).toUInt()]
+
+                                // Apply diffuse light per channel
+                                var r = (rawColor / 0x10000UI) % 0x100UI
+                                var g = (rawColor / 0x100UI) % 0x100UI
+                                var b = rawColor % 0x100UI
+                                var rl = (r.toDouble() * light).toUInt()
+                                var gl = (g.toDouble() * light).toUInt()
+                                var bl = (b.toDouble() * light).toUInt()
+                                pixels[idx.toUInt()] = 0xFF000000UI + rl * 0x10000UI + gl * 0x100UI + bl
+                            }
+                        }
+                        px = px + 1
+                    }
+                    py = py + 1
+                }
             }
         }
     }
