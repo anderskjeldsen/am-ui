@@ -1,0 +1,96 @@
+namespace Am.Ui
+{
+    // Fixed-size ARGB pixel buffer rendered directly to the screen RastPort
+    // via CyberGraphX WritePixelArray on each paint cycle.
+    //
+    // Usage:
+    //   var canvas = PixelBufferView.create(320US, 240US)
+    //   canvas.pixels[y * 320 + x] = 0xFFRRGGBB   // write ARGB pixels
+    //   canvas.flush()                              // request repaint
+    //
+    // On AmigaOS/CyberGraphX: WritePixelArray is called directly on the
+    // window RastPort during paint() — no intermediate BitMap needed.
+    // On other platforms: no-op stubs.
+    native class PixelBufferView : View {
+        import Am.Lang
+
+        // Fixed pixel dimensions of the buffer (set once by create()).
+        var bufferWidth: UShort
+        var bufferHeight: UShort
+
+        // ARGB pixel buffer (0xAARRGGBB).  Index = y * bufferWidth + x.
+        // Write pixel values here, then call flush() to make changes visible.
+        var pixels: UInt[]
+
+        // Horizontal alignment of the buffer within the view's inner bounds.
+        var alignH: Alignment = Alignment.Center
+
+        // Vertical alignment of the buffer within the view's inner bounds.
+        var alignV: Alignment = Alignment.Center
+
+        // Allocate the pixel array. Called internally by create().
+        private native fun initBuffer(width: UShort, height: UShort)
+
+        // Write pixels[] to the screen at the given view-relative position
+        // using WritePixelArray. Called from paint().
+        private native fun writePixels(graphics: Graphics, x: Short, y: Short)
+
+        // Request a repaint so pixels[] are pushed to screen on next paint cycle.
+        fun flush() {
+            this.requestRepaint()
+        }
+
+        // Factory: allocate a PixelBufferView with a zero-filled pixel buffer.
+        static fun create(bufferWidth: UShort, bufferHeight: UShort): PixelBufferView {
+            var view = new PixelBufferView()
+            view.initBuffer(bufferWidth, bufferHeight)
+            return view
+        }
+
+        override fun minWidth(): Short {
+            return this.bufferWidth.toShort() + base.minWidth()
+        }
+
+        override fun minHeight(): Short {
+            return this.bufferHeight.toShort() + base.minHeight()
+        }
+
+        override fun paint(graphics: Graphics) {
+            base.paint(graphics)
+
+            if (this.pixels == null) {
+                return
+            }
+
+            var innerW = this.innerWidth()
+            var innerH = this.innerHeight()
+            var bmpW = this.bufferWidth.toShort()
+            var bmpH = this.bufferHeight.toShort()
+
+            if (innerW <= 0S || innerH <= 0S || bmpW <= 0S || bmpH <= 0S) {
+                return
+            }
+
+            var drawX = 0S
+            var drawY = 0S
+
+            // Horizontal alignment
+            if (this.alignH == Alignment.Center) {
+                drawX = (innerW - bmpW) / 2S
+            } else if (this.alignH == Alignment.End) {
+                drawX = innerW - bmpW
+            }
+            if (drawX < 0S) { drawX = 0S }
+
+            // Vertical alignment
+            if (this.alignV == Alignment.Center) {
+                drawY = (innerH - bmpH) / 2S
+            } else if (this.alignV == Alignment.End) {
+                drawY = innerH - bmpH
+            }
+            if (drawY < 0S) { drawY = 0S }
+
+            this.writePixels(graphics, drawX, drawY)
+        }
+    }
+}
