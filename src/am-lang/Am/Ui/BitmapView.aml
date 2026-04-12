@@ -38,38 +38,70 @@ namespace Am.Ui
             var bmpW = this.bitmap.getWidth().toShort()
             var bmpH = this.bitmap.getHeight().toShort()
 
+            if (innerW <= 0S || innerH <= 0S || bmpW <= 0S || bmpH <= 0S) {
+                return
+            }
+
+            var innerWInt = innerW.toInt()
+            var innerHInt = innerH.toInt()
+            var bmpWInt = bmpW.toInt()
+            var bmpHInt = bmpH.toInt()
+
             var drawX = 0S
             var drawY = 0S
             var drawW = bmpW
             var drawH = bmpH
 
+            var drawWInt = bmpWInt
+            var drawHInt = bmpHInt
+            var drawXInt = 0
+            var drawYInt = 0
+
             if (this.scaleToFit) {
                 if (this.maintainAspectRatio) {
                     // Pick the scale factor that fits both dimensions
-                    var useXScale = (innerW * bmpH) <= (innerH * bmpW)
+                    var useXScale = (innerWInt * bmpHInt) <= (innerHInt * bmpWInt)
 
                     if (useXScale) {
-                        drawW = innerW
-                        drawH = (bmpH * innerW) / bmpW
+                        drawWInt = innerWInt
+                        drawHInt = (bmpHInt * innerWInt) / bmpWInt
                     } else {
-                        drawW = (bmpW * innerH) / bmpH
-                        drawH = innerH
+                        drawWInt = (bmpWInt * innerHInt) / bmpHInt
+                        drawHInt = innerHInt
+                    }
+
+                    if (drawWInt < 1) {
+                        drawWInt = 1
+                    }
+                    if (drawHInt < 1) {
+                        drawHInt = 1
                     }
 
                     // Center within inner area
-                    drawX = (innerW - drawW) / 2S
-                    drawY = (innerH - drawH) / 2S
+                    drawXInt = (innerWInt - drawWInt) / 2
+                    drawYInt = (innerHInt - drawHInt) / 2
                 } else {
-                    drawW = innerW
-                    drawH = innerH
-                    drawX = 0S
-                    drawY = 0S
+                    drawWInt = innerWInt
+                    drawHInt = innerHInt
+                    drawXInt = 0
+                    drawYInt = 0
                 }
             } else {
                 // Original size, centred
-                drawX = (innerW - bmpW) / 2S
-                drawY = (innerH - bmpH) / 2S
+                drawWInt = bmpWInt
+                drawHInt = bmpHInt
+                drawXInt = (innerWInt - bmpWInt) / 2
+                drawYInt = (innerHInt - bmpHInt) / 2
             }
+
+            if (drawWInt <= 0 || drawHInt <= 0) {
+                return
+            }
+
+            drawW = drawWInt.toShort()
+            drawH = drawHInt.toShort()
+            drawX = drawXInt.toShort()
+            drawY = drawYInt.toShort()
 
             graphics.drawBitmap(this.bitmap, drawX, drawY, drawW, drawH)
         }

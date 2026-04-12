@@ -314,6 +314,7 @@ function_result Am_Ui_LayerGraphics_drawBitmap_0(aobject * const this, aobject *
     }
     struct RastPort *rp = get_rp(this);
     if (rp == NULL || bitmap == NULL) goto __exit;
+    if (destWidth <= 0 || destHeight <= 0) goto __exit;
     {
         Am_Ui_Bitmap_data *bitmapData =
             (Am_Ui_Bitmap_data *)bitmap->object_properties.class_object_properties.object_data.value.custom_value;

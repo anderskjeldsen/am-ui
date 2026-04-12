@@ -557,6 +557,7 @@ function_result Am_Ui_ViewContextGraphics_drawBitmap_0(aobject * const this,
 	}
 
 	if (bitmap == NULL) goto __exit;
+	if (destWidth <= 0 || destHeight <= 0) goto __exit;
 
 	{
 		Am_Ui_Bitmap_data * const bitmapData =
