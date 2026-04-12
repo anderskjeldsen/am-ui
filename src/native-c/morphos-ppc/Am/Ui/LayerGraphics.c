@@ -21,6 +21,8 @@ __exit: ; \
 STUB_VOID(Am_Ui_LayerGraphics__native_init_0(aobject * const this))
 STUB_VOID(Am_Ui_LayerGraphics__native_release_0(aobject * const this))
 STUB_VOID(Am_Ui_LayerGraphics__native_mark_children_0(aobject * const this))
+STUB_VOID(Am_Ui_LayerGraphics_attachRenderableBitmap_0(aobject * const this))
+STUB_VOID(Am_Ui_LayerGraphics_attachWindow_0(aobject * const this))
 STUB_VOID(Am_Ui_LayerGraphics_setForegroundPen_0(aobject * const this, unsigned char pen))
 STUB_VOID(Am_Ui_LayerGraphics_setBackgroundPen_0(aobject * const this, unsigned char pen))
 STUB_VOID(Am_Ui_LayerGraphics_drawLine_0(aobject * const this, short x, short y, short x2, short y2))
