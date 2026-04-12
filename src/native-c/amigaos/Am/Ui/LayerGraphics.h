@@ -9,6 +9,8 @@
 typedef struct _Am_Ui_LayerGraphics_data Am_Ui_LayerGraphics_data;
 struct _Am_Ui_LayerGraphics_data {
     struct Region *clip_region;
+    struct RastPort *rastport;
+    struct Layer *layer;
 };
 
 #endif

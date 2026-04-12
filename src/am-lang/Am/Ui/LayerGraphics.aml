@@ -1,13 +1,29 @@
 namespace Am.Ui
 {
-    // Graphics implementation backed by a RenderableBitmap layer/rastport.
-    native class LayerGraphics(private var renderableBitmap: RenderableBitmap) : Graphics {
+    // Graphics implementation backed by a cached native layer/rastport target.
+    native class LayerGraphics : Graphics {
         import Am.Lang
         import Am.Imaging
 
+        private var renderableBitmap: RenderableBitmap
+        private var window: Window
+
         static fun fromRenderableBitmap(renderableBitmap: RenderableBitmap): LayerGraphics {
-            return new LayerGraphics(renderableBitmap)
+            var graphics = new LayerGraphics()
+            graphics.renderableBitmap = renderableBitmap
+            graphics.attachRenderableBitmap()
+            return graphics
         }
+
+        static fun fromWindow(window: Window): LayerGraphics {
+            var graphics = new LayerGraphics()
+            graphics.window = window
+            graphics.attachWindow()
+            return graphics
+        }
+
+        private native fun attachRenderableBitmap()
+        private native fun attachWindow()
 
         native override fun setForegroundPen(pen: UByte)
         native override fun setBackgroundPen(pen: UByte)

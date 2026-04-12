@@ -3,6 +3,8 @@
 #include <amigaos/Am/Ui/LayerGraphics.h>
 #include <Am/Ui/RenderableBitmap.h>
 #include <amigaos/Am/Ui/RenderableBitmap.h>
+#include <Am/Ui/Window.h>
+#include <amigaos/Am/Ui/Window.h>
 #include <Am/Ui/Bitmap.h>
 #include <amigaos/Am/Ui/Bitmap.h>
 #include <Am/Ui/Font.h>
@@ -35,27 +37,79 @@ short lg_translated_y(aobject *g, short y) {
     return ty + y;
 }
 
-static Am_Ui_RenderableBitmap_data *get_renderable_bitmap_data(aobject *this)
+static Am_Ui_LayerGraphics_data *get_layer_graphics_data(aobject *this)
 {
     if (this == NULL) return NULL;
-    aobject *rb = this->object_properties.class_object_properties.properties[Am_Ui_LayerGraphics_P_renderableBitmap]
-        .nullable_value.value.object_value;
-    if (rb == NULL) return NULL;
-    return (Am_Ui_RenderableBitmap_data *)rb->object_properties.class_object_properties.object_data.value.custom_value;
+    return (Am_Ui_LayerGraphics_data *)this->object_properties.class_object_properties.object_data.value.custom_value;
 }
 
 static struct RastPort *get_rp(aobject *this)
 {
-    Am_Ui_RenderableBitmap_data *rbData = get_renderable_bitmap_data(this);
-    if (rbData == NULL || rbData->layer == NULL || rbData->rastport.BitMap == NULL) return NULL;
-    return &rbData->rastport;
+    Am_Ui_LayerGraphics_data *data = get_layer_graphics_data(this);
+    if (data == NULL || data->rastport == NULL || data->rastport->BitMap == NULL) return NULL;
+    return data->rastport;
 }
 
 static struct Layer *get_layer(aobject *this)
 {
-    Am_Ui_RenderableBitmap_data *rbData = get_renderable_bitmap_data(this);
-    if (rbData == NULL) return NULL;
-    return rbData->layer;
+    Am_Ui_LayerGraphics_data *data = get_layer_graphics_data(this);
+    if (data == NULL) return NULL;
+    return data->layer;
+}
+
+static void clear_target(Am_Ui_LayerGraphics_data *data)
+{
+    if (data == NULL) return;
+    data->rastport = NULL;
+    data->layer = NULL;
+}
+
+static void bind_renderable_bitmap_target(aobject *this)
+{
+    if (this == NULL) return;
+    Am_Ui_LayerGraphics_data *data = get_layer_graphics_data(this);
+    if (data == NULL) return;
+
+    aobject *rb = this->object_properties.class_object_properties.properties[Am_Ui_LayerGraphics_P_renderableBitmap]
+        .nullable_value.value.object_value;
+    if (rb == NULL) {
+        clear_target(data);
+        return;
+    }
+
+    Am_Ui_RenderableBitmap_data *rbData =
+        (Am_Ui_RenderableBitmap_data *)rb->object_properties.class_object_properties.object_data.value.custom_value;
+    if (rbData == NULL || rbData->layer == NULL || rbData->rastport.BitMap == NULL) {
+        clear_target(data);
+        return;
+    }
+
+    data->rastport = &rbData->rastport;
+    data->layer = rbData->layer;
+}
+
+static void bind_window_target(aobject *this)
+{
+    if (this == NULL) return;
+    Am_Ui_LayerGraphics_data *data = get_layer_graphics_data(this);
+    if (data == NULL) return;
+
+    aobject *windowObj = this->object_properties.class_object_properties.properties[Am_Ui_LayerGraphics_P_window]
+        .nullable_value.value.object_value;
+    if (windowObj == NULL) {
+        clear_target(data);
+        return;
+    }
+
+    Am_Ui_Window_data *windowData =
+        (Am_Ui_Window_data *)windowObj->object_properties.class_object_properties.object_data.value.custom_value;
+    if (windowData == NULL || windowData->window == NULL || windowData->window->RPort == NULL || windowData->window->WLayer == NULL) {
+        clear_target(data);
+        return;
+    }
+
+    data->rastport = windowData->window->RPort;
+    data->layer = windowData->window->WLayer;
 }
 
 static void apply_clip_rect(aobject *this, aobject *clipRect)
@@ -103,6 +157,7 @@ function_result Am_Ui_LayerGraphics__native_init_0(aobject * const this)
         goto __exit;
     }
     data->clip_region = NewRegion();
+    clear_target(data);
     this->object_properties.class_object_properties.object_data.value.custom_value = data;
 
 __exit: ;
@@ -136,6 +191,24 @@ function_result Am_Ui_LayerGraphics__native_mark_children_0(aobject * const this
 {
     function_result __result = { .has_return_value = false };
     bool __returning = false;
+__exit: ;
+    return __result;
+}
+
+function_result Am_Ui_LayerGraphics_attachRenderableBitmap_0(aobject * const this)
+{
+    function_result __result = { .has_return_value = false };
+    bool __returning = false;
+    bind_renderable_bitmap_target(this);
+__exit: ;
+    return __result;
+}
+
+function_result Am_Ui_LayerGraphics_attachWindow_0(aobject * const this)
+{
+    function_result __result = { .has_return_value = false };
+    bool __returning = false;
+    bind_window_target(this);
 __exit: ;
     return __result;
 }
