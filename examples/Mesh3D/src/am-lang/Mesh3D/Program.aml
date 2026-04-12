@@ -1,0 +1,95 @@
+namespace Mesh3D
+{
+    class Program {
+        import Am.Lang
+        import Am.Util
+        import Am.IO
+        import Am.Ui
+        import Am.Graphics3D
+        import Am.Imaging
+        import Am.Imaging.Png
+
+        static fun main() {
+            var bufW = 320
+            var bufH = 240
+
+            // Load the texture from the working directory
+            var texture = PngLoader.load(new File("image.png"))
+
+            // Build a quad mesh: 4 vertices, 2 triangles, 4 UV coords
+            //
+            //  3 (-1,+1)----2 (+1,+1)
+            //      |  \     |
+            //      |   \    |
+            //      |    \   |
+            //  0 (-1,-1)----1 (+1,-1)
+            //
+            var mesh = Mesh.create(4, 2)
+
+            // Local-space vertices (unit square in the XY plane)
+            mesh.getVertices().setVector(0, -1.0, -1.0, 0.0)  // bottom-left
+            mesh.getVertices().setVector(1,  1.0, -1.0, 0.0)  // bottom-right
+            mesh.getVertices().setVector(2,  1.0,  1.0, 0.0)  // top-right
+            mesh.getVertices().setVector(3, -1.0,  1.0, 0.0)  // top-left
+
+            // UV coordinates  (y=0 is top of image, y=1 is bottom)
+            mesh.getTextureVertices().setVector(0, 0.0, 1.0)  // bottom-left tex
+            mesh.getTextureVertices().setVector(1, 1.0, 1.0)  // bottom-right tex
+            mesh.getTextureVertices().setVector(2, 1.0, 0.0)  // top-right tex
+            mesh.getTextureVertices().setVector(3, 0.0, 0.0)  // top-left tex
+
+            // Triangle 0: verts 0,1,2  (bottom-right half)
+            var poly1: Polygon = {
+                textureIndex: 0S,
+                vertex1Index: 0US, vertex2Index: 1US, vertex3Index: 2US,
+                textureVertex1Index: 0US, textureVertex2Index: 1US, textureVertex3Index: 2US,
+                flags: 0UB, group: 0UB
+            }
+
+            var poly2: Polygon = {
+                textureIndex: 0S,
+                vertex1Index: 0US, vertex2Index: 2US, vertex3Index: 3US,
+                textureVertex1Index: 0US, textureVertex2Index: 2US, textureVertex3Index: 3US,
+                flags: 0UB, group: 0UB
+            }
+
+            mesh.getPolygons().setPolygon(0, poly1)
+
+            // Triangle 1: verts 0,2,3  (top-left half)
+            mesh.getPolygons().setPolygon(1, poly2)
+
+            // Place the mesh in front of the camera (camera at origin, looking +Z)
+            mesh.setPosition(0.0, 0.0, 2.5)
+
+            // Allocate the z-buffer (same dimensions as the pixel buffer)
+            var bufSize = bufW * bufH
+            var zbuffer = new Double[bufSize]
+
+            // Create the pixel buffer view
+            var canvas = PixelBufferView.create(bufW.toUShort(), bufH.toUShort())
+
+            // Open window
+            var window = Window.openWindow(50S, 50S, bufW.toShort(), bufH.toShort(), null, null)
+            window.setTitle("3D Mesh")
+            window.setScreenTitle("AmUI Textured 3D Mesh")
+            window.setRootView(canvas)
+            window.layout()
+
+            while (window.isOpen()) {
+                // Spin the mesh around the Y axis each frame
+                mesh.addRotation(0.0, 1.5, 0.0)
+
+                // Clear pixel buffer and z-buffer
+                Renderer3D.clearBuffers(canvas.pixels, zbuffer, bufSize)
+
+                // Render all polygons
+                Renderer3D.render(mesh, texture, canvas.pixels, zbuffer, bufW, bufH)
+
+                // Push pixels to screen
+                canvas.flush()
+
+                window.handleInput()
+            }
+        }
+    }
+}
