@@ -1,9 +1,9 @@
 namespace Mesh3D
 {
     // Software 3D renderer: perspective projection, affine texture mapping,
-    // diffuse lighting, and z-buffer depth test.
+    // and z-buffer depth test.
     // Camera is fixed at the origin looking down +Z.
-    class Renderer3D {
+    native class Renderer3D {
         import Am.Lang
         import Am.Util
         import Am.Graphics3D
@@ -13,7 +13,7 @@ namespace Mesh3D
         static fun clearBuffers(pixels: UInt[], zbuffer: Double[], bufSize: Int) {
             var bg = 0xFF101018UI
             for (i = 0 to bufSize) {
-                pixels[i.toUInt()] = bg
+                pixels[i as UInt] = bg
                 zbuffer[i] = 9999999.0
             }
         }
@@ -28,8 +28,8 @@ namespace Mesh3D
             zbuffer: Double[],
             bufW: Int, bufH: Int
         ) {
-            var halfW = bufW.toDouble() * 0.5
-            var halfH = bufH.toDouble() * 0.5
+            var halfW = bufW as Double * 0.5
+            var halfH = bufH as Double * 0.5
             var pd = 200.0
 
             var meshPos = mesh.getPosition()
@@ -39,22 +39,18 @@ namespace Mesh3D
             var rotZ = Matrix3.rotationZ(Math.toRadians(meshRot.z))
             var rotMat = rotY.multiply(rotX).multiply(rotZ)
 
-            // Light direction (world space, normalised)
-            var lightRaw: Vector3 = { x: 1.0, y: -1.0, z: 1.0 }
-            var lightDir = lightRaw.normalize()
-
             var verts = mesh.getVertices()
             var polys = mesh.getPolygons()
             var tverts = mesh.getTextureVertices()
 
             for (pi = 0UI to polys.polygons.length()) {
                 var poly = polys.polygons[pi]
-                var vi0 = poly.vertex1Index.toInt()
-                var vi1 = poly.vertex2Index.toInt()
-                var vi2 = poly.vertex3Index.toInt()
-                var ti0 = poly.textureVertex1Index.toInt()
-                var ti1 = poly.textureVertex2Index.toInt()
-                var ti2 = poly.textureVertex3Index.toInt()
+                var vi0 = poly.vertex1Index as Int
+                var vi1 = poly.vertex2Index as Int
+                var vi2 = poly.vertex3Index as Int
+                var ti0 = poly.textureVertex1Index as Int
+                var ti1 = poly.textureVertex2Index as Int
+                var ti2 = poly.textureVertex3Index as Int
 
                 // Local → world (rotate then translate)
                 var lv0 = verts.getVector(vi0)
@@ -68,16 +64,6 @@ namespace Mesh3D
                 if (wv0.z <= 0.1 || wv1.z <= 0.1 || wv2.z <= 0.1) {
                     continue
                 }
-
-                // Face normal → diffuse lighting
-                var edge0: Vector3 = { x: wv1.x - wv0.x, y: wv1.y - wv0.y, z: wv1.z - wv0.z }
-                var edge1: Vector3 = { x: wv2.x - wv0.x, y: wv2.y - wv0.y, z: wv2.z - wv0.z }
-                var normal = edge0.cross(edge1).normalize()
-                var ndotl = normal.dot(lightDir)
-                if (ndotl < 0.0) { ndotl = -ndotl }
-                var light = 0.2 + ndotl * 0.8
-                if (light < 0.15) { light = 0.15 }
-                if (light > 1.0) { light = 1.0 }
 
                 // Perspective project (Y flipped: screen +Y is down)
                 var ax = wv0.x * pd / wv0.z + halfW
@@ -102,11 +88,13 @@ namespace Mesh3D
                 var cv = tv2.y
 
                 // Pick texture for this polygon; access pixel data directly
-                var texIdx = poly.textureIndex.toInt()
-                var texture = textures[texIdx.toUInt()]
+                var texIdx = poly.textureIndex as Int
+                var texture = textures[texIdx as UInt]
                 var texPixels = texture.getPixelColors()
-                var tw = texture.getWidth().toInt()
-                var th = texture.getHeight().toInt()
+                var tw = texture.getWidth() as Int
+                var th = texture.getHeight() as Int
+                var twDouble = tw as Double
+                var thDouble = th as Double
 
                 // Bounding box clamped to screen
                 var minX = ax
@@ -122,10 +110,10 @@ namespace Mesh3D
                 if (by > maxY) { maxY = by }
                 if (cy > maxY) { maxY = cy }
 
-                var x0 = minX.toInt()
-                var x1 = maxX.toInt()
-                var y0 = minY.toInt()
-                var y1 = maxY.toInt()
+                var x0 = minX as Int
+                var x1 = maxX as Int
+                var y0 = minY as Int
+                var y1 = maxY as Int
                 if (x0 < 0) { x0 = 0 }
                 if (y0 < 0) { y0 = 0 }
                 if (x1 >= bufW) { x1 = bufW - 1 }
@@ -142,11 +130,11 @@ namespace Mesh3D
 
                 // Rasterize
                 var py = y0
+                var fpy = y0 as Double + 0.5
                 while (py <= y1) {
                     var px = x0
+                    var fpx = x0 as Double + 0.5
                     while (px <= x1) {
-                        var fpx = px.toDouble() + 0.5
-                        var fpy = py.toDouble() + 0.5
                         var w0 = (e00 * (fpx - cx) + e01 * (fpy - cy)) * invDenom
                         var w1 = (e10 * (fpx - cx) + e11 * (fpy - cy)) * invDenom
                         var w2 = 1.0 - w0 - w1
@@ -165,25 +153,28 @@ namespace Mesh3D
                                 if (pv >= 1.0) { pv = 0.9999 }
 
                                 // Fetch texel directly from pixel array
-                                var tpx = (pu * tw.toDouble()).toInt()
-                                var tpy = (pv * th.toDouble()).toInt()
-                                var rawColor = texPixels[(tpy * tw + tpx).toUInt()]
+                                var tpx = (pu * twDouble) as Int
+                                var tpy = (pv * thDouble) as Int
+                                var rawColor = texPixels[(tpy * tw + tpx)]
 
-                                // Apply diffuse light per channel
-                                var r = (rawColor / 0x10000UI) % 0x100UI
-                                var g = (rawColor / 0x100UI) % 0x100UI
-                                var b = rawColor % 0x100UI
-                                var rl = (r.toDouble() * light).toUInt()
-                                var gl = (g.toDouble() * light).toUInt()
-                                var bl = (b.toDouble() * light).toUInt()
-                                pixels[idx.toUInt()] = 0xFF000000UI + rl * 0x10000UI + gl * 0x100UI + bl
+                                pixels[idx] = rawColor
                             }
                         }
                         px = px + 1
+                        fpx = fpx + 1.0
                     }
                     py = py + 1
+                    fpy = fpy + 1.0
                 }
             }
         }
+
+        native static fun drawPolygons2(
+            mesh: Mesh,
+            textures: Image[],
+            pixels: UInt[],
+            zbuffer: Double[],
+            bufW: Int, bufH: Int
+        )
     }
 }
