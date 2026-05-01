@@ -37,13 +37,25 @@ platforms:
     gccCommand: ppc-morphos-gcc -O3
     additionalHeaders:
     additionalAsmSources:
-    additionalCSources: 
+    additionalCSources:
     additionalIncludePaths:
     gccAdditionalOptions:
-      - -noixemul     
+      - -noixemul
     additionalLinkerFlags:
       - -noixemul
     gccAdditionalLibraries:
+  # Headless platform that simulates AmigaOS graphics on linux-x64. Builds to a
+  # 150x100 byte buffer instead of an OS window — used by the unit-test suite
+  # to verify the layout / clip / paint pipeline. Despite the name it does NOT
+  # cross-compile to AmigaOS; "sim" stands for simulator.
+  - id: amigaos-sim
+    extends: libc
+    gccCommand: gcc
+    additionalHeaders:
+      - headless_painter.h
+    additionalCSources:
+      - inputFilename: headless_painter.c
+        outputFilename: headless_painter.o
 
 
 buildTargets:
@@ -57,4 +69,7 @@ buildTargets:
     dockerBuild:
       image: amigadev/crosstools:ppc-morphos
       buildPath: /work
+  - id: amigaos-sim
+    platform: amigaos-sim
+    features: ["floatingPoint"]
 

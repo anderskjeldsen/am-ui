@@ -22,6 +22,11 @@ else
 	$(CMD) test . -bt linux-x64 -ll $(LOGLEVEL)
 endif
 
+# Headless graphics tests — runs locally with gcc, paints into a 150x100
+# byte buffer, asserts pixels via the test-only HeadlessPainter class.
+test-sim:
+	$(CMD) test . -bt amigaos-sim -ll $(LOGLEVEL)
+
 test-rl:
 # if MAXONEERROR is true, add -maxOneError flag
 ifeq ($(MAXONEERROR),true)

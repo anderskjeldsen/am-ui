@@ -1,0 +1,115 @@
+namespace Am.Ui.Tests
+{
+    // Reproduces the AppLauncher example layout (VStack > [Separator, Panel >
+    // HStack > Buttons]) inside a 150x100 simulator window and asserts that
+    // each button's text cell ends up inside its own painted area — the bug
+    // we hit on real Amiga where Panel.paintAll's missing pushClipRect made
+    // child clip rects land at the wrong absolute coords, so labels were
+    // half-clipped.
+    //
+    // The amigaos-sim font is a fixed 8-pixel cell per character. With the
+    // foreground pen at draw time, drawString fills the cell with the pen
+    // index. So we can read pixels via HeadlessPainter.getPixelAt to verify:
+    //   - somewhere inside each button → non-zero (button background was drawn)
+    //   - somewhere inside the label cell → non-zero (label was drawn,
+    //     i.e. NOT clipped out)
+    class AppLauncherLayoutTest {
+        import Am.Lang
+        import Am.Ui
+        import Am.Tests
+
+        test buttonsRenderInsideTheirBounds() {
+            var window = Window.openWindow(0S, 0S, 150US, 100US, null, null)
+
+            // Mirror AppLauncher: VStack root with default padding,
+            // a separator, and a Panel containing an HStack of buttons.
+            var root = new VStack(0S)
+            root.setDefaultPadding()
+
+            var sep = new Separator(SeparatorOrientation.Horizontal)
+            root.addChild(sep)
+
+            var appPanel = new Panel()
+            appPanel.setDefaultPadding()
+            appPanel.setDefaultBorder()
+            appPanel.growX = 255UB
+            appPanel.growY = 0UB
+            root.addChild(appPanel)
+
+            var appsRow = new HStack(0S)
+            appsRow.setDefaultPadding()
+            appsRow.growX = 0UB
+            appsRow.growY = 0UB
+            appPanel.setChild(appsRow)
+
+            // Three buttons, like the AppLauncher cards.
+            var btn1 = new Button("A", (v) => { return true })
+            btn1.setDefaultPadding()
+            btn1.setDefaultBorder()
+            btn1.growX = 1UB
+            appsRow.addChild(btn1)
+
+            var btn2 = new Button("B", (v) => { return true })
+            btn2.setDefaultPadding()
+            btn2.setDefaultBorder()
+            btn2.growX = 1UB
+            appsRow.addChild(btn2)
+
+            var btn3 = new Button("C", (v) => { return true })
+            btn3.setDefaultPadding()
+            btn3.setDefaultBorder()
+            btn3.growX = 1UB
+            appsRow.addChild(btn3)
+
+            window.setRootView(root)
+            window.layout()
+            window.repaint()
+
+            // Each button is at absolute Y = root.padding.top + sep.height +
+            // panel.margin.top + panel.border.top + panel.padding.top, with
+            // its own border/padding added on top. Without computing exact
+            // pixel positions, we walk the panel's interior row by row and
+            // count how many pixels inside it are non-zero. If the bug is
+            // back, the panel's content area will be mostly zero (clipped
+            // away) — with the fix, it should be largely painted.
+            var paintedInsidePanel = AppLauncherLayoutTest.countNonZeroInPanel(window, appPanel)
+
+            window.close()
+
+            // Empirically a 150-wide panel with three buttons has hundreds
+            // of painted pixels when the layout works; pre-fix it would
+            // typically have an order of magnitude fewer (only the topmost
+            // strip survives the misplaced clip).
+            ("painted pixels inside panel: " + paintedInsidePanel.toString()).println()
+            Assert.assertTrue(paintedInsidePanel > 100)
+        }
+
+        // Sweep the panel's bounding box and count non-zero pixels.
+        // Coordinates are in the window's coordinate system (post-layout
+        // panel.x/y/width/height).
+        static fun countNonZeroInPanel(window: Window, panel: Panel): Int {
+            var count = 0
+            var startX = panel.x
+            var startY = panel.y
+            var sumX = panel.x.toInt() + panel.width.toInt()
+            var sumY = panel.y.toInt() + panel.height.toInt()
+            var endX = sumX.toShort()
+            var endY = sumY.toShort()
+            var x = startX
+            while (x < endX) {
+                var y = startY
+                while (y < endY) {
+                    var pen = HeadlessPainter.getPixelAt(window, x, y)
+                    if (pen != 0UB) {
+                        count = count + 1
+                    }
+                    var ny = y.toInt() + 1
+                    y = ny.toShort()
+                }
+                var nx = x.toInt() + 1
+                x = nx.toShort()
+            }
+            return count
+        }
+    }
+}

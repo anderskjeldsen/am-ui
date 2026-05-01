@@ -1,7 +1,7 @@
 
 namespace Am.Ui 
 {
-    #implementationPlatforms "libc", "amigaos"
+    #implementationPlatforms "libc", "amigaos", "amigaos-sim"
     native class Window {
         import Am.Lang
 
@@ -91,12 +91,13 @@ namespace Am.Ui
                 this.refresh()
             }
         }
-/*
+        // Synchronously paints the root view into the window. On native
+        // platforms paint() is normally driven by the OS event loop in
+        // response to refresh(); tests (and simple synchronous flows) can
+        // call this to force a paint without depending on input events.
         fun repaint() {
             this.paint()
-//            this.repaintRequested = false
         }
-        */
 
         private fun paint() {
             var graphics = this.getGraphics()

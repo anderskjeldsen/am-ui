@@ -1,0 +1,12 @@
+#pragma once
+#include <libc/core.h>
+#include <Am/Ui/PixelBufferView.h>
+#include <Am/Lang/ClassRef.h>
+#include <Am/Ui/View.h>
+#include <Am/Lang/UShort.h>
+#include <Am/Lang/UInt.h>
+#include <Am/Lang/Array.h>
+#include <Am/Ui/Alignment.h>
+#include <Am/Ui/Graphics.h>
+#include <Am/Lang/Short.h>
+#include <Am/Lang/Bool.h>
