@@ -3,6 +3,7 @@ namespace Am.Ui
 {
 
 
+    #implementationPlatforms "libc", "amigaos"
     native class GadToolsButton : GadToolsBase {
         import Am.Lang
 

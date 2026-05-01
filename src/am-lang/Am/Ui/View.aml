@@ -147,6 +147,7 @@ namespace Am.Ui
                 var currentClip = graphics.getCurrentClipRect()
                 
                 viewClipRect = currentClip.createInnerClipRect(ix, iy, viewWidth.toUShort(), viewHeight.toUShort())                              
+                "new clip rect: (${viewClipRect.x}, ${viewClipRect.y}, ${viewClipRect.width}, ${viewClipRect.height})".println()
 
                 graphics.pushClipRect(viewClipRect)
 

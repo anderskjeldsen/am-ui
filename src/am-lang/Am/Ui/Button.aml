@@ -62,9 +62,9 @@ namespace Am.Ui
             base.paint(graphics)
 
             var x1 = 0S
-            var x2 = this.width.toShort() - (this.margin.right + this.margin.left + 1S)
+            var x2 = this.width as Short - (this.margin.right + this.margin.left + 1S)
             var y1 = 0S
-            var y2 = this.height.toShort() - (this.margin.bottom + this.margin.top + 1S)
+            var y2 = this.height as Short - (this.margin.bottom + this.margin.top + 1S)
 
             var borderPens = this.borderPens
             var bgPen = 0UB
@@ -76,11 +76,13 @@ namespace Am.Ui
             // Background bl,bt - w-br,h-bb            
             graphics.setForegroundPen(bgPen)
             graphics.fillRect(x1, y1, x2, y2)
+            "Rect: (${x1}, ${y1}), (${x2}, ${y2})".println()
 
             this.paintNativeBorder(graphics, borderPens)
 
             var label = this.ensureLabel()
             label.backgroundPen = bgPen
+            "paint label".println()
             label.paintAll(graphics)
         }
 

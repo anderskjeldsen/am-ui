@@ -67,7 +67,7 @@ namespace Am.Ui
             
             var currentClip = graphics.getCurrentClipRect()
             var viewClipRect: ClipRect = currentClip.createInnerClipRect(ix, iy, viewWidth.toUShort(), viewHeight.toUShort())
-            graphics.pushClipRect(viewClipRect)                
+            graphics.pushClipRect(viewClipRect)
 
             if (b1 || b2) {
                 graphics.translate(ix, iy)
@@ -88,18 +88,17 @@ namespace Am.Ui
 
             if (b1 || b2) {
                 graphics.translate(ix, iy)
-                this.paint(graphics)
+                this.paintChildren(graphics)
                 graphics.translate(-ix, -iy)
             }
             this.markAsPainted()
 
             graphics.popClipRect()
-
-
-
+/*
             graphics.translate(ix, iy)            
             this.paintChildren(graphics)
             graphics.translate(-ix, -iy)
+            */
 
         }
 

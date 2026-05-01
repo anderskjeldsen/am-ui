@@ -1,0 +1,198 @@
+namespace AppLauncher {
+
+    class AppInfo(var title: String, var icon: String, var executable: String, var description: String) {
+        import Am.Lang
+        import Am.Imaging
+
+        var image: Image = null
+    }
+
+    class Program {
+        import Am.Lang
+        import Am.IO
+        import Am.Imaging
+        import Am.Imaging.Png
+        import Am.Ui
+        import Am.Json
+        import Am.Util.Parsers.Text
+        import Am.Collections
+
+        static fun loadApps(): List<AppInfo> {
+            var result = new List<AppInfo>()
+
+            var file = new File("apps.json")
+            if (!file.exists()) {
+                "Warning: apps.json not found in working directory".println()
+                return result
+            }
+
+            var content = String.readFromFile(file.toString())
+            var textParser = new TextParser(content)
+            var jsonParser = new JsonParser(textParser)
+            var json = jsonParser.parse()
+            var arr = json.asArray()
+
+            for (i = 0 to arr.size()) {
+                var obj = arr.getJsonObject(i)
+                var title = obj.getString("title")
+                var icon = obj.getString("icon")
+                var executable = obj.getString("executable")
+                var description = obj.getString("description")
+
+                var app = new AppInfo(title, icon, executable, description)
+
+                var iconFile = new File(icon)
+                "icon file ${icon}".println()
+                if (iconFile.exists()) {
+                    "icon file exists".println()
+                    app.image = PngLoader.load(iconFile)
+                } else {
+                    "icon file not found: ${icon}".println()
+                    var defaultFile = new File("default.png")
+                    if (defaultFile.exists()) {
+                        app.image = PngLoader.load(defaultFile)
+                    }
+                }
+
+                result.add(app)
+            }
+
+            return result
+        }
+
+        static fun scaleImage(src: Image, targetW: UShort, targetH: UShort): Image {
+            var dst = Image.createARGB(targetW, targetH)
+            var x = 0US
+            while (x < targetW) {
+                var y = 0US
+                while (y < targetH) {
+                    var srcX = ((x.toUInt() * src.getWidth().toUInt()) / targetW.toUInt()).toUShort()
+                    var srcY = ((y.toUInt() * src.getHeight().toUInt()) / targetH.toUInt()).toUShort()
+                    var color = 0UI
+                    if (src.getPixelFormat() == PixelFormat.ARGB) {
+                        color = src.getPixelColor(srcX, srcY)
+                    } else {
+                        var idx = src.getPixelIndex(srcX, srcY)
+                        color = src.getPaletteColor(idx)
+                    }
+                    dst.setPixelColor(x, y, color)
+                    y++
+                }
+                x++
+            }
+            return dst
+        }
+
+        static fun appMatchesFilter(app: AppInfo, filter: String): Bool {
+            if (filter.isEmpty()) {
+                return true
+            }
+            var lowerTitle = app.title.toLowerCase()
+            var lowerFilter = filter.toLowerCase()
+            return lowerTitle.indexOf(lowerFilter) >= 0
+        }
+
+        static fun buildAppRow(appsRow: HStack, allApps: List<AppInfo>, filter: String, window: Window) {
+            appsRow.removeChildren()
+
+            ("buildAppRow: allApps.getSize()=" + allApps.getSize().toString() + " filter='" + filter + "'").println()
+
+            each (app in allApps) {
+                var matches = Program.appMatchesFilter(app, filter)
+                (" app title='" + app.title + "' matches=" + matches.toString()).println()
+
+                if (matches) {
+                    var appTitle = app.title
+
+                    var card = new VStack(2S)
+                    card.setDefaultPadding()
+                    card.setDefaultBorder()
+//                    card.setMargin(2S, 2S)
+
+                    if (app.image != null) {
+                        "app image set".println()
+//                        var scaledImage = Program.scaleImage(app.image, 48US, 48US)
+                        var bmp = Bitmap.fromImage(app.image, window)
+                        var bmpView = new BitmapView(bmp)
+                        bmpView.scaleToFit = true
+                        bmpView.maintainAspectRatio = true
+                        bmpView.setDefaultPadding()
+//                        card.addChild(bmpView)
+                    }
+
+                    var btn = new Button(appTitle, (view) => {
+                        var name = appTitle
+                        (name + " clicked").println()
+                        return true
+                    })
+                    btn.setDefaultPadding()
+                    btn.setDefaultBorder()
+                    btn.growX = 1UB
+                    btn.growY = 0UB
+//                    card.addChild(btn)
+
+                    appsRow.addChild(btn)
+                    ("  -> card added for '" + appTitle + "'").println()
+                }
+            }
+        }
+
+        static fun main() {
+            var allApps = Program.loadApps()
+
+            var window = Window.openWindow(50S, 50S, 600US, 220US, null, null)
+            window.setTitle("App Launcher")
+            window.setScreenTitle("AmLang App Launcher")
+
+            var root = new VStack(0S)
+            root.setDefaultPadding()
+//            root.setDefaultBorder()
+
+            // Search / filter bar
+            var searchField = new TextField()
+            searchField.setPlaceholder("Search apps...")
+            searchField.setDefaultPadding()
+            searchField.setDefaultBorder()
+            searchField.growX = 255UB
+            root.addChild(searchField)
+
+            var sep = new Separator(SeparatorOrientation.Horizontal)
+            root.addChild(sep)
+
+            // Horizontal row of app cards
+
+            var appPanel = new Panel()
+            appPanel.setDefaultPadding()
+            appPanel.setDefaultBorder()
+            appPanel.growX = 255UB
+            appPanel.growY = 0UB
+            root.addChild(appPanel)
+
+            var appsRow = new HStack(0S)
+            appsRow.setDefaultPadding()
+            appsRow.growX = 0UB
+            appsRow.growY = 0UB
+            appPanel.setChild(appsRow)
+
+            Program.buildAppRow(appsRow, allApps, "", window)
+
+            window.setRootView(root)
+            window.layout()
+            window.requestRepaint()
+
+            var lastFilter = ""
+
+            while (window.isOpen()) {
+                var filter = searchField.getText()
+                if (filter != lastFilter) {
+                    "filter changed: '$filter'".println()
+                    lastFilter = filter
+                    Program.buildAppRow(appsRow, allApps, filter, window)
+                    window.layout()
+                    window.requestRepaint()
+                }
+                window.handleInput()
+            }
+        }
+    }
+}

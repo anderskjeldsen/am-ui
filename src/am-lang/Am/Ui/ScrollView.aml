@@ -51,24 +51,48 @@ namespace Am.Ui
 
 
         override fun paintAll(graphics: Graphics) {
-            var ix = this.x + this.margin.left
-            var iy = this.y + this.margin.top
-
             var b1 = graphics.shouldRepaintAll()
             var b2 = this.getRepaintRequested()
+
+            // Phase 1: paint the scroll view itself (background + border) inside
+            // a clip that excludes the margin. Clip and translate must be pushed
+            // together so descendants' createInnerClipRect math stays in sync.
+            var ix = this.x + this.margin.left
+            var iy = this.y + this.margin.top
+            var viewWidth = this.width.toShort() - this.margin.left - this.margin.right
+            var viewHeight = this.height.toShort() - this.margin.top - this.margin.bottom
+
+            var currentClip = graphics.getCurrentClipRect()
+            var viewClipRect: ClipRect = currentClip.createInnerClipRect(ix, iy, viewWidth.toUShort(), viewHeight.toUShort())
+            graphics.pushClipRect(viewClipRect)
+
             if (b1 || b2) {
                 graphics.translate(ix, iy)
                 this.paint(graphics)
                 graphics.translate(-ix, -iy)
             }
             this.markAsPainted()
-            if (this.child != null) {
-                ix = this.x + this.scrollX
-                iy = this.y + this.scrollY
 
-                graphics.translate(ix, iy)
-                this.child.paintAll(graphics)
-                graphics.translate(-ix, -iy)
+            graphics.popClipRect()
+
+            // Phase 2: paint the child shifted by (scrollX, scrollY). The clip
+            // must stay at the ScrollView's static viewport — NOT shifted by
+            // the scroll offset — otherwise content scrolls out of clip range
+            // before it's actually off-screen.
+            if (this.child != null) {
+                viewClipRect = currentClip.createInnerClipRect(this.x, this.y, this.width, this.height)
+                graphics.pushClipRect(viewClipRect)
+
+                if (b1 || b2) {
+                    ix = this.x + this.scrollX
+                    iy = this.y + this.scrollY
+
+                    graphics.translate(ix, iy)
+                    this.child.paintAll(graphics)
+                    graphics.translate(-ix, -iy)
+                }
+
+                graphics.popClipRect()
             }
         }
 

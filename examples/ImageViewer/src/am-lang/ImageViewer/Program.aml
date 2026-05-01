@@ -34,8 +34,8 @@ namespace ImageViewer
 
             // BitmapView renders the bitmap, scaling to fit while maintaining aspect ratio.
             var bitmapView = new BitmapView(bitmap)
-            bitmapView.scaleToFit = true
-            bitmapView.maintainAspectRatio = true
+            bitmapView.scaleToFit = false
+            bitmapView.maintainAspectRatio = false
 
             window.setRootView(bitmapView)
             window.layout()

@@ -23,7 +23,7 @@ namespace Am.Ui
         override fun minHeight(): Short {
             var font = this.getUsedFont()
             if (font != null) {
-                return font.size.toShort()
+                return font.getSize().toShort()
             }
             var vc = this.getViewContext()  
             if (vc != null) {
@@ -39,7 +39,7 @@ namespace Am.Ui
             var font = this.getUsedFont()
 //            ("text width: " + this.getViewContext() .getWindow().calculateStringWidth(font, this.text).toString()).println()
 
-            return this.getViewContext() .getWindow().calculateStringWidth(font, this.text).toShort()
+            return this.getViewContext().getWindow().calculateStringWidth(font, this.text).toShort()
         }
 
         override fun paint(graphics: Graphics) {
@@ -55,6 +55,7 @@ namespace Am.Ui
                 graphics.setFont(font)
             }
 
+            "draw String: ${this.text} to (${x1}, ${y1})".println()
             graphics.drawString(this.text, x1, y1)
         }
     }
