@@ -117,7 +117,7 @@ namespace AppLauncher {
                         bmpView.scaleToFit = true
                         bmpView.maintainAspectRatio = true
                         bmpView.setDefaultPadding()
-//                        card.addChild(bmpView)
+                        card.addChild(bmpView)
                     }
 
                     var btn = new Button(appTitle, (view) => {
@@ -129,9 +129,9 @@ namespace AppLauncher {
                     btn.setDefaultBorder()
                     btn.growX = 1UB
                     btn.growY = 0UB
-//                    card.addChild(btn)
+                    card.addChild(btn)
 
-                    appsRow.addChild(btn)
+                    appsRow.addChild(card)
                     ("  -> card added for '" + appTitle + "'").println()
                 }
             }
