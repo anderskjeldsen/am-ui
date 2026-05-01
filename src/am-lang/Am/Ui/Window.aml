@@ -121,9 +121,16 @@ namespace Am.Ui
                     graphics.setFont(this.font)
                 }
 
+                // Enter content-local coord space so the translate accumulator
+                // matches the absolute clip rect we just pushed; otherwise every
+                // nested createInnerClipRect bakes in (border.left, border.top)
+                // while the translate stack does not, and child paints land at
+                // window-frame coords while their clips are at content coords.
+                graphics.translate(innerX, innerY)
                 this.rootView.paintAll(graphics)
+                graphics.translate(0S - innerX, 0S - innerY)
 
-                graphics.popClipRect()                
+                graphics.popClipRect()
                 // Restore clipping state
             }
             graphics.finalizeRepaintCycle()
@@ -141,9 +148,11 @@ namespace Am.Ui
         fun layout() {
             if (this.rootView != null) {
                 var b = this.border
-//                ("border top" + b.top.toString()).println()
-//                ("Win size: " + this.width.toString() + " x " + this.height.toString()).println()
-                this.rootView.layout(b.left, b.top, this.width - (b.left + b.right).toUShort(), this.height - (b.top + b.bottom).toUShort())
+                // rootView lives in content-local coords (origin at the inside
+                // of the window border). Window.paint() translates by
+                // (b.left, b.top) before delegating, so passing those again as
+                // the rootView position would double-count the border.
+                this.rootView.layout(0S, 0S, this.width - (b.left + b.right).toUShort(), this.height - (b.top + b.bottom).toUShort())
             }
         }
 
