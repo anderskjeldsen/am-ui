@@ -1,7 +1,7 @@
 
 namespace Am.Ui 
 {
-    #implementationPlatforms "libc", "amigaos"
+    #implementationPlatforms "libc", "amigaos", "amigaos-sim"
     native class GadgetViews {
         import Am.Lang
 

@@ -1,0 +1,20 @@
+namespace Am.Ui.Tests
+{
+    // Test-only window-buffer accessor. Only compiled into the test build
+    // (file lives under tests/), and only has a real native implementation
+    // on the amigaos-sim platform — production builds will never see it.
+    #implementationPlatforms "amigaos-sim"
+    native class HeadlessPainter {
+        import Am.Lang
+        import Am.Ui
+
+        // Read the pen index at (x, y) on the window's headless buffer.
+        // Returns 0 when the coordinate is outside the buffer or the window
+        // has no buffer (e.g. on a non-amigaos-sim build).
+        static native fun getPixelAt(window: Window, x: Short, y: Short): UByte
+
+        // Reset every pixel to 0. Useful between assertions in a single test
+        // when re-painting from scratch.
+        static native fun clear(window: Window)
+    }
+}
