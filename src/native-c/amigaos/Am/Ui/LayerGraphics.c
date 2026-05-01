@@ -112,7 +112,7 @@ static void bind_window_target(aobject *this)
     data->layer = windowData->window->WLayer;
 }
 
-static void apply_clip_rect(aobject *this, aobject *clipRect)
+static void apply_clip_rect(aobject *this, struct Am_Ui_ClipRect *clipRect)
 {
     if (this == NULL) return;
     if (clipRect == NULL) return;
@@ -127,16 +127,12 @@ static void apply_clip_rect(aobject *this, aobject *clipRect)
     InstallClipRegion(layer, NULL);
     ClearRegion(gData->clip_region);
 
-    short x = clipRect->object_properties.class_object_properties.properties[Am_Ui_ClipRect_P_x].nullable_value.value.short_value;
-    short y = clipRect->object_properties.class_object_properties.properties[Am_Ui_ClipRect_P_y].nullable_value.value.short_value;
-    unsigned short width = clipRect->object_properties.class_object_properties.properties[Am_Ui_ClipRect_P_width].nullable_value.value.ushort_value;
-    unsigned short height = clipRect->object_properties.class_object_properties.properties[Am_Ui_ClipRect_P_height].nullable_value.value.ushort_value;
-
+    // ClipRect is now a struct (value type) — read fields directly.
     struct Rectangle rect;
-    rect.MinX = x;
-    rect.MinY = y;
-    rect.MaxX = x + width - 1;
-    rect.MaxY = y + height - 1;
+    rect.MinX = clipRect->x;
+    rect.MinY = clipRect->y;
+    rect.MaxX = clipRect->x + clipRect->width - 1;
+    rect.MaxY = clipRect->y + clipRect->height - 1;
 
     OrRectRegion(gData->clip_region, &rect);
     InstallClipRegion(layer, gData->clip_region);
@@ -317,6 +313,7 @@ function_result Am_Ui_LayerGraphics_getCurrentFontSize_0(aobject * const this)
     bool __returning = false;
     struct RastPort *rp = get_rp(this);
     if (rp != NULL && rp->Font != NULL) {
+        printf("font size: %d\n", rp->Font->tf_YSize);
         __result.return_value.value.uchar_value = rp->Font->tf_YSize;
     }
 __exit: ;
@@ -428,20 +425,15 @@ __exit: ;
     return __result;
 }
 
-function_result Am_Ui_LayerGraphics_setClipRect_0(aobject * const this, aobject * const clipRect)
+function_result Am_Ui_LayerGraphics_setClipRect_0(aobject * const this, struct Am_Ui_ClipRect * clipRect)
 {
     function_result __result = { .has_return_value = false };
     bool __returning = false;
-    if (clipRect != NULL) {
-        __increase_reference_count(clipRect);
-    }
 
+    // clipRect is a struct value-type (not ARC-tracked); no ref count adjustments needed.
     apply_clip_rect(this, clipRect);
 
 __exit: ;
-    if (clipRect != NULL) {
-        __decrease_reference_count(clipRect);
-    }
     return __result;
 }
 
@@ -459,20 +451,15 @@ __exit: ;
     return __result;
 }
 
-function_result Am_Ui_LayerGraphics_beginPainting_0(aobject * const this, aobject * const clipRect)
+function_result Am_Ui_LayerGraphics_beginPainting_0(aobject * const this, struct Am_Ui_ClipRect * clipRect)
 {
     function_result __result = { .has_return_value = false };
     bool __returning = false;
-    if (clipRect != NULL) {
-        __increase_reference_count(clipRect);
-    }
 
+    // clipRect is a struct value-type (not ARC-tracked); no ref count adjustments needed.
     apply_clip_rect(this, clipRect);
 
 __exit: ;
-    if (clipRect != NULL) {
-        __decrease_reference_count(clipRect);
-    }
     return __result;
 }
 

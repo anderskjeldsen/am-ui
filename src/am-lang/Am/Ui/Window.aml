@@ -1,6 +1,7 @@
 
 namespace Am.Ui 
 {
+    #implementationPlatforms "libc", "amigaos"
     native class Window {
         import Am.Lang
 
@@ -108,7 +109,7 @@ namespace Am.Ui
                 var innerHeight = this.height - (this.border.top + this.border.bottom).toUShort()
 //                ("Window setting clip: x=" + innerX.toString() + " y=" + innerY.toString() + " w=" + innerWidth.toString() + " h=" + innerHeight.toString()).println()
                 
-                var windowClipRect = new ClipRect(innerX, innerY, innerWidth, innerHeight)
+                var windowClipRect: ClipRect = { x: innerX, y: innerY, width: innerWidth, height: innerHeight }
                 graphics.pushClipRect(windowClipRect)
                 
                 if (this.fillBackground) {

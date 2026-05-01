@@ -1,0 +1,38 @@
+[
+    {
+        "title": "Hippo Player",
+        "icon": "assets/hippo.png",
+        "executable": "HippoPlayer",
+        "description": "Amiga music player supporting MOD, XM, and many tracker formats"
+    },
+    {
+        "title": "Directory Opus",
+        "icon": "assets/dopus.png",
+        "executable": "DirectoryOpus",
+        "description": "Powerful file manager for AmigaOS"
+    },
+    {
+        "title": "Workbench",
+        "icon": "assets/workbench.png",
+        "executable": "SYS:System/Workbench",
+        "description": "Amiga system desktop environment"
+    },
+    {
+        "title": "Deluxe Paint",
+        "icon": "assets/dpaint.png",
+        "executable": "DPaint",
+        "description": "Classic pixel art and animation editor"
+    },
+    {
+        "title": "iBrowse",
+        "icon": "assets/ibrowse.png",
+        "executable": "IBrowse",
+        "description": "Web browser for AmigaOS"
+    },
+    {
+        "title": "Final Writer",
+        "icon": "assets/finalwriter.png",
+        "executable": "FinalWriter",
+        "description": "Word processor and desktop publisher"
+    }
+]
