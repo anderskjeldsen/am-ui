@@ -65,8 +65,8 @@ namespace Am.Ui
 
             var innerW = this.innerWidth()
             var innerH = this.innerHeight()
-            var bmpW = this.bufferWidth.toShort()
-            var bmpH = this.bufferHeight.toShort()
+            var bmpW = this.bufferWidth as Short
+            var bmpH = this.bufferHeight as Short
 
             if (innerW <= 0S || innerH <= 0S || bmpW <= 0S || bmpH <= 0S) {
                 return
@@ -90,7 +90,6 @@ namespace Am.Ui
                 drawY = innerH - bmpH
             }
             if (drawY < 0S) { drawY = 0S }
-
             this.writePixels(graphics, drawX, drawY)
         }
     }
