@@ -70,7 +70,7 @@ namespace Mesh3D
             var canvas = PixelBufferView.create(bufW.toUShort(), bufH.toUShort())
 
             // Open window
-            var window = Window.openWindow(50S, 50S, bufW.toShort(), bufH.toShort(), null, null)
+            var window = Window.openWindow(50S, 50S, bufW, bufH, null, null)
             window.setTitle("3D Mesh")
             window.setScreenTitle("AmUI Textured 3D Mesh")
             window.setRootView(canvas)
@@ -78,7 +78,7 @@ namespace Mesh3D
 
             while (window.isOpen()) {
                 // Spin the mesh around the Y axis each frame
-                mesh.addRotation(0.0, 1.5, 0.0)
+                mesh.addRotation(0.0, 3.5, 0.0)
 
                 // Clear pixel buffer and z-buffer
                 Renderer3D.clearBuffers(canvas.pixels, zbuffer, bufSize)

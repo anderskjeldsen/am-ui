@@ -76,7 +76,12 @@ namespace Mesh3D
                 var cy = -(wv2.y * pd / wv2.z) + halfH
                 var cz = wv2.z
 
-                // Texture UVs
+                // Reciprocal Z for perspective-correct texture mapping
+                var ainvz = 1.0 / az
+                var binvz = 1.0 / bz
+                var cinvz = 1.0 / cz
+
+                // Texture UVs (raw values; scaled by 1/z after winding check)
                 var tv0 = tverts.getVector(ti0)
                 var tv1 = tverts.getVector(ti1)
                 var tv2 = tverts.getVector(ti2)
@@ -122,49 +127,121 @@ namespace Mesh3D
                 // Barycentric setup
                 var denom = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy)
                 if (denom > -0.0001 && denom < 0.0001) { continue }
-                var invDenom = 1.0 / denom
                 var e00 = by - cy
                 var e01 = cx - bx
                 var e10 = cy - ay
                 var e11 = ax - cx
+                // Normalise winding: flip edge equations so weights are always
+                // positive inside the triangle (handles both CW and CCW polygons).
+                // Also mirror U so the back face shows the same texture orientation
+                // as the front face (U=0..1 left-to-right on both sides).
+                if (denom < 0.0) {
+                    denom = -denom
+                    e00 = -e00
+                    e01 = -e01
+                    e10 = -e10
+                    e11 = -e11
+                    au = 1.0 - au
+                    bu = 1.0 - bu
+                    cu = 1.0 - cu
+                }
+                var invDenom = 1.0 / denom
 
-                // Rasterize
+                // Scale raw UVs by 1/z so we interpolate u/z, v/z in screen
+                // space. A per-pixel divide then gives perspective-correct UVs,
+                // eliminating the affine seam between the two quad triangles.
+                au = au * ainvz
+                av = av * ainvz
+                bu = bu * binvz
+                bv = bv * binvz
+                cu = cu * cinvz
+                cv = cv * cinvz
+
+                // Per-pixel increments for barycentric weights (dw/dx, dw/dy)
+                var dw0_dx = e00 * invDenom
+                var dw1_dx = e10 * invDenom
+                var dw2_dx = -dw0_dx - dw1_dx
+                var dw0_dy = e01 * invDenom
+                var dw1_dy = e11 * invDenom
+                var dw2_dy = -dw0_dy - dw1_dy
+
+                // Pre-subtract vertex C so: val = w0*(A-C) + w1*(B-C) + C
+                var azCz = az - cz
+                var bzCz = bz - cz
+                var auCu = au - cu
+                var buCu = bu - cu
+                var avCv = av - cv
+                var bvCv = bv - cv
+                var aizCiz = ainvz - cinvz
+                var bizCiz = binvz - cinvz
+
+                // Derived increments for z, u/z, v/z, 1/z
+                var dpz_dx = dw0_dx * azCz + dw1_dx * bzCz
+                var dpu_dx = dw0_dx * auCu + dw1_dx * buCu
+                var dpv_dx = dw0_dx * avCv + dw1_dx * bvCv
+                var dpiz_dx = dw0_dx * aizCiz + dw1_dx * bizCiz
+                var dpz_dy = dw0_dy * azCz + dw1_dy * bzCz
+                var dpu_dy = dw0_dy * auCu + dw1_dy * buCu
+                var dpv_dy = dw0_dy * avCv + dw1_dy * bvCv
+                var dpiz_dy = dw0_dy * aizCiz + dw1_dy * bizCiz
+
+                // Seed all interpolants at the centre of the first pixel (x0+0.5, y0+0.5)
+                var fpx0 = x0 as Double + 0.5
+                var fpy0 = y0 as Double + 0.5
+                var w0_row = (e00 * (fpx0 - cx) + e01 * (fpy0 - cy)) * invDenom
+                var w1_row = (e10 * (fpx0 - cx) + e11 * (fpy0 - cy)) * invDenom
+                var w2_row = 1.0 - w0_row - w1_row
+                var pz_row = w0_row * azCz + w1_row * bzCz + cz
+                var pu_row = w0_row * auCu + w1_row * buCu + cu
+                var pv_row = w0_row * avCv + w1_row * bvCv + cv
+                var piz_row = w0_row * aizCiz + w1_row * bizCiz + cinvz
+
+                // Rasterize — inner loop is additions only
                 var py = y0
-                var fpy = y0 as Double + 0.5
                 while (py <= y1) {
                     var px = x0
-                    var fpx = x0 as Double + 0.5
+                    var w0 = w0_row
+                    var w1 = w1_row
+                    var w2 = w2_row
+                    var pz = pz_row
+                    var pu = pu_row
+                    var pv = pv_row
+                    var piz = piz_row
                     while (px <= x1) {
-                        var w0 = (e00 * (fpx - cx) + e01 * (fpy - cy)) * invDenom
-                        var w1 = (e10 * (fpx - cx) + e11 * (fpy - cy)) * invDenom
-                        var w2 = 1.0 - w0 - w1
                         if (w0 >= 0.0 && w1 >= 0.0 && w2 >= 0.0) {
-                            var pz = w0 * az + w1 * bz + w2 * cz
                             var idx = py * bufW + px
                             if (pz < zbuffer[idx]) {
                                 zbuffer[idx] = pz
-
-                                // Interpolate UV and clamp
-                                var pu = w0 * au + w1 * bu + w2 * cu
-                                var pv = w0 * av + w1 * bv + w2 * cv
-                                if (pu < 0.0) { pu = 0.0 }
-                                if (pu >= 1.0) { pu = 0.9999 }
-                                if (pv < 0.0) { pv = 0.0 }
-                                if (pv >= 1.0) { pv = 0.9999 }
-
-                                // Fetch texel directly from pixel array
-                                var tpx = (pu * twDouble) as Int
-                                var tpy = (pv * thDouble) as Int
-                                var rawColor = texPixels[(tpy * tw + tpx)]
-
-                                pixels[idx] = rawColor
+                                // Perspective divide: recover u and v from u/z and v/z
+                                var perspZ = 1.0 / piz
+                                var clampU = pu * perspZ
+                                if (clampU < 0.0) { clampU = 0.0 }
+                                if (clampU >= 1.0) { clampU = 0.9999 }
+                                var clampV = pv * perspZ
+                                if (clampV < 0.0) { clampV = 0.0 }
+                                if (clampV >= 1.0) { clampV = 0.9999 }
+                                var tpx = (clampU * twDouble) as Int
+                                var tpy = (clampV * thDouble) as Int
+                                pixels[idx] = texPixels[(tpy * tw + tpx)]
                             }
                         }
-                        px = px + 1
-                        fpx = fpx + 1.0
+                        px++
+                        w0 = w0 + dw0_dx
+                        w1 = w1 + dw1_dx
+                        w2 = w2 + dw2_dx
+                        pz = pz + dpz_dx
+                        pu = pu + dpu_dx
+                        pv = pv + dpv_dx
+                        piz = piz + dpiz_dx
                     }
-                    py = py + 1
-                    fpy = fpy + 1.0
+                    py++
+                    w0_row = w0_row + dw0_dy
+                    w1_row = w1_row + dw1_dy
+                    w2_row = w2_row + dw2_dy
+                    pz_row = pz_row + dpz_dy
+                    pu_row = pu_row + dpu_dy
+                    pv_row = pv_row + dpv_dy
+                    piz_row = piz_row + dpiz_dy
                 }
             }
         }
