@@ -91,9 +91,13 @@ namespace MoreViews
             
             vstack.addChild(buttonStack)
             
-            // Set the main view for the window
+            // Wrap everything in a Panel
+            var panel = new Panel()
+            panel.setDefaultPadding()
+            panel.setDefaultBorder()
+            panel.setChild(vstack)
 
-            window.setRootView(vstack)
+            window.setRootView(panel)
             
             window.layout()
             window.requestRepaint()

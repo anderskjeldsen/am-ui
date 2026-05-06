@@ -49,7 +49,7 @@ namespace Am.Ui
             if (vc != null) { 
                 fontHeight = vc.getWindow().getCurrentFontSize().toShort()
             }
-            return fontHeight
+            return fontHeight + 4S
         }
 
         override fun setDefaultPadding() {
@@ -99,9 +99,9 @@ namespace Am.Ui
             
             // Position label to the right of checkbox
             var labelX = this.margin.left + this.borderWidths.left + this.padding.left + checkBoxSize + spacing
-            var labelY = this.margin.top + this.borderWidths.top + this.padding.top
-            var labelWidth = this.innerWidth() - checkBoxSize - spacing
             var labelHeight = label.minHeight()
+            var labelY = this.margin.top + this.borderWidths.top + this.padding.top + (checkBoxSize - labelHeight) / 2S
+            var labelWidth = this.innerWidth() - checkBoxSize - spacing
             
             label.layout(labelX, labelY, labelWidth.toUShort(), labelHeight.toUShort())
         }
@@ -158,8 +158,8 @@ namespace Am.Ui
                 var startX = checkBoxX + margin
                 var startY = checkBoxY + checkBoxSize / 2S
                 var midX = checkBoxX + checkBoxSize / 2S
-                var midY = checkBoxY + checkBoxSize - margin - 1S
-                var endX = checkBoxX + checkBoxSize - margin - 1S
+                var midY = checkBoxY + checkBoxSize - (margin + 1S)
+                var endX = checkBoxX + checkBoxSize - (margin + 1S)
                 var endY = checkBoxY + margin
                 
                 graphics.drawLine(startX, startY, midX, midY)

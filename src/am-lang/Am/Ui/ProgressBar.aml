@@ -78,7 +78,7 @@ namespace Am.Ui
             this.paintNativeBorder(graphics, this.borderPens)
 
             // Calculate progress width using integer arithmetic
-            var progressWidth = (innerW * (this.value - this.minimum).toShort()) / (this.maximum - this.minimum).toShort()
+            var progressWidth = ((innerW.toInt() * (this.value - this.minimum)) / (this.maximum - this.minimum)).toShort()
             
             // Draw progress bar
             if (progressWidth > 0S) {
