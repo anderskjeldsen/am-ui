@@ -1,0 +1,13 @@
+namespace Am.Ui
+{
+    class MenuStrip {
+        import Am.Lang
+        import Am.Collections
+
+        var menus: List<Menu> = new List<Menu>()
+
+        fun addMenu(menu: Menu) {
+            this.menus.add(menu)
+        }
+    }
+}

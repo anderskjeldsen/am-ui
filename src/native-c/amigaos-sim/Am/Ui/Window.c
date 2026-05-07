@@ -145,3 +145,38 @@ function_result Am_Ui_Window_pasteFromClipboard_0(aobject * const this)
 __exit: ;
     return __result;
 }
+
+function_result Am_Ui_Window_nativeBeginMenuStrip_0(aobject * const this)
+{
+    function_result __result = { .has_return_value = false };
+    (void)this;
+    return __result;
+}
+
+function_result Am_Ui_Window_nativeAddMenu_0(aobject * const this, aobject * const title)
+{
+    function_result __result = { .has_return_value = false };
+    (void)this; (void)title;
+    return __result;
+}
+
+function_result Am_Ui_Window_nativeAddMenuItem_0(aobject * const this, int menuIndex, aobject * const item, aobject * const label)
+{
+    function_result __result = { .has_return_value = false };
+    (void)this; (void)menuIndex; (void)item; (void)label;
+    return __result;
+}
+
+function_result Am_Ui_Window_nativeFinalizeMenuStrip_0(aobject * const this)
+{
+    function_result __result = { .has_return_value = false };
+    (void)this;
+    return __result;
+}
+
+function_result Am_Ui_Window_nativeClearMenuStrip_0(aobject * const this)
+{
+    function_result __result = { .has_return_value = false };
+    (void)this;
+    return __result;
+}

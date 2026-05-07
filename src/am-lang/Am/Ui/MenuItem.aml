@@ -1,0 +1,16 @@
+namespace Am.Ui
+{
+    class MenuItem(var label: String, var clickListener: (item: MenuItem) => Bool) {
+        import Am.Lang
+
+        var enabled: Bool = true
+
+        fun invokeClick(): Bool {
+            var cl = this.clickListener
+            if (cl != null) {
+                return cl(this)
+            }
+            return false
+        }
+    }
+}

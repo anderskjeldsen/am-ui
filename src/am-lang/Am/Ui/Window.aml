@@ -22,6 +22,7 @@ namespace Am.Ui
         private var pixelMetrics: PixelMetrics
         private var title: String = ""
         private var screenTitle: String = ""
+        private var menuStrip: MenuStrip
 
         var font: Font
 
@@ -192,8 +193,32 @@ namespace Am.Ui
         }
 
         native fun copyToClipboard(text: String)
-        
+
         native fun pasteFromClipboard(): String
+
+        fun setMenuStrip(strip: MenuStrip) {
+            this.menuStrip = strip
+            if (strip == null) {
+                this.nativeClearMenuStrip()
+                return
+            }
+            this.nativeBeginMenuStrip()
+            var menuIndex = 0
+            each (menu in strip.menus) {
+                this.nativeAddMenu(menu.title)
+                each (item in menu.items) {
+                    this.nativeAddMenuItem(menuIndex, item, item.label)
+                }
+                menuIndex++
+            }
+            this.nativeFinalizeMenuStrip()
+        }
+
+        private native fun nativeBeginMenuStrip()
+        private native fun nativeAddMenu(title: String)
+        private native fun nativeAddMenuItem(menuIndex: Int, item: MenuItem, label: String)
+        private native fun nativeFinalizeMenuStrip()
+        private native fun nativeClearMenuStrip()
 
         private fun getGraphics(): LayerGraphics  {
             return this.graphics
