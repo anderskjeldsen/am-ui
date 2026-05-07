@@ -48,7 +48,7 @@ namespace AppLauncher {
                     app.image = PngLoader.load(iconFile)
                 } else {
                     "icon file not found: ${icon}".println()
-                    var defaultFile = new File("default.png")
+                    var defaultFile = new File("assets/default.png")
                     if (defaultFile.exists()) {
                         app.image = PngLoader.load(defaultFile)
                     }
@@ -168,7 +168,7 @@ namespace AppLauncher {
             appPanel.growY = 0UB
             root.addChild(appPanel)
 
-            var appsRow = new HStack(0S)
+            var appsRow = new HStack(5S)
             appsRow.setDefaultPadding()
             appsRow.growX = 0UB
             appsRow.growY = 0UB
