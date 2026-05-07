@@ -66,6 +66,11 @@ namespace Am.Ui
         }
 
         static fun openWindow(x: Short, y: Short, width: UShort, height: UShort, screen: Screen, windowManager: WindowManager): Window {
+            var properties: WindowProperties = { borderless: false }
+            return Window.openWindow(x, y, width, height, screen, windowManager, properties)
+        }
+
+        static fun openWindow(x: Short, y: Short, width: UShort, height: UShort, screen: Screen, windowManager: WindowManager, properties: WindowProperties): Window {
             var w = new Window()
             var vc = new ViewContextImpl()
             vc.setWindow(w)
@@ -77,7 +82,7 @@ namespace Am.Ui
             w.width = width
             w.height = height
             w.screen = screen
-            w.open(x, y, width, height, screen, windowManager)
+            w.open(x, y, width, height, screen, windowManager, properties)
             var graphics = LayerGraphics.fromWindow(w)
             w.graphics = graphics
 //            vc.setGraphics(graphics)
@@ -215,7 +220,7 @@ namespace Am.Ui
         private native fun refresh()
         private native fun setTitleNative(windowTitle: String, screenTitle: String)
 
-        private native fun open(x: Short, y: Short, width: UShort, height: UShort, screen: Screen, windowManager: WindowManager)
+        private native fun open(x: Short, y: Short, width: UShort, height: UShort, screen: Screen, windowManager: WindowManager, properties: WindowProperties)
         native fun close()
         fun dispose() {
             this.viewContext = null

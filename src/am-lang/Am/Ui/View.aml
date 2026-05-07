@@ -17,6 +17,7 @@ namespace Am.Ui
         var growY: UByte
         private var repaintRequested: Bool = false
         var visible: Bool = true
+        var clickListener: (view: View) => Bool = null
 
         fun getRepaintRequested(): Bool {
             return this.repaintRequested
@@ -242,6 +243,12 @@ namespace Am.Ui
         // returns true if consumed
         open fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
             if (this.contains(x, y)) {
+                if (type == MouseEventType.up) {
+                    var cl = this.clickListener
+                    if (cl != null) {
+                        return cl(this)
+                    }
+                }
                 return true
             }
             return false
