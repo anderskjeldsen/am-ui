@@ -2,7 +2,7 @@
 namespace Am.Ui 
 {
 
-    class Button(var text: String, var clickListener: (view: View) => Bool) : View {
+    class Button(var text: String, var buttonClickListener: (view: View) => Bool) : View {
         import Am.Lang
 
         private var label: Label
@@ -100,7 +100,7 @@ namespace Am.Ui
                     this.requestRepaint()
 
 //                ("Button clicked: " + this.text).println()
-                    var cl = this.clickListener
+                    var cl = this.buttonClickListener
                     if (cl != null) {
                         var res = cl(this)                    
                         return res

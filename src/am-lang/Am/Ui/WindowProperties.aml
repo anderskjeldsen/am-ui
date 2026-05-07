@@ -1,0 +1,9 @@
+namespace Am.Ui
+{
+    struct WindowProperties
+    {
+        import Am.Lang
+
+        var borderless: Bool
+    }
+}

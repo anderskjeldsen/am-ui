@@ -1,6 +1,7 @@
 #include <libc/core.h>
 
 #include <Am/Ui/Window.h>
+#include <Am/Ui/WindowProperties.h>
 #include <Am/Lang/Object.h>
 #include <Am/Lang/String.h>
 #include <Am/Ui/Screen.h>
@@ -131,7 +132,7 @@ UBYTE calculate_pixel_scale_y(USHORT screen_width, USHORT screen_height) {
 }
 
 
-function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHORT width, USHORT height, aobject * screen, aobject * windowManager) //, aobject * screen)
+function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHORT width, USHORT height, aobject * screen, aobject * windowManager, struct Am_Ui_WindowProperties * properties)
 {
 	function_result __result = { .has_return_value = false };
 	bool __returning = false;
@@ -139,6 +140,11 @@ function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHO
 	if (this != NULL) {
 		__increase_reference_count(this);
 	}
+
+	bool borderless = (properties != NULL) ? properties->borderless : false;
+	ULONG window_flags = borderless
+		? (WFLG_ACTIVATE | WFLG_RMBTRAP | WFLG_BORDERLESS | WFLG_SMART_REFRESH)
+		: (WFLG_SIZEGADGET | WFLG_ACTIVATE | WFLG_RMBTRAP | WFLG_DRAGBAR | WFLG_DEPTHGADGET | WFLG_CLOSEGADGET | WFLG_SMART_REFRESH | WFLG_SIZEBBOTTOM);
 
 	SysBase = *((struct ExecBase **)4UL);
 	if (IntuitionBase == NULL) {
@@ -192,9 +198,10 @@ function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHO
 		WA_DetailPen, 1,
 		WA_BlockPen, 2,
 		WA_IDCMP, IDCMP_CLOSEWINDOW | IDCMP_GADGETUP | MENUPICK | MOUSEBUTTONS | REFRESHWINDOW | IDCMP_INTUITICKS | IDCMP_NEWSIZE | IDCMP_MOUSEBUTTONS | IDCMP_RAWKEY,
-		WA_Flags, WFLG_SIZEGADGET | WFLG_ACTIVATE | WFLG_RMBTRAP | WFLG_DRAGBAR | WFLG_DEPTHGADGET | WFLG_CLOSEGADGET | WFLG_SMART_REFRESH | WFLG_SIZEBBOTTOM, //WFLG_BORDERLESS WFLG_BACKDROP
+		WA_Flags, window_flags,
+		WA_Borderless, borderless ? TRUE : FALSE,
 		WA_Gadgets, 0, // (ULONG) data->context_gadget,
-		WA_Title, (ULONG) "Hello",
+		WA_Title, borderless ? (ULONG) NULL : (ULONG) "Hello",
 		WA_MinWidth, 0,
 		WA_MaxWidth, 1000,
 		WA_MinHeight, 0,

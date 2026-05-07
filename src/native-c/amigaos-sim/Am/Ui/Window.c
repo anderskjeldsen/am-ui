@@ -5,6 +5,7 @@
 
 #include <libc/core.h>
 #include <Am/Ui/Window.h>
+#include <Am/Ui/WindowProperties.h>
 #include <Am/Lang/Object.h>
 #include <Am/Lang/String.h>
 #include <Am/Lang/Bool.h>
@@ -53,10 +54,12 @@ __exit: ;
 
 function_result Am_Ui_Window_open_0(aobject * const this, short x, short y,
                                     unsigned short width, unsigned short height,
-                                    aobject *screen, aobject *windowManager)
+                                    aobject *screen, aobject *windowManager,
+                                    struct Am_Ui_WindowProperties *properties)
 {
     function_result __result = { .has_return_value = false };
     bool __returning = false;
+    (void)properties;
 
     // Width / height parameters from the .aml side are honored, but capped to
     // the headless screen size so a paint never escapes our buffer.

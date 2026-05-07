@@ -103,6 +103,7 @@ namespace AppLauncher {
 
                 if (matches) {
                     var appTitle = app.title
+                    var appExecutable = app.executable
 
                     var card = new VStack(2S)
                     card.setDefaultPadding()
@@ -117,14 +118,35 @@ namespace AppLauncher {
                         bmpView.scaleToFit = true
                         bmpView.maintainAspectRatio = true
                         bmpView.setDefaultPadding()
+                        bmpView.clickListener = (view) => {
+                            "[image-click] handler entered".println()
+                            ("[image-click] launching " + appTitle + ": " + appExecutable).println()
+                            var exitCode = Process.run(appExecutable)
+                            ("[image-click] Process.run returned exitCode=" + exitCode.toString()).println()
+                            return true
+                        }
                         card.addChild(bmpView)
                     }
 
+                    ("[btn-create] '" + appTitle + "' exec='" + appExecutable + "'").println()
                     var btn = new Button(appTitle, (view) => {
-                        var name = appTitle
-                        (name + " clicked").println()
+                        "[click] handler entered".println()
+                        ("[click] appTitle='" + appTitle + "'").println()
+                        ("[click] appExecutable='" + appExecutable + "'").println()
+                        if (appExecutable == null) {
+                            "[click] ERROR: appExecutable is null".println()
+                            return true
+                        }
+                        if (appExecutable.isEmpty()) {
+                            "[click] ERROR: appExecutable is empty".println()
+                            return true
+                        }
+                        "[click] calling Process.run...".println()
+                        var exitCode = Process.run(appExecutable)
+                        ("[click] Process.run returned exitCode=" + exitCode.toString()).println()
                         return true
                     })
+                    "[btn-create] done".println()
                     btn.setDefaultPadding()
                     btn.setDefaultBorder()
                     btn.growX = 1UB
@@ -137,10 +159,25 @@ namespace AppLauncher {
             }
         }
 
-        static fun main() {
+        static fun main(args: String[]) {
             var allApps = Program.loadApps()
 
-            var window = Window.openWindow(50S, 50S, 600US, 220US, null, null)
+            var borderless = false
+            var i = 0
+            while (i < args.length()) {
+                if (args[i] == "BORDERLESS") {
+                    borderless = true
+                }
+                i++
+            }
+
+            var window: Window
+            if (borderless) {
+                var properties: WindowProperties = { borderless: true }
+                window = Window.openWindow(50S, 50S, 600US, 280US, null, null, properties)
+            } else {
+                window = Window.openWindow(50S, 50S, 600US, 280US, null, null)
+            }
             window.setTitle("App Launcher")
             window.setScreenTitle("AmLang App Launcher")
 
