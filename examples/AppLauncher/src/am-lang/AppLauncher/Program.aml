@@ -112,8 +112,10 @@ namespace AppLauncher {
 
                     if (app.image != null) {
                         "app image set".println()
-//                        var scaledImage = Program.scaleImage(app.image, 48US, 48US)
-                        var bmp = Bitmap.fromImage(app.image, window)
+                        var halfW = (app.image.getWidth().toUInt() / 2UI).toUShort()
+                        var halfH = (app.image.getHeight().toUInt() / 2UI).toUShort()
+                        var scaledImage = Program.scaleImage(app.image, halfW, halfH)
+                        var bmp = Bitmap.fromImage(scaledImage, window)
                         var bmpView = new BitmapView(bmp)
                         bmpView.scaleToFit = true
                         bmpView.maintainAspectRatio = true
@@ -181,6 +183,16 @@ namespace AppLauncher {
             window.setTitle("App Launcher")
             window.setScreenTitle("AmLang App Launcher")
 
+            var projectMenu = new Menu("Project")
+            projectMenu.addItem(new MenuItem("Exit", (item) => {
+                "[menu] Exit selected".println()
+                window.close()
+                return true
+            }))
+            var menuStrip = new MenuStrip()
+            menuStrip.addMenu(projectMenu)
+            window.setMenuStrip(menuStrip)
+
             var root = new VStack(0S)
             root.setDefaultPadding()
 //            root.setDefaultBorder()
@@ -198,18 +210,20 @@ namespace AppLauncher {
 
             // Horizontal row of app cards
 
+            /*
             var appPanel = new Panel()
             appPanel.setDefaultPadding()
             appPanel.setDefaultBorder()
             appPanel.growX = 255UB
             appPanel.growY = 0UB
             root.addChild(appPanel)
+            */
 
             var appsRow = new HStack(5S)
             appsRow.setDefaultPadding()
-            appsRow.growX = 0UB
+            appsRow.growX = 255UB
             appsRow.growY = 0UB
-            appPanel.setChild(appsRow)
+            root.addChild(appsRow)
 
             Program.buildAppRow(appsRow, allApps, "", window)
 
