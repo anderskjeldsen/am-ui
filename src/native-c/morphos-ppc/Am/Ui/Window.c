@@ -30,7 +30,7 @@ static void do_full_close(aobject * const this) {
 		if (releasing) {
 			this->reference_count = -100;
 		}
-		Am_Ui_Window_setRootView_0(this, NULL);
+		Am_Ui_Window_f_setRootView_0(this, NULL);
 		if (releasing) {
 			this->reference_count = 0;
 		}
@@ -51,6 +51,9 @@ static void do_full_close(aobject * const this) {
 			for (int i = 0; data->menu_new_menus[i].nm_Type != NM_END; i++) {
 				if (data->menu_new_menus[i].nm_Label != NULL && data->menu_new_menus[i].nm_Label != NM_BARLABEL) {
 					free((void *) data->menu_new_menus[i].nm_Label);
+				}
+				if (data->menu_new_menus[i].nm_CommKey != NULL) {
+					free((void *) data->menu_new_menus[i].nm_CommKey);
 				}
 			}
 			free(data->menu_new_menus);
@@ -80,6 +83,11 @@ static void do_full_close(aobject * const this) {
 		if (data->locked_screen != NULL) {
 			UnlockPubScreen(NULL, data->locked_screen);
 			data->locked_screen = NULL;
+		}
+
+		if (data->clip_region != NULL) {
+			DisposeRegion(data->clip_region);
+			data->clip_region = NULL;
 		}
 	}
 
@@ -189,6 +197,7 @@ function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHO
 
 	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) calloc(1, sizeof(Am_Ui_Window_data));
 	this->object_properties.class_object_properties.object_data.value.custom_value = data;
+	data->clip_region = NewRegion();
 
 	struct Screen *amiga_screen = NULL;
 	struct VisualInfo *visual_info = NULL;
@@ -264,8 +273,8 @@ function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHO
 	this->object_properties.class_object_properties.properties[Am_Ui_Window_P_pixelScaleX].nullable_value.value.uchar_value = calculate_pixel_scale_x(window->WScreen->Width, window->WScreen->Height);
 	this->object_properties.class_object_properties.properties[Am_Ui_Window_P_pixelScaleY].nullable_value.value.uchar_value = calculate_pixel_scale_y(window->WScreen->Width, window->WScreen->Height);
 
-	Am_Ui_Window_setBorder_0(this, window->BorderLeft, window->BorderTop, window->BorderRight, window->BorderBottom);
-	Am_Ui_Window_onResize_0(this, window->LeftEdge, window->TopEdge, window->Width, window->Height);
+	Am_Ui_Window_f_setBorder_0(this, window->BorderLeft, window->BorderTop, window->BorderRight, window->BorderBottom);
+	Am_Ui_Window_f_onResize_0(this, window->LeftEdge, window->TopEdge, window->Width, window->Height);
 
 	GT_RefreshWindow(window, NULL);
 
@@ -338,23 +347,23 @@ void handle_message(aobject * this, struct IntuiMessage * msg) {
 			break;
 		case IDCMP_NEWSIZE:
 //			printf("Resize %dx%d\n", win->Width, win->Height);
-	//					Am_Ui_Window_setBorder_0(this, win->BorderLeft, win->BorderTop, win->BorderRight, win->BorderBottom);
+	//					Am_Ui_Window_f_setBorder_0(this, win->BorderLeft, win->BorderTop, win->BorderRight, win->BorderBottom);
 			window_data->pending_resize= TRUE;
-//			Am_Ui_Window_onResize_0(this, win->LeftEdge, win->TopEdge, win->Width, win->Height);
+//			Am_Ui_Window_f_onResize_0(this, win->LeftEdge, win->TopEdge, win->Width, win->Height);
 	//					GT_RefreshWindow(win, NULL);
 			break;
 		case IDCMP_MOUSEBUTTONS:
 //			printf("Mouse click %d\n", msg->Code);
 			if (msg->Code == MENUUP) // Check for right mouse button // IECODE_RBUTTON
 			{
-				Am_Ui_Window_onMouseEvent_0(this, 2, 2, msg->MouseX, msg->MouseY);
+				Am_Ui_Window_f_onMouseEvent_0(this, 2, 2, msg->MouseX, msg->MouseY);
 			} else if (msg->Code == SELECTUP) {
-				Am_Ui_Window_onMouseEvent_0(this, 2, 1, msg->MouseX, msg->MouseY);
+				Am_Ui_Window_f_onMouseEvent_0(this, 2, 1, msg->MouseX, msg->MouseY);
 			} else if (msg->Code == MENUDOWN) // Check for right mouse button
 			{
-				Am_Ui_Window_onMouseEvent_0(this, 3, 2, msg->MouseX, msg->MouseY);
+				Am_Ui_Window_f_onMouseEvent_0(this, 3, 2, msg->MouseX, msg->MouseY);
 			} else if (msg->Code == SELECTDOWN) {
-				Am_Ui_Window_onMouseEvent_0(this, 3, 1, msg->MouseX, msg->MouseY);
+				Am_Ui_Window_f_onMouseEvent_0(this, 3, 1, msg->MouseX, msg->MouseY);
 			}
 			break;
 		case IDCMP_MOUSEMOVE:
@@ -362,7 +371,7 @@ void handle_message(aobject * this, struct IntuiMessage * msg) {
 			if (msg->MouseX != window_data->last_mouse_x && msg->MouseY != window_data->last_mouse_y) {
 				window_data->last_mouse_x = msg->MouseX;
 				window_data->last_mouse_y = msg->MouseY;
-				Am_Ui_Window_onMouseEvent_0(this, 1, 0, msg->MouseX, msg->MouseY);
+				Am_Ui_Window_f_onMouseEvent_0(this, 1, 0, msg->MouseX, msg->MouseY);
 			}
 			break;
 	}
@@ -414,27 +423,27 @@ function_result Am_Ui_Window_handleInput_0(aobject * const this)
 //	printf("Handling done %d\n", signals);
 
 	if (window_data->pending_resize) {
-		Am_Ui_Window_onResize_0(this, win->LeftEdge, win->TopEdge, win->Width, win->Height);
+		Am_Ui_Window_f_onResize_0(this, win->LeftEdge, win->TopEdge, win->Width, win->Height);
 	}
 
 	if (window_data->pending_full_refresh) {
-		Am_Ui_Window_paint_0(this);
+		Am_Ui_Window_f_paint_0(this);
 	}
 	else if (window_data->pending_refresh) {
 		printf("handle pending refresh\n");
 
 		BeginRefresh(window_data->window);
-		Am_Ui_Window_paint_0(this);
+		Am_Ui_Window_f_paint_0(this);
 		EndRefresh(window_data->window, TRUE);
 	}
 
 /*
 	if (window_data->pending_repaint) {
-		Am_Ui_Window_paint_0(this);
+		Am_Ui_Window_f_paint_0(this);
 	}
 */
 	if (window_data->pending_close) {
-		Am_Ui_Window_onCloseButtonClick_0(this);
+		Am_Ui_Window_f_onCloseButtonClick_0(this);
 	}
 
 __exit: ;
@@ -459,6 +468,34 @@ __exit: ;
 	}
 	return __result;
 };
+
+function_result Am_Ui_Window_getHostScreenWidth_0(aobject * const this)
+{
+	function_result __result = { .has_return_value = true };
+	__increase_reference_count(this);
+	Am_Ui_Window_data * data = (Am_Ui_Window_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+	unsigned short v = 0;
+	if (data != NULL && data->window != NULL && data->window->WScreen != NULL) {
+		v = (unsigned short) data->window->WScreen->Width;
+	}
+	__result.return_value.value.ushort_value = v;
+	__decrease_reference_count(this);
+	return __result;
+}
+
+function_result Am_Ui_Window_getHostScreenHeight_0(aobject * const this)
+{
+	function_result __result = { .has_return_value = true };
+	__increase_reference_count(this);
+	Am_Ui_Window_data * data = (Am_Ui_Window_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+	unsigned short v = 0;
+	if (data != NULL && data->window != NULL && data->window->WScreen != NULL) {
+		v = (unsigned short) data->window->WScreen->Height;
+	}
+	__result.return_value.value.ushort_value = v;
+	__decrease_reference_count(this);
+	return __result;
+}
 
 function_result Am_Ui_Window_refresh_0(aobject * const this)
 {
@@ -540,6 +577,9 @@ function_result Am_Ui_Window_nativeBeginMenuStrip_0(aobject * const this) {
 		}
 		for (int i = 0; i < data->menu_builder->num_items; i++) {
 			free(data->menu_builder->item_labels[i]);
+			if (data->menu_builder->item_comm_keys[i] != NULL) {
+				free(data->menu_builder->item_comm_keys[i]);
+			}
 		}
 		free(data->menu_builder);
 	}
@@ -572,11 +612,12 @@ __exit: ;
 	return __result;
 }
 
-function_result Am_Ui_Window_nativeAddMenuItem_0(aobject * const this, int menuIndex, aobject * const item, aobject * const label) {
+function_result Am_Ui_Window_nativeAddMenuItem_0(aobject * const this, int menuIndex, aobject * const item, aobject * const label, aobject * const commKey) {
 	function_result __result = { .has_return_value = false };
 	if (this != NULL) __increase_reference_count(this);
 	if (item != NULL) __increase_reference_count(item);
 	if (label != NULL) __increase_reference_count(label);
+	if (commKey != NULL) __increase_reference_count(commKey);
 	Am_Ui_Window_data * data = (Am_Ui_Window_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
 	if (data == NULL || data->menu_builder == NULL) {
 		goto __exit;
@@ -588,6 +629,16 @@ function_result Am_Ui_Window_nativeAddMenuItem_0(aobject * const this, int menuI
 	}
 	b->item_menu_indices[b->num_items] = menuIndex;
 	b->item_labels[b->num_items] = extract_string_dup(label);
+	if (commKey != NULL) {
+		char * dup = extract_string_dup(commKey);
+		if (dup != NULL && dup[0] == '\0') {
+			free(dup);
+			dup = NULL;
+		}
+		b->item_comm_keys[b->num_items] = dup;
+	} else {
+		b->item_comm_keys[b->num_items] = NULL;
+	}
 	if (item != NULL) {
 		__increase_reference_count(item);
 	}
@@ -597,6 +648,7 @@ __exit: ;
 	if (this != NULL) __decrease_reference_count(this);
 	if (item != NULL) __decrease_reference_count(item);
 	if (label != NULL) __decrease_reference_count(label);
+	if (commKey != NULL) __decrease_reference_count(commKey);
 	return __result;
 }
 
@@ -627,12 +679,13 @@ function_result Am_Ui_Window_nativeFinalizeMenuStrip_0(aobject * const this) {
 			}
 			nm[n].nm_Type = NM_ITEM;
 			nm[n].nm_Label = b->item_labels[i];
-			nm[n].nm_CommKey = NULL;
+			nm[n].nm_CommKey = b->item_comm_keys[i];
 			nm[n].nm_Flags = 0;
 			nm[n].nm_MutualExclude = 0;
 			nm[n].nm_UserData = (APTR) b->item_aobjects[i];
 			n++;
 			b->item_labels[i] = NULL;
+			b->item_comm_keys[i] = NULL;
 			data->menu_item_aobjects[data->menu_item_count++] = b->item_aobjects[i];
 			b->item_aobjects[i] = NULL;
 		}
@@ -672,6 +725,67 @@ function_result Am_Ui_Window_nativeClearMenuStrip_0(aobject * const this) {
 	if (data != NULL) {
 		free_menu_strip(data);
 	}
+__exit: ;
+	if (this != NULL) __decrease_reference_count(this);
+	return __result;
+}
+
+// Mirror of the amigaos setTitleNative: hand both strings to Intuition's
+// SetWindowTitles. A NULL screenTitle is passed through as-is (Intuition
+// docs say (UBYTE *)-1 means "leave unchanged" — callers can rely on that).
+function_result Am_Ui_Window_setTitleNative_0(aobject * const this, aobject * const windowTitle, aobject * const screenTitle)
+{
+	function_result __result = { .has_return_value = false };
+	if (this != NULL) __increase_reference_count(this);
+	if (windowTitle != NULL) __increase_reference_count(windowTitle);
+	if (screenTitle != NULL) __increase_reference_count(screenTitle);
+
+	Am_Ui_Window_data * const data = (Am_Ui_Window_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+	if (data != NULL && data->window != NULL) {
+		char * windowTitleStr = NULL;
+		if (windowTitle != NULL) {
+			string_holder * sh = (string_holder *) windowTitle->object_properties.class_object_properties.object_data.value.custom_value;
+			if (sh != NULL && sh->string_value != NULL) {
+				windowTitleStr = sh->string_value;
+			}
+		}
+		char * screenTitleStr = NULL;
+		if (screenTitle != NULL) {
+			string_holder * sh = (string_holder *) screenTitle->object_properties.class_object_properties.object_data.value.custom_value;
+			if (sh != NULL && sh->string_value != NULL && sh->length > 0) {
+				screenTitleStr = sh->string_value;
+			}
+		}
+		SetWindowTitles(data->window, (STRPTR) windowTitleStr, (STRPTR) screenTitleStr);
+	}
+
+__exit: ;
+	if (this != NULL) __decrease_reference_count(this);
+	if (windowTitle != NULL) __decrease_reference_count(windowTitle);
+	if (screenTitle != NULL) __decrease_reference_count(screenTitle);
+	return __result;
+}
+
+// Clipboard support requires iffparse + clipboard.device — not wired up
+// on MorphOS yet. Stubs so the link resolves.
+function_result Am_Ui_Window_copyToClipboard_0(aobject * const this, aobject * const text)
+{
+	function_result __result = { .has_return_value = false };
+	if (this != NULL) __increase_reference_count(this);
+	if (text != NULL) __increase_reference_count(text);
+	printf("TODO: implement Am_Ui_Window_copyToClipboard_0 on morphos-ppc\n");
+__exit: ;
+	if (this != NULL) __decrease_reference_count(this);
+	if (text != NULL) __decrease_reference_count(text);
+	return __result;
+}
+
+function_result Am_Ui_Window_pasteFromClipboard_0(aobject * const this)
+{
+	function_result __result = { .has_return_value = true };
+	if (this != NULL) __increase_reference_count(this);
+	printf("TODO: implement Am_Ui_Window_pasteFromClipboard_0 on morphos-ppc\n");
+	__result.return_value.value.object_value = NULL;
 __exit: ;
 	if (this != NULL) __decrease_reference_count(this);
 	return __result;

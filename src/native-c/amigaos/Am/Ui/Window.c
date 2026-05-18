@@ -58,6 +58,9 @@ static void do_full_close(aobject * const this) {
 				if (data->menu_new_menus[i].nm_Label != NULL && data->menu_new_menus[i].nm_Label != NM_BARLABEL) {
 					free((void *) data->menu_new_menus[i].nm_Label);
 				}
+				if (data->menu_new_menus[i].nm_CommKey != NULL) {
+					free((void *) data->menu_new_menus[i].nm_CommKey);
+				}
 			}
 			free(data->menu_new_menus);
 			data->menu_new_menus = NULL;
@@ -566,6 +569,34 @@ __exit: ;
 	return __result;
 };
 
+function_result Am_Ui_Window_getHostScreenWidth_0(aobject * const this)
+{
+	function_result __result = { .has_return_value = true };
+	__increase_reference_count(this);
+	Am_Ui_Window_data * data = (Am_Ui_Window_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+	unsigned short v = 0;
+	if (data != NULL && data->window != NULL && data->window->WScreen != NULL) {
+		v = (unsigned short) data->window->WScreen->Width;
+	}
+	__result.return_value.value.ushort_value = v;
+	__decrease_reference_count(this);
+	return __result;
+}
+
+function_result Am_Ui_Window_getHostScreenHeight_0(aobject * const this)
+{
+	function_result __result = { .has_return_value = true };
+	__increase_reference_count(this);
+	Am_Ui_Window_data * data = (Am_Ui_Window_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+	unsigned short v = 0;
+	if (data != NULL && data->window != NULL && data->window->WScreen != NULL) {
+		v = (unsigned short) data->window->WScreen->Height;
+	}
+	__result.return_value.value.ushort_value = v;
+	__decrease_reference_count(this);
+	return __result;
+}
+
 function_result Am_Ui_Window_refresh_0(aobject * const this)
 {
 	function_result __result = { .has_return_value = false };
@@ -776,6 +807,9 @@ function_result Am_Ui_Window_nativeBeginMenuStrip_0(aobject * const this) {
 		}
 		for (int i = 0; i < data->menu_builder->num_items; i++) {
 			free(data->menu_builder->item_labels[i]);
+			if (data->menu_builder->item_comm_keys[i] != NULL) {
+				free(data->menu_builder->item_comm_keys[i]);
+			}
 		}
 		free(data->menu_builder);
 	}
@@ -819,7 +853,7 @@ __exit: ;
 	return __result;
 }
 
-function_result Am_Ui_Window_nativeAddMenuItem_0(aobject * const this, int menuIndex, aobject * const item, aobject * const label) {
+function_result Am_Ui_Window_nativeAddMenuItem_0(aobject * const this, int menuIndex, aobject * const item, aobject * const label, aobject * const commKey) {
 	function_result __result = { .has_return_value = false };
 	if (this != NULL) {
 		__increase_reference_count(this);
@@ -829,6 +863,9 @@ function_result Am_Ui_Window_nativeAddMenuItem_0(aobject * const this, int menuI
 	}
 	if (label != NULL) {
 		__increase_reference_count(label);
+	}
+	if (commKey != NULL) {
+		__increase_reference_count(commKey);
 	}
 
 	Am_Ui_Window_data * data = (Am_Ui_Window_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
@@ -842,6 +879,19 @@ function_result Am_Ui_Window_nativeAddMenuItem_0(aobject * const this, int menuI
 	}
 	b->item_menu_indices[b->num_items] = menuIndex;
 	b->item_labels[b->num_items] = extract_string_dup(label);
+	// Empty string is treated as "no CommKey" — Intuition only honours
+	// a non-empty first character, and passing "" to NewMenu can confuse
+	// Magic Menu and friends.
+	if (commKey != NULL) {
+		char * dup = extract_string_dup(commKey);
+		if (dup != NULL && dup[0] == '\0') {
+			free(dup);
+			dup = NULL;
+		}
+		b->item_comm_keys[b->num_items] = dup;
+	} else {
+		b->item_comm_keys[b->num_items] = NULL;
+	}
 	// Hold a reference to the AmLang MenuItem for the lifetime of the strip;
 	// released in free_menu_strip().
 	if (item != NULL) {
@@ -859,6 +909,9 @@ __exit: ;
 	}
 	if (label != NULL) {
 		__decrease_reference_count(label);
+	}
+	if (commKey != NULL) {
+		__decrease_reference_count(commKey);
 	}
 	return __result;
 }
@@ -896,12 +949,15 @@ function_result Am_Ui_Window_nativeFinalizeMenuStrip_0(aobject * const this) {
 			}
 			nm[n].nm_Type = NM_ITEM;
 			nm[n].nm_Label = b->item_labels[i];
-			nm[n].nm_CommKey = NULL;
+			nm[n].nm_CommKey = b->item_comm_keys[i];
 			nm[n].nm_Flags = 0;
 			nm[n].nm_MutualExclude = 0;
 			nm[n].nm_UserData = (APTR) b->item_aobjects[i];
 			n++;
 			b->item_labels[i] = NULL;
+			// Ownership of the CommKey string moves into the NewMenu so
+			// free_menu_strip releases it together with the label.
+			b->item_comm_keys[i] = NULL;
 			data->menu_item_aobjects[data->menu_item_count++] = b->item_aobjects[i];
 			b->item_aobjects[i] = NULL;
 		}

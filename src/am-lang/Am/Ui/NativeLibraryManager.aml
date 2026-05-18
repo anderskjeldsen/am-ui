@@ -3,7 +3,7 @@ namespace Am.Ui
     // Manages the lifecycle of native Amiga shared libraries used by am-ui.
     // The singleton instance is held for the lifetime of the application,
     // opening libraries on init and closing them on release.
-    #implementationPlatforms "libc", "amigaos", "amigaos-sim"
+    #implementationPlatforms "libc", "amigaos", "amigaos-sim", "morphos-ppc"
     native class NativeLibraryManager {
         import Am.Lang
 

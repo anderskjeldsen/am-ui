@@ -8,6 +8,13 @@ namespace Am.Ui
         var font: Font
         var backgroundPen: UByte = 0UB
         var textPen: UByte = 1UB
+        // Mouse-over support. Set hoverEnabled = true and pick a contrasting
+        // bg pen to get the row to fill itself with that pen while the
+        // mouse is over it. Disabled by default so plain Labels keep
+        // their original transparent rendering.
+        var hoverEnabled: Bool = false
+        var hoverBackgroundPen: UByte = 0UB
+        private var hovered: Bool = false
 
         fun getUsedFont(): Font {
             if (this.font != null) {
@@ -48,7 +55,22 @@ namespace Am.Ui
             var x1 = 0S
             var y1 = 0S
 
-            graphics.setBackgroundPen(this.backgroundPen)
+            var bgPen = this.backgroundPen
+            if (this.hoverEnabled && this.hovered) {
+                bgPen = this.hoverBackgroundPen
+            }
+            // When hover is in play, always paint the whole row's bg — on
+            // an un-hover frame this is what wipes the previous hover
+            // colour. Plain labels keep their original transparent
+            // rendering when hover is disabled.
+            if (this.hoverEnabled) {
+                var x2 = this.width.toShort() - 1S
+                var y2 = this.height.toShort() - 1S
+                graphics.setForegroundPen(bgPen)
+                graphics.fillRect(x1, y1, x2, y2)
+            }
+
+            graphics.setBackgroundPen(bgPen)
             graphics.setForegroundPen(this.textPen)
             var font = this.getUsedFont()
             if (font != null) {
@@ -57,6 +79,22 @@ namespace Am.Ui
 
             "draw String: ${this.text} to (${x1}, ${y1})".println()
             graphics.drawString(this.text, x1, y1)
+        }
+
+        override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
+            if (type == MouseEventType.move) {
+                if (this.hoverEnabled) {
+                    var inside = this.contains(x, y)
+                    if (inside != this.hovered) {
+                        this.hovered = inside
+                        this.requestRepaint()
+                    }
+                }
+                // Return false so sibling labels also see the move event
+                // and can clear their own hover state.
+                return false
+            }
+            return base.onMouseEvent(type, button, x, y)
         }
     }
 

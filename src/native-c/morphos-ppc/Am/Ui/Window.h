@@ -6,6 +6,7 @@
 #include <Am/Lang/Int.h>
 #include <intuition/intuition.h>
 #include <libraries/gadtools.h>
+#include <graphics/regions.h>
 
 #define AM_UI_WINDOW_MENU_MAX_MENUS 16
 #define AM_UI_WINDOW_MENU_MAX_ITEMS 128
@@ -17,6 +18,7 @@ struct _Am_Ui_Window_menu_builder {
     char * menu_titles[AM_UI_WINDOW_MENU_MAX_MENUS];
     int item_menu_indices[AM_UI_WINDOW_MENU_MAX_ITEMS];
     char * item_labels[AM_UI_WINDOW_MENU_MAX_ITEMS];
+    char * item_comm_keys[AM_UI_WINDOW_MENU_MAX_ITEMS];
     aobject * item_aobjects[AM_UI_WINDOW_MENU_MAX_ITEMS];
 };
 
@@ -28,6 +30,8 @@ struct _Am_Ui_Window_data {
     struct IntuiMessage refresh_msg;
 //    struct Gadget *first_gadget;
     struct Gadget *context_gadget;
+    struct Region *clip_region;
+    struct Region *old_clip_region;
     bool pending_close;
     bool pending_refresh;
     bool pending_full_refresh;

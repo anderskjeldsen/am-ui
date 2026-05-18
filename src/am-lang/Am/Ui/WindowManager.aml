@@ -2,7 +2,7 @@
 namespace Am.Ui 
 {
 
-    #implementationPlatforms "libc", "amigaos", "amigaos-sim"
+    #implementationPlatforms "libc", "amigaos", "amigaos-sim", "morphos-ppc"
     native class WindowManager {
         import Am.Lang
 
