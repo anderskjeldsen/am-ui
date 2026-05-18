@@ -134,11 +134,6 @@ static void apply_clip_rect(aobject *this, struct Am_Ui_ClipRect *clipRect)
     rect.MaxX = clipRect->x + clipRect->width - 1;
     rect.MaxY = clipRect->y + clipRect->height - 1;
 
-    printf("[clip] install rect MinX=%d MinY=%d MaxX=%d MaxY=%d (raw x=%d y=%d w=%u h=%u) layer=%p\n",
-           (int)rect.MinX, (int)rect.MinY, (int)rect.MaxX, (int)rect.MaxY,
-           (int)clipRect->x, (int)clipRect->y, (unsigned)clipRect->width, (unsigned)clipRect->height,
-           (void*)layer);
-
     OrRectRegion(gData->clip_region, &rect);
     InstallClipRegion(layer, gData->clip_region);
 }
