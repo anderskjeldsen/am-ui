@@ -52,7 +52,6 @@ namespace Am.Ui
             // Install the clip rectangle as-is (no automatic intersection)
             this.clipRects.add(clipRect)
             this.setClipRect(clipRect)
-            "Set Clip Rect: ${clipRect.x},${clipRect.y},${clipRect.width},${clipRect.height}".println()
         }
 
         // Pops the topmost clip rect; safe to call when the stack is empty

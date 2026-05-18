@@ -10,6 +10,13 @@ namespace Am.Ui
         var backgroundPen: UByte = 0UB
         var drawBorder: Bool = true
         var borderPens: BorderPens = new BorderPens(1UB, 1UB, 2UB, 2UB)
+        // When non-negative this value replaces the child-derived
+        // minWidth — used for resizable side panels whose width is
+        // not bounded by their content (e.g. a sidebar wrapping a
+        // file tree). Padding/margin/border still apply on top.
+        // A negative value (the default) preserves the original
+        // "size to content" behaviour.
+        var preferredWidth: Short = -1S
 
         override fun setDefaultPadding() {
             this.setPadding(4S, 2S)
@@ -39,7 +46,9 @@ namespace Am.Ui
 
         override fun minWidth(): Short {
             var cw = 0S
-            if (this.child != null) {
+            if (this.preferredWidth >= 0S) {
+                cw = this.preferredWidth
+            } else if (this.child != null) {
                 cw = this.child.minWidth()
             }
             return cw + this.padding.left + this.padding.right + this.margin.left + this.margin.right + this.borderWidths.left + this.borderWidths.right

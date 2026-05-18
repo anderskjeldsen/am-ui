@@ -1,0 +1,461 @@
+namespace Am.Ui
+{
+    // Horizontal strip of TabViews. Each tab carries an opaque string `id`
+    // (consumers typically use a file path) and a display label.
+    //
+    // API for owners:
+    //   openTab(id, label) — add a new tab if `id` isn't already present
+    //                        and activate it. If `id` already exists, just
+    //                        activate it (no duplicate created).
+    //   closeTab(id)       — remove the tab. If it was active, the
+    //                        neighbour to its right (or left if it was the
+    //                        last) becomes active.
+    //   setActive(id)      — change which tab is active without altering
+    //                        the tab list.
+    //   getActiveId()      — current active id, or "" if no tabs.
+    //
+    // Listeners (set by owner):
+    //   tabSelectListener — fired after a tab becomes active (via click
+    //                       on the tab body, or programmatic openTab/
+    //                       setActive). Receives the tab's id.
+    //   tabCloseListener  — fired after a tab has been removed from the
+    //                       bar. Receives the closed tab's id. The new
+    //                       active tab (if any) has already been chosen
+    //                       and reported via tabSelectListener.
+    class TabBar() : ViewGroup {
+        import Am.Lang
+        import Am.Collections
+
+        // Strip background — the strip between/around tabs (visible when
+        // the bar is wider than the sum of its tabs).
+        var backgroundPen: UByte         = 6UB
+        // Per-tab pens — copied onto each TabView on creation. Owners can
+        // override these before adding their first tab and the new values
+        // take effect for subsequent additions.
+        var tabActiveBgPen: UByte        = 0UB
+        var tabInactiveBgPen: UByte      = 6UB
+        var tabHoverBgPen: UByte         = 3UB
+        var tabAccentPen: UByte          = 5UB
+        var tabTextPen: UByte            = 1UB
+        var tabCloseXPen: UByte          = 2UB
+        // Pen used for the 1-px vertical divider on each tab's right
+        // edge. Owners may want to match this to PEN_BORDER for a subtle
+        // separator that contrasts gently with both active and inactive
+        // tab backgrounds.
+        var tabSeparatorPen: UByte       = 8UB
+        // Arrow-zone visual styling. The arrow zones appear on the
+        // left/right of the bar only when the sum of tab widths exceeds
+        // the bar's width — otherwise the tabs use the full strip.
+        var arrowEnabledPen: UByte       = 2UB
+        var arrowDisabledPen: UByte      = 8UB
+
+        var tabSelectListener: (id: String) => Bool = null
+        var tabCloseListener:  (id: String) => Bool = null
+
+        // Mirror of ViewGroup's children, typed so we don't need a cast to
+        // read tabId / call setActive() in callbacks. addChild/removeChild
+        // keep the two lists in sync — never mutate one without the other.
+        private var tabs: List<TabView> = new List<TabView>()
+
+        private var activeId: String = ""
+
+        // Horizontal scroll offset of the tab strip, in pixels. Mutated
+        // by clicks on the arrow zones; clamped during layoutChildren()
+        // to [0, totalTabWidth - scrollableArea]. Implicit 0 while the
+        // bar isn't overflowing.
+        private var scrollOffset: Short = 0S
+
+        private static const ARROW_ZONE_W: Short    = 18S
+        private static const ARROW_SCROLL_STEP: Short = 100S
+
+        // -------- public API --------
+
+        fun openTab(id: String, label: String) {
+            var existing = this.findTab(id)
+            if (existing != null) {
+                this.setActive(id)
+                return
+            }
+            // Bind `this` explicitly for the lambdas below — AmLang's
+            // closure semantics for instance `this` aren't guaranteed.
+            var self = this
+            var tab = new TabView(id, label)
+            tab.activeBackgroundPen   = this.tabActiveBgPen
+            tab.inactiveBackgroundPen = this.tabInactiveBgPen
+            tab.hoverBackgroundPen    = this.tabHoverBgPen
+            tab.bottomBorderPen       = this.tabAccentPen
+            tab.textPen               = this.tabTextPen
+            tab.closeXPen             = this.tabCloseXPen
+            tab.separatorPen          = this.tabSeparatorPen
+            tab.font                  = this.font
+            // Capture `id` (not `tab.tabId`) so the closure doesn't dereference
+            // a potentially-freed TabView during late event delivery.
+            var capturedId = id
+            // The activate-listener firing is centralised in setActive,
+            // so the closure just delegates — no manual listener call.
+            tab.onActivate = () => {
+                self.setActive(capturedId)
+                return true
+            }
+            tab.onClose = () => {
+                self.closeTab(capturedId)
+                return true
+            }
+            this.tabs.add(tab)
+            this.addChild(tab)
+            this.setActive(id)
+        }
+
+        fun closeTab(id: String) {
+            var idx = this.indexOf(id)
+            if (idx < 0) {
+                return
+            }
+            var tab = this.tabs.get(idx)
+            this.tabs.removeAt(idx)
+            this.removeChild(tab)
+            var wasActive = this.activeId.equals(id)
+
+            // Pick a neighbour to activate when closing the active tab.
+            // Default behaviour: take the tab now sitting at the same
+            // index (the right neighbour); if that's out of range, take
+            // the one to the left; if no tabs remain, activeId is "".
+            if (wasActive) {
+                var size = this.tabs.getSize()
+                if (size == 0) {
+                    this.activeId = ""
+                } else {
+                    var nextIdx = idx
+                    if (nextIdx >= size) {
+                        nextIdx = size - 1
+                    }
+                    var pick = this.tabs.get(nextIdx)
+                    this.setActive(pick.tabId)
+                }
+            }
+
+            var cl = this.tabCloseListener
+            if (cl != null) {
+                cl(id)
+            }
+            this.requestStripRepaint()
+        }
+
+        // Activate the tab with the given id. The select-listener fires
+        // unconditionally afterwards — consumers expect that to be where
+        // file loading + window.layout() / window.requestFullRepaint()
+        // happen, so we need it on programmatic activation (openTab,
+        // closeTab→neighbour) too, not only on user clicks.
+        fun setActive(id: String) {
+            this.activeId = id
+            var i = 0
+            while (i < this.tabs.getSize()) {
+                var t = this.tabs.get(i)
+                t.active = t.tabId.equals(id)
+                i = i + 1
+            }
+            this.requestStripRepaint()
+            var l = this.tabSelectListener
+            if (l != null && !id.isEmpty()) {
+                l(id)
+            }
+        }
+
+        fun getActiveId(): String {
+            return this.activeId
+        }
+
+        // Mark a tab as dirty/clean. No-op if the id doesn't exist — the
+        // tab may already have been closed by the time a deferred edit
+        // notification reaches us. Triggers a strip-wide repaint so
+        // the "* " prefix appears (or disappears) immediately AND any
+        // tabs that were sitting on freshly cleared bar background
+        // get repainted at their new (well, same) positions.
+        fun setDirty(id: String, dirty: Bool) {
+            var t = this.findTab(id)
+            if (t == null) {
+                return
+            }
+            if (t.dirty == dirty) {
+                return
+            }
+            t.dirty = dirty
+            this.requestStripRepaint()
+        }
+
+        // Mark the bar AND every tab as needing a repaint. Any code
+        // path that flips a TabBar-level visual property must use this
+        // instead of plain `requestRepaint()` — TabBar.paint() fills
+        // the entire bar background, wiping every tab's pixels, and
+        // ViewGroup.paintAll only paints children whose own
+        // repaintRequested flag is set. Without poking the children
+        // here, the next paint cycle leaves the strip blank until
+        // some other event (a hover, a click) dirties them.
+        private fun requestStripRepaint() {
+            this.requestRepaint()
+            var i = 0
+            while (i < this.tabs.getSize()) {
+                this.tabs.get(i).requestRepaint()
+                i = i + 1
+            }
+        }
+
+        fun isDirty(id: String): Bool {
+            var t = this.findTab(id)
+            if (t == null) {
+                return false
+            }
+            return t.dirty
+        }
+
+        // -------- internals --------
+
+        private fun findTab(id: String): TabView {
+            var idx = this.indexOf(id)
+            if (idx < 0) {
+                return null
+            }
+            return this.tabs.get(idx)
+        }
+
+        private fun indexOf(id: String): Int {
+            var i = 0
+            while (i < this.tabs.getSize()) {
+                if (this.tabs.get(i).tabId.equals(id)) {
+                    return i
+                }
+                i = i + 1
+            }
+            return -1
+        }
+
+        // -------- scrolling helpers --------
+
+        // Sum of every tab's preferred width. Used to decide whether
+        // the strip is currently overflowing and (when it is) how far
+        // we're allowed to scroll right.
+        private fun totalTabWidth(): Short {
+            var w = 0S
+            var i = 0
+            while (i < this.tabs.getSize()) {
+                w = w + this.tabs.get(i).minWidth()
+                i = i + 1
+            }
+            return w
+        }
+
+        private fun isOverflowing(): Bool {
+            return this.totalTabWidth() > this.width.toShort()
+        }
+
+        private fun scrollableAreaWidth(): Short {
+            return this.width.toShort() - (2S * TabBar.ARROW_ZONE_W)
+        }
+
+        private fun maxScrollOffset(): Short {
+            var m = this.totalTabWidth() - this.scrollableAreaWidth()
+            if (m < 0S) {
+                return 0S
+            }
+            return m
+        }
+
+        // -------- layout + paint --------
+
+        override fun layoutChildren() {
+            var y = 0S
+            var h = this.innerHeight()
+            var overflowing = this.isOverflowing()
+            var startX = 0S
+            if (overflowing) {
+                startX = TabBar.ARROW_ZONE_W
+                // Re-clamp the scroll offset on every layout — a tab
+                // close or a resize can leave the previous value past
+                // the new max.
+                if (this.scrollOffset < 0S) {
+                    this.scrollOffset = 0S
+                }
+                var maxOff = this.maxScrollOffset()
+                if (this.scrollOffset > maxOff) {
+                    this.scrollOffset = maxOff
+                }
+            } else {
+                this.scrollOffset = 0S
+            }
+            var x = startX - this.scrollOffset
+            var i = 0
+            while (i < this.tabs.getSize()) {
+                var t = this.tabs.get(i)
+                var w = t.minWidth()
+                t.layout(x, y, w.toUShort(), h.toUShort())
+                x = x + w
+                i = i + 1
+            }
+        }
+
+        override fun minHeight(): Short {
+            var h = 0S
+            var i = 0
+            while (i < this.tabs.getSize()) {
+                var th = this.tabs.get(i).minHeight()
+                if (th > h) {
+                    h = th
+                }
+                i = i + 1
+            }
+            // Sensible default when no tabs are present yet — the bar
+            // still needs some visual height during initial layout.
+            if (h == 0S) {
+                h = 18S
+            }
+            return h + this.padding.top + this.padding.bottom + this.margin.top + this.margin.bottom + this.borderWidths.top + this.borderWidths.bottom
+        }
+
+        override fun paint(graphics: Graphics) {
+            base.paint(graphics)
+            // Fill the strip background so the area to the right of the
+            // last tab is the bar colour rather than whatever was painted
+            // there previously.
+            graphics.setForegroundPen(this.backgroundPen)
+            graphics.fillRect(0S, 0S, this.width.toShort() - 1S, this.height.toShort() - 1S)
+        }
+
+        // paintAll override: ViewGroup's version paints self then
+        // children. We need a third phase — paint scroll arrows over
+        // any tab pixels that bled into the arrow zones — so that the
+        // arrows are always on top regardless of scroll position.
+        // Tabs whose visual rect extends into the arrow zone get
+        // visually clipped by the arrow strip drawn here.
+        override fun paintAll(graphics: Graphics) {
+            base.paintAll(graphics)
+            if (!this.isOverflowing()) {
+                return
+            }
+            var ix = this.x + this.margin.left
+            var iy = this.y + this.margin.top
+            var viewWidth = this.width.toShort() - this.margin.left - this.margin.right
+            var viewHeight = this.height.toShort() - this.margin.top - this.margin.bottom
+            var currentClip = graphics.getCurrentClipRect()
+            var clip = currentClip.createInnerClipRect(ix, iy, viewWidth.toUShort(), viewHeight.toUShort())
+            graphics.pushClipRect(clip)
+            graphics.translate(ix, iy)
+            this.paintArrows(graphics)
+            graphics.translate(-ix, -iy)
+            graphics.popClipRect()
+        }
+
+        private fun paintArrows(graphics: Graphics) {
+            var barW = this.width.toShort()
+            var barH = this.height.toShort()
+            // Backfill both arrow zones with the bar background so any
+            // tab pixels that extended into them are covered.
+            graphics.setForegroundPen(this.backgroundPen)
+            graphics.fillRect(0S, 0S, TabBar.ARROW_ZONE_W - 1S, barH - 1S)
+            graphics.fillRect(barW - TabBar.ARROW_ZONE_W, 0S, barW - 1S, barH - 1S)
+
+            // The arrow glyphs are drawn as 5×9 isoceles triangles via
+            // fillRect rows. This sidesteps any sensitivity to the
+            // installed font's character width / side bearings, which
+            // were making the previous drawString approach look
+            // off-centre on Topaz. We control every painted pixel,
+            // so the triangle is guaranteed to sit exactly at the
+            // zone's geometric centre.
+            var leftPen = this.arrowEnabledPen
+            if (this.scrollOffset <= 0S) {
+                leftPen = this.arrowDisabledPen
+            }
+            this.paintLeftArrow(graphics, TabBar.ARROW_ZONE_W / 2S, barH / 2S, leftPen)
+
+            var rightPen = this.arrowEnabledPen
+            if (this.scrollOffset >= this.maxScrollOffset()) {
+                rightPen = this.arrowDisabledPen
+            }
+            this.paintRightArrow(graphics, barW - (TabBar.ARROW_ZONE_W / 2S) - 1S, barH / 2S, rightPen)
+        }
+
+        // Half-size of the painted arrow glyphs. The triangle is
+        // (2*ARROW_SIZE + 1) tall and (ARROW_SIZE + 1) wide, so an
+        // ARROW_SIZE of 4 gives a 9-tall × 5-wide chevron.
+        private static const ARROW_SIZE: Short = 4S
+
+        // Left chevron centred on (cx, cy). The triangle's tip is
+        // exactly at cx; the right edge is at cx + ARROW_SIZE.
+        private fun paintLeftArrow(graphics: Graphics, cx: Short, cy: Short, pen: UByte) {
+            graphics.setForegroundPen(pen)
+            var dy = 0S - TabBar.ARROW_SIZE
+            while (dy <= TabBar.ARROW_SIZE) {
+                var absDy = dy
+                if (absDy < 0S) {
+                    absDy = 0S - dy
+                }
+                // Row width grows from 1 px at the top/bottom to
+                // ARROW_SIZE+1 px at the vertical middle. Tip stays
+                // anchored at cx; right edge sweeps out to cx +
+                // (ARROW_SIZE - |dy|).
+                var x1 = cx
+                var x2 = cx + (TabBar.ARROW_SIZE - absDy)
+                graphics.fillRect(x1, cy + dy, x2, cy + dy)
+                dy = dy + 1S
+            }
+        }
+
+        // Right chevron — mirror of paintLeftArrow. Tip on the right,
+        // left edge sweeps in toward cx.
+        private fun paintRightArrow(graphics: Graphics, cx: Short, cy: Short, pen: UByte) {
+            graphics.setForegroundPen(pen)
+            var dy = 0S - TabBar.ARROW_SIZE
+            while (dy <= TabBar.ARROW_SIZE) {
+                var absDy = dy
+                if (absDy < 0S) {
+                    absDy = 0S - dy
+                }
+                var x1 = cx - (TabBar.ARROW_SIZE - absDy)
+                var x2 = cx
+                graphics.fillRect(x1, cy + dy, x2, cy + dy)
+                dy = dy + 1S
+            }
+        }
+
+        // Mouse handling: when overflowing, clicks in the left/right
+        // arrow zones scroll the strip. All other clicks fall through
+        // to the default ViewGroup walk so individual tabs get their
+        // hover/click events normally.
+        override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
+            if (this.isOverflowing() && this.contains(x, y)) {
+                if (type == MouseEventType.down && button == MouseButton.left) {
+                    if (x < TabBar.ARROW_ZONE_W) {
+                        this.scrollBy(0S - TabBar.ARROW_SCROLL_STEP)
+                        return true
+                    }
+                    if (x >= this.width.toShort() - TabBar.ARROW_ZONE_W) {
+                        this.scrollBy(TabBar.ARROW_SCROLL_STEP)
+                        return true
+                    }
+                }
+            }
+            return base.onMouseEvent(type, button, x, y)
+        }
+
+        private fun scrollBy(delta: Short) {
+            var target = this.scrollOffset + delta
+            if (target < 0S) {
+                target = 0S
+            }
+            var maxOff = this.maxScrollOffset()
+            if (target > maxOff) {
+                target = maxOff
+            }
+            if (target == this.scrollOffset) {
+                return
+            }
+            this.scrollOffset = target
+            this.layoutChildren()
+            // layout() updates each tab's (x, y) but does not flag
+            // their repaintRequested. requestStripRepaint pokes the
+            // bar AND every tab so the next paint cycle redraws each
+            // tab at its new position rather than leaving them
+            // visually frozen until a hover prods them dirty.
+            this.requestStripRepaint()
+        }
+    }
+}

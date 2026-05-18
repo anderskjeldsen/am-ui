@@ -1,0 +1,97 @@
+namespace Am.Ui
+{
+    // A thin draggable bar used as a column separator (typically
+    // between a sidebar and the main content). It paints itself as
+    // a flat 2-px-wide strip in `splitterPen` and forwards drag
+    // motion to `onDrag` as a screen-space delta in pixels.
+    //
+    // The drag delta is robust against the splitter being moved
+    // mid-drag by the parent's layout: we track the cursor's offset
+    // inside the splitter at mousedown and re-derive the delta from
+    // (current_local_x − recorded_offset) on every move. Re-resolving
+    // against the splitter's *current* local-coords origin means the
+    // delta stays correct even after a relayout shifts the splitter
+    // to follow the cursor.
+    //
+    // The consumer is responsible for actually adjusting the
+    // sibling view's size in onDrag and calling window.layout() so
+    // the new size takes effect; SplitterView itself never mutates
+    // its neighbours.
+    class SplitterView() : View {
+        import Am.Lang
+
+        var splitterPen: UByte         = 8UB
+        var hoverSplitterPen: UByte    = 5UB
+
+        // Fired on every drag-move with the desired pixel delta —
+        // positive = move the splitter right, negative = left.
+        // Returning true is the standard "consumed" flag.
+        var onDrag: (delta: Short) => Bool = null
+
+        private var dragging: Bool = false
+        private var hovered: Bool  = false
+        // Offset inside the splitter where mousedown happened. We
+        // resize the sibling so that this same offset always lands
+        // under the cursor; see the file-level comment for why this
+        // is the form that stays correct across relayouts.
+        private var dragOffsetX: Short = 0S
+
+        private static const SPLITTER_W: Short = 2S
+
+        override fun minWidth(): Short {
+            return SplitterView.SPLITTER_W
+        }
+
+        override fun minHeight(): Short {
+            return 0S
+        }
+
+        override fun paint(graphics: Graphics) {
+            base.paint(graphics)
+            var pen = this.splitterPen
+            if (this.hovered || this.dragging) {
+                pen = this.hoverSplitterPen
+            }
+            graphics.setForegroundPen(pen)
+            graphics.fillRect(0S, 0S, this.width.toShort() - 1S, this.height.toShort() - 1S)
+        }
+
+        override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
+            if (type == MouseEventType.move) {
+                if (this.dragging) {
+                    // Local x is measured from the splitter's current
+                    // origin. The desired delta is how far the cursor
+                    // has moved past the offset it had at mousedown —
+                    // a positive value means the splitter should be
+                    // dragged right by that many pixels.
+                    var delta = x - this.dragOffsetX
+                    if (delta != 0S) {
+                        var cb = this.onDrag
+                        if (cb != null) {
+                            cb(delta)
+                        }
+                    }
+                    return true
+                }
+                var inside = this.contains(x, y)
+                if (inside != this.hovered) {
+                    this.hovered = inside
+                    this.requestRepaint()
+                }
+                return false
+            }
+            if (type == MouseEventType.down && button == MouseButton.left && this.contains(x, y)) {
+                this.dragging = true
+                this.dragOffsetX = x
+                this.requestRepaint()
+                return true
+            }
+            if (type == MouseEventType.up && this.dragging) {
+                this.dragging = false
+                this.requestRepaint()
+                return true
+            }
+            return base.onMouseEvent(type, button, x, y)
+        }
+    }
+}

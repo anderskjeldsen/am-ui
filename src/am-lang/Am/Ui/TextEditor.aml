@@ -31,7 +31,8 @@ namespace Am.Ui
     //   - return inserts a new line and splits the current one
     //
     // Limitations: no scrollback past the editor's height (content past
-    // the bottom is just clipped), no focus system, no mouse positioning.
+    // the bottom is just clipped), no focus system. Left-click moves the
+    // cursor to the character cell under the pointer.
     class TextEditor() : View {
         import Am.Lang
         import Am.Collections
@@ -56,11 +57,34 @@ namespace Am.Ui
         private var cursorLine: Int = 0
         private var cursorCol: Int = 0
 
+        // First line index visible at the top of the viewport. The
+        // renderer subtracts this from each line's index when computing
+        // its on-screen y position, so lines above scrollLine are
+        // outside the visible area and are skipped. Auto-advanced by
+        // ensureCursorVisible() whenever the cursor would otherwise
+        // move off-screen.
+        private var scrollLine: Int = 0
+
+        // Fired after every user-initiated edit (insertChar /
+        // insertNewLine / backspace). Does NOT fire on setText —
+        // setText is the load-from-disk pathway and should not mark a
+        // buffer dirty. Consumers (the IDE) use this to flip the
+        // owning tab's dirty flag.
+        var contentChangeListener: () => Bool = null
+
         // Incremental-repaint state. -1 = no pending partial repaint, do
         // a full render on the next paint() (the default state after
         // every paint cycle).
         private var dirtyLineFrom: Int = -1
         private var dirtyLineTo: Int = -1
+        // Sticky "next paint must be a full render" flag. Needed
+        // separately from `dirtyLineFrom == -1` because a subsequent
+        // partial-dirty call (e.g. an extra auto-repeated cursor move
+        // arriving before the paint cycle runs) would otherwise
+        // overwrite the -1 sentinel and silently downgrade the next
+        // paint to a partial one — leaving any line that wasn't in
+        // the new dirty range showing stale post-scroll content.
+        private var pendingFullRepaint: Bool = false
         // Pending scroll: shift the rows starting at pendingScrollLineFrom
         // by pendingScrollDy pixels (positive = down, negative = up).
         // pendingScrollLineFrom == -1 means no scroll queued.
@@ -105,6 +129,7 @@ namespace Am.Ui
         }
 
         private fun forceFullRepaint() {
+            this.pendingFullRepaint = true
             this.dirtyLineFrom = -1
             this.dirtyLineTo = -1
             this.pendingScrollLineFrom = -1
@@ -121,6 +146,44 @@ namespace Am.Ui
             }
             this.pendingScrollLineFrom = fromLine
             this.pendingScrollDy = dy
+        }
+
+        // How many full lines fit inside the current viewport. Used by
+        // ensureCursorVisible() and Page Up / Page Down handling.
+        // Conservatively rounds down so partially-clipped trailing
+        // lines aren't counted as fully visible.
+        private fun visibleLineCount(): Int {
+            var lh = this.getLineHeight()
+            if (lh <= 0S) {
+                return 1
+            }
+            var n = this.height.toShort() / lh
+            if (n < 1S) {
+                return 1
+            }
+            return n.toInt()
+        }
+
+        // Adjust scrollLine so the cursor sits inside the viewport.
+        // Called after every cursor move (arrows, click, insert,
+        // backspace, page nav). Returns true if scrollLine actually
+        // changed — caller can then force a full repaint to redraw the
+        // newly-visible band of lines.
+        private fun ensureCursorVisible(): Bool {
+            var oldScroll = this.scrollLine
+            if (this.cursorLine < this.scrollLine) {
+                this.scrollLine = this.cursorLine
+            } else {
+                var visible = this.visibleLineCount()
+                var lastVisible = (this.scrollLine + visible) - 1
+                if (this.cursorLine > lastVisible) {
+                    this.scrollLine = (this.cursorLine - visible) + 1
+                }
+            }
+            if (this.scrollLine < 0) {
+                this.scrollLine = 0
+            }
+            return this.scrollLine != oldScroll
         }
 
         // -------- public API --------
@@ -141,6 +204,7 @@ namespace Am.Ui
             this.lines = newLines
             this.cursorLine = 0
             this.cursorCol = 0
+            this.scrollLine = 0
             this.forceFullRepaint()
             this.requestRepaint()
         }
@@ -220,6 +284,9 @@ namespace Am.Ui
                 this.cursorCol = this.currentLine().length()
             }
             this.markCursorMoveDirty(oldLine)
+            if (this.ensureCursorVisible()) {
+                this.forceFullRepaint()
+            }
             this.requestRepaint()
         }
 
@@ -228,11 +295,14 @@ namespace Am.Ui
             var lineLen = this.currentLine().length()
             if (this.cursorCol < lineLen) {
                 this.cursorCol = this.cursorCol + 1
-            } else if (this.cursorLine < this.lines.getSize() - 1) {
+            } else if (this.cursorLine < (this.lines.getSize() - 1)) {
                 this.cursorLine = this.cursorLine + 1
                 this.cursorCol = 0
             }
             this.markCursorMoveDirty(oldLine)
+            if (this.ensureCursorVisible()) {
+                this.forceFullRepaint()
+            }
             this.requestRepaint()
         }
 
@@ -243,16 +313,58 @@ namespace Am.Ui
                 this.clampCursorCol()
             }
             this.markCursorMoveDirty(oldLine)
+            if (this.ensureCursorVisible()) {
+                this.forceFullRepaint()
+            }
             this.requestRepaint()
         }
 
         private fun moveCursorDown() {
             var oldLine = this.cursorLine
-            if (this.cursorLine < this.lines.getSize() - 1) {
+            if (this.cursorLine < (this.lines.getSize() - 1)) {
                 this.cursorLine = this.cursorLine + 1
                 this.clampCursorCol()
             }
             this.markCursorMoveDirty(oldLine)
+            if (this.ensureCursorVisible()) {
+                this.forceFullRepaint()
+            }
+            this.requestRepaint()
+        }
+
+        // Page Up / Page Down — move the cursor by one viewport's worth
+        // of lines, clamped to the buffer. After moving we always force
+        // a full repaint because we know the viewport shifted (saves
+        // the incremental-repaint pipeline from having to reason about
+        // a multi-line jump combined with a scroll).
+        private fun pageDown() {
+            var oldLine = this.cursorLine
+            var step = this.visibleLineCount()
+            var target = this.cursorLine + step
+            var lastLine = this.lines.getSize() - 1
+            if (target > lastLine) {
+                target = lastLine
+            }
+            this.cursorLine = target
+            this.clampCursorCol()
+            this.markCursorMoveDirty(oldLine)
+            this.ensureCursorVisible()
+            this.forceFullRepaint()
+            this.requestRepaint()
+        }
+
+        private fun pageUp() {
+            var oldLine = this.cursorLine
+            var step = this.visibleLineCount()
+            var target = this.cursorLine - step
+            if (target < 0) {
+                target = 0
+            }
+            this.cursorLine = target
+            this.clampCursorCol()
+            this.markCursorMoveDirty(oldLine)
+            this.ensureCursorVisible()
+            this.forceFullRepaint()
             this.requestRepaint()
         }
 
@@ -271,7 +383,11 @@ namespace Am.Ui
             this.lines.set(this.cursorLine, sb.toString())
             this.cursorCol = this.cursorCol + 1
             this.markDirtyLine(this.cursorLine)
+            if (this.ensureCursorVisible()) {
+                this.forceFullRepaint()
+            }
             this.requestRepaint()
+            this.fireContentChanged()
         }
 
         private fun insertNewLine() {
@@ -290,16 +406,38 @@ namespace Am.Ui
             this.cursorLine = this.cursorLine + 1
             this.cursorCol = 0
 
-            // Shift everything below the split point DOWN by one row so we
-            // don't have to re-render those lines, then re-render the
-            // two lines that actually changed (split source + new line).
-            var lineHeight = this.getLineHeight()
-            this.queueScroll(oldCursorLine + 1, lineHeight)
-            this.markDirty(oldCursorLine, oldCursorLine + 1)
+            // If the new cursor row would otherwise scroll off the
+            // bottom of the viewport, advance scrollLine and do a full
+            // repaint — the incremental scroll-raster path can't
+            // represent "insert a line AND scroll the viewport" in a
+            // single frame correctly, so we fall back here.
+            if (this.ensureCursorVisible()) {
+                this.forceFullRepaint()
+            } else {
+                // Shift everything below the split point DOWN by one row
+                // so we don't have to re-render those lines, then
+                // re-render the two lines that actually changed (split
+                // source + new line).
+                var lineHeight = this.getLineHeight()
+                this.queueScroll(oldCursorLine + 1, lineHeight)
+                this.markDirty(oldCursorLine, oldCursorLine + 1)
+            }
             this.requestRepaint()
+            this.fireContentChanged()
+        }
+
+        private fun fireContentChanged() {
+            var cb = this.contentChangeListener
+            if (cb != null) {
+                cb()
+            }
         }
 
         private fun backspace() {
+            var hadChange = false
+            if (this.cursorCol > 0 || this.cursorLine > 0) {
+                hadChange = true
+            }
             if (this.cursorCol > 0) {
                 var line = this.currentLine()
                 var sb = new StringBuilder()
@@ -310,11 +448,12 @@ namespace Am.Ui
                 this.lines.set(this.cursorLine, sb.toString())
                 this.cursorCol = this.cursorCol - 1
                 this.markDirtyLine(this.cursorLine)
+                if (this.ensureCursorVisible()) {
+                    this.forceFullRepaint()
+                }
             } else if (this.cursorLine > 0) {
                 // Merge: previous line absorbs the current one, lines
-                // below shift UP by one row. ScrollRaster handles the
-                // bulk; we re-render the merged line and any line that
-                // newly scrolled into view at the bottom.
+                // below shift UP by one row.
                 var mergedAt = this.cursorLine - 1
                 var prev = this.lines.get(this.cursorLine - 1)
                 var cur = this.currentLine()
@@ -323,12 +462,25 @@ namespace Am.Ui
                 this.lines.removeAt(this.cursorLine)
                 this.cursorLine = this.cursorLine - 1
 
-                var lineHeight = this.getLineHeight()
-                this.queueScroll(mergedAt + 1, 0S - lineHeight)
-                var visible = (this.height.toShort() / lineHeight).toInt() + 1
-                this.markDirty(mergedAt, mergedAt + visible)
+                // If the merge would pull the cursor above the
+                // viewport (cursor moved up to a line that's now off
+                // the top), advance scrollLine to match and do a full
+                // repaint — the scroll-raster path can't represent
+                // "remove a line AND shift the viewport up" in a
+                // single frame.
+                if (this.ensureCursorVisible()) {
+                    this.forceFullRepaint()
+                } else {
+                    var lineHeight = this.getLineHeight()
+                    this.queueScroll(mergedAt + 1, 0S - lineHeight)
+                    var visible = (this.height.toShort() / lineHeight).toInt() + 1
+                    this.markDirty(mergedAt, mergedAt + visible)
+                }
             }
             this.requestRepaint()
+            if (hadChange) {
+                this.fireContentChanged()
+            }
         }
 
         // -------- rendering --------
@@ -342,8 +494,18 @@ namespace Am.Ui
         }
 
         // Render every visible line — used for full repaints (initial
-        // paint, expose, setText, etc.).
+        // paint, expose, setText, etc.). We start by wiping the whole
+        // viewport with the editor's background pen so any pixels left
+        // over from a previous layout (e.g. a scroll-induced shift)
+        // can't bleed through — drawString in JAM2 only repaints the
+        // bounding boxes of the glyphs we draw, not the gaps between
+        // them, so without this clear a row that used to be longer
+        // than the new content keeps its trailing characters.
         private fun renderContent(graphics: Graphics) {
+            if (this.fillBackground) {
+                graphics.setForegroundPen(this.backgroundPen)
+                graphics.fillRect(0S, 0S, this.width.toShort() - 1S, this.height.toShort() - 1S)
+            }
             this.renderLines(graphics, 0, this.lines.getSize() - 1, true)
             this.fillBelowLastLine(graphics)
         }
@@ -370,20 +532,26 @@ namespace Am.Ui
             var availableHeight = this.height.toShort()
             var viewWidth = this.width.toShort()
 
+            // Clamp the requested range to lines that fall inside the
+            // current viewport. `scrollLine` is the line currently at
+            // y=0; anything below it (i < scrollLine) is above the
+            // viewport, anything past `scrollLine + visibleCount` is
+            // below the viewport. Both ends are no-ops to render.
             var lo = fromLine
-            if (lo < 0) { lo = 0 }
+            if (lo < this.scrollLine) { lo = this.scrollLine }
             var hi = toLine
             var lastLine = this.lines.getSize() - 1
             if (hi > lastLine) { hi = lastLine }
 
             var i = lo
             while (i <= hi) {
-                var y = (i * lineHeight.toInt()).toShort()
+                // y is in viewport coords — i=scrollLine renders at y=0.
+                var y = ((i - this.scrollLine) * lineHeight.toInt()).toShort()
                 if (y >= availableHeight) {
                     return
                 }
                 var line = this.lines.get(i)
-                var lineBottom = y + lineHeight - 1S
+                var lineBottom = (y + lineHeight) - 1S
 
                 this.drawLine(graphics, line, i, 0S, y)
 
@@ -414,7 +582,13 @@ namespace Am.Ui
             }
             var lineHeight = this.getLineHeight()
             var availableHeight = this.height.toShort()
-            var y = (this.lines.getSize() * lineHeight.toInt()).toShort()
+            // Last line's y is computed against scrollLine so that the
+            // fill aligns with whatever the visible lines actually
+            // ended at.
+            var y = ((this.lines.getSize() - this.scrollLine) * lineHeight.toInt()).toShort()
+            if (y < 0S) {
+                y = 0S
+            }
             if (y < availableHeight) {
                 graphics.setForegroundPen(this.backgroundPen)
                 graphics.fillRect(0S, y, this.width.toShort() - 1S, availableHeight - 1S)
@@ -425,10 +599,21 @@ namespace Am.Ui
         // the bottom of the visible editor by pendingScrollDy pixels.
         // After this the pixels for the unchanged lines are already in
         // the right place, and only the dirty lines need rendering.
+        //
+        // `pendingScrollLineFrom` is an *absolute* line index, but the
+        // RastPort y axis is viewport-relative — we have to subtract
+        // `scrollLine` before scaling by lineHeight, otherwise we'd
+        // scroll a band of pixels that has nothing to do with the
+        // edited rows (this was leaving stale text below the edit
+        // point until the cursor stepped through it).
         private fun applyPendingScroll(graphics: Graphics) {
             var lineHeight = this.getLineHeight()
             var availableHeight = this.height.toShort()
-            var startY = (this.pendingScrollLineFrom * lineHeight.toInt()).toShort()
+            var relLine = this.pendingScrollLineFrom - this.scrollLine
+            if (relLine < 0) {
+                relLine = 0
+            }
+            var startY = (relLine * lineHeight.toInt()).toShort()
             if (startY >= availableHeight) {
                 return
             }
@@ -464,7 +649,13 @@ namespace Am.Ui
         override fun paint(graphics: Graphics) {
             base.paint(graphics)
 
-            var forceFull = graphics.shouldRepaintAll() || this.dirtyLineFrom < 0
+            // dirtyLineFrom < 0 used to be the only "full-repaint" signal,
+            // but that bit got clobbered if a partial-dirty mark
+            // arrived between forceFullRepaint() and the paint cycle.
+            // pendingFullRepaint sticks across markDirty calls so a
+            // post-scroll auto-repeated cursor move can't silently
+            // demote the next paint to partial.
+            var forceFull = graphics.shouldRepaintAll() || this.pendingFullRepaint || this.dirtyLineFrom < 0
             if (this.useOffscreen) {
                 this.renderViaOffscreen(graphics)
             } else if (forceFull) {
@@ -478,17 +669,89 @@ namespace Am.Ui
 
             // Consume the partial-repaint state — the next paint starts
             // from "full repaint" again unless an edit op reschedules.
+            this.pendingFullRepaint = false
             this.dirtyLineFrom = -1
             this.dirtyLineTo = -1
             this.pendingScrollLineFrom = -1
             this.pendingScrollDy = 0S
         }
 
+        // -------- mouse positioning --------
+
+        // Find the column index in `line` whose character cell most closely
+        // aligns with `pixelX`. Walks one character at a time using the
+        // font's own glyph-width measurement so the math stays correct for
+        // proportional fonts. Boundary heuristic: place the cursor before
+        // the character whose midpoint is past `pixelX`.
+        private fun colForPixelX(line: String, pixelX: Short): Int {
+            if (pixelX <= 0S || line.length() == 0) {
+                return 0
+            }
+            var f = this.getUsedFont()
+            if (f == null) {
+                return 0
+            }
+            var len = line.length()
+            var prevWidth = 0US
+            var col = 0
+            while (col < len) {
+                var prefix = line.substring(0UI, (col + 1).toUInt())
+                var curWidth = f.calculateStringWidth(prefix)
+                var glyphMid = (prevWidth.toShort() + curWidth.toShort()) / 2S
+                if (pixelX < glyphMid) {
+                    return col
+                }
+                prevWidth = curWidth
+                col = col + 1
+            }
+            return len
+        }
+
+        // Click-to-position. Left mouse-down inside the editor moves the
+        // cursor to the character cell under the pointer. Mid-button and
+        // motion events fall through to the base handler.
+        override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
+            if (type == MouseEventType.down && button == MouseButton.left && this.contains(x, y)) {
+                var oldLine = this.cursorLine
+                var lineHeight = this.getLineHeight()
+                var lastLine = this.lines.getSize() - 1
+                if (lineHeight <= 0S) {
+                    return base.onMouseEvent(type, button, x, y)
+                }
+                // y is in viewport coords (0 = top of editor area).
+                // Add scrollLine back to recover the absolute line
+                // index in the buffer.
+                var newLine = (y.toInt() / lineHeight.toInt()) + this.scrollLine
+                if (newLine < 0) { newLine = 0 }
+                if (newLine > lastLine) { newLine = lastLine }
+                var lineText = this.lines.get(newLine)
+                var newCol = this.colForPixelX(lineText, x)
+                this.cursorLine = newLine
+                this.cursorCol = newCol
+                this.markCursorMoveDirty(oldLine)
+                this.requestRepaint()
+                return true
+            }
+            return base.onMouseEvent(type, button, x, y)
+        }
+
         override fun onKeyboardEvent(type: KeyboardEventType, keyCode: UShort, keyChar: UShort): Bool {
             if (type != KeyboardEventType.down) {
                 return false
             }
-            // AmigaOS raw key codes for arrows.
+            // AmigaOS raw key codes for arrows. The native handler
+            // tags shifted arrows with keyChar=1 — we route Shift+Up
+            // and Shift+Down to page navigation (the Amiga keyboard
+            // has no dedicated PgUp/PgDn keys; this matches the
+            // long-standing CED convention).
+            if (keyCode == 76US && keyChar == 1US) {
+                this.pageUp()
+                return true
+            }
+            if (keyCode == 77US && keyChar == 1US) {
+                this.pageDown()
+                return true
+            }
             if (keyCode == 79US) {
                 this.moveCursorLeft()
                 return true
