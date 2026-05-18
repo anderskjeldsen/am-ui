@@ -1,0 +1,529 @@
+namespace Am.Ui
+{
+    // Minimal multi-line text editor with incremental repaints.
+    //
+    // Background and border are intentionally not painted — the editor
+    // composites onto whatever container holds it (set fillBackground
+    // = true if you want the editor to wipe its own area).
+    //
+    // The render loop calls drawLine() for each visible line so a
+    // syntax-highlighting subclass can override just that hook later.
+    //
+    // Editing operations queue two pieces of state for the next paint:
+    //
+    //   1. A *pending scroll* — a single ScrollRaster operation that
+    //      shifts a range of rows up or down using the blitter. Used by
+    //      Enter / Backspace-across-line so we don't have to re-render
+    //      every line below the cursor when one row is inserted/removed.
+    //
+    //   2. A *dirty line range* — the inclusive line indices whose text
+    //      actually changed (or whose cursor mark needs to move). Only
+    //      these lines are re-rasterised on the next paint.
+    //
+    // A full repaint (dirtyLineFrom == -1) still happens on setText(),
+    // on resize, when shouldRepaintAll() is set on the graphics, or
+    // when two scrolls would overlap in one paint cycle.
+    //
+    // Current editing support:
+    //   - left / right / up / down arrows move the cursor
+    //   - typing inserts printable ASCII at the cursor
+    //   - backspace removes the char before the cursor (joins lines)
+    //   - return inserts a new line and splits the current one
+    //
+    // Limitations: no scrollback past the editor's height (content past
+    // the bottom is just clipped), no focus system, no mouse positioning.
+    class TextEditor() : View {
+        import Am.Lang
+        import Am.Collections
+
+        var font: Font
+        var textPen: UByte = 1UB
+        var cursorPen: UByte = 1UB
+        var fillBackground: Bool = false
+        var backgroundPen: UByte = 0UB
+        // useOffscreen routes paints through the window's screen-sized
+        // offscreen buffer for flicker-free rendering. The offscreen path
+        // currently always does a full content render — the incremental
+        // scroll/dirty pipeline only kicks in for the direct (visible)
+        // render path.
+        var useOffscreen: Bool = false
+
+        // One String per line. Always contains at least one entry (an
+        // empty string for the initial "" state) so cursor maths can
+        // assume currentLine() is non-null.
+        var lines: List<String> = TextEditor.singleEmptyLine()
+
+        private var cursorLine: Int = 0
+        private var cursorCol: Int = 0
+
+        // Incremental-repaint state. -1 = no pending partial repaint, do
+        // a full render on the next paint() (the default state after
+        // every paint cycle).
+        private var dirtyLineFrom: Int = -1
+        private var dirtyLineTo: Int = -1
+        // Pending scroll: shift the rows starting at pendingScrollLineFrom
+        // by pendingScrollDy pixels (positive = down, negative = up).
+        // pendingScrollLineFrom == -1 means no scroll queued.
+        private var pendingScrollLineFrom: Int = -1
+        private var pendingScrollDy: Short = 0S
+
+        private static fun singleEmptyLine(): List<String> {
+            var l = new List<String>()
+            l.add("")
+            return l
+        }
+
+        // -------- incremental-repaint bookkeeping --------
+
+        private fun markDirtyLine(line: Int) {
+            this.markDirty(line, line)
+        }
+
+        // Union the existing dirty range with [lo, hi].
+        private fun markDirty(lo: Int, hi: Int) {
+            if (this.dirtyLineFrom < 0 || lo < this.dirtyLineFrom) {
+                this.dirtyLineFrom = lo
+            }
+            if (hi > this.dirtyLineTo) {
+                this.dirtyLineTo = hi
+            }
+        }
+
+        // Tell the next paint to redraw both the previous cursor's line
+        // (to erase the old cursor mark) and the new cursor's line.
+        private fun markCursorMoveDirty(oldLine: Int) {
+            var newLine = this.cursorLine
+            if (oldLine == newLine) {
+                this.markDirtyLine(newLine)
+                return
+            }
+            if (oldLine < newLine) {
+                this.markDirty(oldLine, newLine)
+            } else {
+                this.markDirty(newLine, oldLine)
+            }
+        }
+
+        private fun forceFullRepaint() {
+            this.dirtyLineFrom = -1
+            this.dirtyLineTo = -1
+            this.pendingScrollLineFrom = -1
+            this.pendingScrollDy = 0S
+        }
+
+        // Composing two scrolls into one ScrollRaster correctly is
+        // fiddly — when a second op tries to scroll while one is already
+        // pending, we just fall back to a full repaint for that frame.
+        private fun queueScroll(fromLine: Int, dy: Short) {
+            if (this.pendingScrollLineFrom >= 0) {
+                this.forceFullRepaint()
+                return
+            }
+            this.pendingScrollLineFrom = fromLine
+            this.pendingScrollDy = dy
+        }
+
+        // -------- public API --------
+
+        fun setText(text: String) {
+            var newLines = new List<String>()
+            if (text != null && !text.isEmpty()) {
+                var arr = text.split(0x000AUS)
+                var i = 0
+                while (i < arr.length()) {
+                    newLines.add(arr[i])
+                    i++
+                }
+            }
+            if (newLines.getSize() == 0) {
+                newLines.add("")
+            }
+            this.lines = newLines
+            this.cursorLine = 0
+            this.cursorCol = 0
+            this.forceFullRepaint()
+            this.requestRepaint()
+        }
+
+        fun getText(): String {
+            var sb = new StringBuilder()
+            var i = 0
+            while (i < this.lines.getSize()) {
+                if (i > 0) {
+                    sb.addChar(0x000AUS)
+                }
+                sb.add(this.lines.get(i))
+                i++
+            }
+            return sb.toString()
+        }
+
+        fun getLineCount(): Int {
+            return this.lines.getSize()
+        }
+
+        fun getUsedFont(): Font {
+            if (this.font != null) {
+                return this.font
+            }
+            var vc = this.getViewContext()
+            if (vc != null) {
+                return vc.getWindow().font
+            }
+            return null
+        }
+
+        private fun getLineHeight(): Short {
+            var f = this.getUsedFont()
+            if (f != null) {
+                return f.getSize().toShort()
+            }
+            var vc = this.getViewContext()
+            if (vc != null) {
+                return vc.getWindow().getCurrentFontSize().toShort()
+            }
+            return 8S
+        }
+
+        override fun minWidth(): Short {
+            return 0S
+        }
+
+        override fun minHeight(): Short {
+            return this.getLineHeight()
+        }
+
+        private fun currentLine(): String {
+            if (this.cursorLine < 0 || this.cursorLine >= this.lines.getSize()) {
+                return ""
+            }
+            return this.lines.get(this.cursorLine)
+        }
+
+        private fun clampCursorCol() {
+            var len = this.currentLine().length()
+            if (this.cursorCol < 0) {
+                this.cursorCol = 0
+            } else if (this.cursorCol > len) {
+                this.cursorCol = len
+            }
+        }
+
+        // -------- cursor moves --------
+
+        private fun moveCursorLeft() {
+            var oldLine = this.cursorLine
+            if (this.cursorCol > 0) {
+                this.cursorCol = this.cursorCol - 1
+            } else if (this.cursorLine > 0) {
+                this.cursorLine = this.cursorLine - 1
+                this.cursorCol = this.currentLine().length()
+            }
+            this.markCursorMoveDirty(oldLine)
+            this.requestRepaint()
+        }
+
+        private fun moveCursorRight() {
+            var oldLine = this.cursorLine
+            var lineLen = this.currentLine().length()
+            if (this.cursorCol < lineLen) {
+                this.cursorCol = this.cursorCol + 1
+            } else if (this.cursorLine < this.lines.getSize() - 1) {
+                this.cursorLine = this.cursorLine + 1
+                this.cursorCol = 0
+            }
+            this.markCursorMoveDirty(oldLine)
+            this.requestRepaint()
+        }
+
+        private fun moveCursorUp() {
+            var oldLine = this.cursorLine
+            if (this.cursorLine > 0) {
+                this.cursorLine = this.cursorLine - 1
+                this.clampCursorCol()
+            }
+            this.markCursorMoveDirty(oldLine)
+            this.requestRepaint()
+        }
+
+        private fun moveCursorDown() {
+            var oldLine = this.cursorLine
+            if (this.cursorLine < this.lines.getSize() - 1) {
+                this.cursorLine = this.cursorLine + 1
+                this.clampCursorCol()
+            }
+            this.markCursorMoveDirty(oldLine)
+            this.requestRepaint()
+        }
+
+        // -------- edits --------
+
+        private fun insertChar(c: UShort) {
+            var line = this.currentLine()
+            var sb = new StringBuilder()
+            if (this.cursorCol > 0) {
+                sb.add(line.substring(0UI, this.cursorCol.toUInt()))
+            }
+            sb.addChar(c)
+            if (this.cursorCol < line.length()) {
+                sb.add(line.substringToEnd(this.cursorCol.toUInt()))
+            }
+            this.lines.set(this.cursorLine, sb.toString())
+            this.cursorCol = this.cursorCol + 1
+            this.markDirtyLine(this.cursorLine)
+            this.requestRepaint()
+        }
+
+        private fun insertNewLine() {
+            var oldCursorLine = this.cursorLine
+            var line = this.currentLine()
+            var before = ""
+            var after = ""
+            if (this.cursorCol > 0) {
+                before = line.substring(0UI, this.cursorCol.toUInt())
+            }
+            if (this.cursorCol < line.length()) {
+                after = line.substringToEnd(this.cursorCol.toUInt())
+            }
+            this.lines.set(this.cursorLine, before)
+            this.lines.insertAt(this.cursorLine + 1, after)
+            this.cursorLine = this.cursorLine + 1
+            this.cursorCol = 0
+
+            // Shift everything below the split point DOWN by one row so we
+            // don't have to re-render those lines, then re-render the
+            // two lines that actually changed (split source + new line).
+            var lineHeight = this.getLineHeight()
+            this.queueScroll(oldCursorLine + 1, lineHeight)
+            this.markDirty(oldCursorLine, oldCursorLine + 1)
+            this.requestRepaint()
+        }
+
+        private fun backspace() {
+            if (this.cursorCol > 0) {
+                var line = this.currentLine()
+                var sb = new StringBuilder()
+                sb.add(line.substring(0UI, (this.cursorCol - 1).toUInt()))
+                if (this.cursorCol < line.length()) {
+                    sb.add(line.substringToEnd(this.cursorCol.toUInt()))
+                }
+                this.lines.set(this.cursorLine, sb.toString())
+                this.cursorCol = this.cursorCol - 1
+                this.markDirtyLine(this.cursorLine)
+            } else if (this.cursorLine > 0) {
+                // Merge: previous line absorbs the current one, lines
+                // below shift UP by one row. ScrollRaster handles the
+                // bulk; we re-render the merged line and any line that
+                // newly scrolled into view at the bottom.
+                var mergedAt = this.cursorLine - 1
+                var prev = this.lines.get(this.cursorLine - 1)
+                var cur = this.currentLine()
+                this.cursorCol = prev.length()
+                this.lines.set(this.cursorLine - 1, prev + cur)
+                this.lines.removeAt(this.cursorLine)
+                this.cursorLine = this.cursorLine - 1
+
+                var lineHeight = this.getLineHeight()
+                this.queueScroll(mergedAt + 1, 0S - lineHeight)
+                var visible = (this.height.toShort() / lineHeight).toInt() + 1
+                this.markDirty(mergedAt, mergedAt + visible)
+            }
+            this.requestRepaint()
+        }
+
+        // -------- rendering --------
+
+        // Subclasses override this when they want to render the line as
+        // multiple coloured runs (syntax highlighting). Default draws
+        // the entire line with `this.textPen`.
+        open fun drawLine(graphics: Graphics, line: String, lineIndex: Int, x: Short, y: Short) {
+            graphics.setForegroundPen(this.textPen)
+            graphics.drawString(line, x, y)
+        }
+
+        // Render every visible line — used for full repaints (initial
+        // paint, expose, setText, etc.).
+        private fun renderContent(graphics: Graphics) {
+            this.renderLines(graphics, 0, this.lines.getSize() - 1, true)
+            this.fillBelowLastLine(graphics)
+        }
+
+        // Render a clamped sub-range of lines. Used by incremental
+        // updates after ScrollRaster has done the bulk shift.
+        private fun renderLineRange(graphics: Graphics, fromLine: Int, toLine: Int) {
+            this.renderLines(graphics, fromLine, toLine, false)
+        }
+
+        // The shared rendering loop. The trailing "fillBelowLastLine"
+        // pass is only needed when we're doing a full repaint — partial
+        // repaints know they don't need to touch the area below the
+        // visible lines.
+        private fun renderLines(graphics: Graphics, fromLine: Int, toLine: Int, isFullRepaint: Bool) {
+            graphics.setBackgroundPen(this.backgroundPen)
+
+            var f = this.getUsedFont()
+            if (f != null) {
+                graphics.setFont(f)
+            }
+
+            var lineHeight = this.getLineHeight()
+            var availableHeight = this.height.toShort()
+            var viewWidth = this.width.toShort()
+
+            var lo = fromLine
+            if (lo < 0) { lo = 0 }
+            var hi = toLine
+            var lastLine = this.lines.getSize() - 1
+            if (hi > lastLine) { hi = lastLine }
+
+            var i = lo
+            while (i <= hi) {
+                var y = (i * lineHeight.toInt()).toShort()
+                if (y >= availableHeight) {
+                    return
+                }
+                var line = this.lines.get(i)
+                var lineBottom = y + lineHeight - 1S
+
+                this.drawLine(graphics, line, i, 0S, y)
+
+                if (this.fillBackground) {
+                    var textWidth = graphics.calculateStringWidth(line).toShort()
+                    if (textWidth < viewWidth) {
+                        graphics.setForegroundPen(this.backgroundPen)
+                        graphics.fillRect(textWidth, y, viewWidth - 1S, lineBottom)
+                    }
+                }
+
+                if (i == this.cursorLine) {
+                    var cursorX = 0S
+                    if (this.cursorCol > 0) {
+                        var before = line.substring(0UI, this.cursorCol.toUInt())
+                        cursorX = graphics.calculateStringWidth(before).toShort()
+                    }
+                    graphics.setForegroundPen(this.cursorPen)
+                    graphics.fillRect(cursorX, y, cursorX, lineBottom)
+                }
+                i = i + 1
+            }
+        }
+
+        private fun fillBelowLastLine(graphics: Graphics) {
+            if (!this.fillBackground) {
+                return
+            }
+            var lineHeight = this.getLineHeight()
+            var availableHeight = this.height.toShort()
+            var y = (this.lines.getSize() * lineHeight.toInt()).toShort()
+            if (y < availableHeight) {
+                graphics.setForegroundPen(this.backgroundPen)
+                graphics.fillRect(0S, y, this.width.toShort() - 1S, availableHeight - 1S)
+            }
+        }
+
+        // ScrollRaster the strip starting at pendingScrollLineFrom down to
+        // the bottom of the visible editor by pendingScrollDy pixels.
+        // After this the pixels for the unchanged lines are already in
+        // the right place, and only the dirty lines need rendering.
+        private fun applyPendingScroll(graphics: Graphics) {
+            var lineHeight = this.getLineHeight()
+            var availableHeight = this.height.toShort()
+            var startY = (this.pendingScrollLineFrom * lineHeight.toInt()).toShort()
+            if (startY >= availableHeight) {
+                return
+            }
+            var h = availableHeight - startY
+            if (h <= 0S) {
+                return
+            }
+            graphics.scrollRect(0S, startY, this.width, h.toUShort(), 0S, this.pendingScrollDy, this.backgroundPen)
+        }
+
+        // Render via the window-level offscreen buffer (no flicker, but
+        // also no incremental updates — every paint re-renders all
+        // visible lines into offscreen and blits the rect back).
+        private fun renderViaOffscreen(graphics: Graphics) {
+            var window = this.getViewContext().getWindow()
+            var off = window.getOffscreenGraphics()
+
+            var absX = graphics.getTranslateX()
+            var absY = graphics.getTranslateY()
+
+            off.translate(absX, absY)
+            var clip: ClipRect = { x: absX, y: absY, width: this.width, height: this.height }
+            off.pushClipRect(clip)
+
+            this.renderContent(off)
+
+            off.popClipRect()
+            off.translate(0S - absX, 0S - absY)
+
+            window.flushOffscreenRect(absX, absY, this.width, this.height)
+        }
+
+        override fun paint(graphics: Graphics) {
+            base.paint(graphics)
+
+            var forceFull = graphics.shouldRepaintAll() || this.dirtyLineFrom < 0
+            if (this.useOffscreen) {
+                this.renderViaOffscreen(graphics)
+            } else if (forceFull) {
+                this.renderContent(graphics)
+            } else {
+                if (this.pendingScrollLineFrom >= 0 && this.pendingScrollDy != 0S) {
+                    this.applyPendingScroll(graphics)
+                }
+                this.renderLineRange(graphics, this.dirtyLineFrom, this.dirtyLineTo)
+            }
+
+            // Consume the partial-repaint state — the next paint starts
+            // from "full repaint" again unless an edit op reschedules.
+            this.dirtyLineFrom = -1
+            this.dirtyLineTo = -1
+            this.pendingScrollLineFrom = -1
+            this.pendingScrollDy = 0S
+        }
+
+        override fun onKeyboardEvent(type: KeyboardEventType, keyCode: UShort, keyChar: UShort): Bool {
+            if (type != KeyboardEventType.down) {
+                return false
+            }
+            // AmigaOS raw key codes for arrows.
+            if (keyCode == 79US) {
+                this.moveCursorLeft()
+                return true
+            }
+            if (keyCode == 78US) {
+                this.moveCursorRight()
+                return true
+            }
+            if (keyCode == 76US) {
+                this.moveCursorUp()
+                return true
+            }
+            if (keyCode == 77US) {
+                this.moveCursorDown()
+                return true
+            }
+            // ASCII char keys.
+            if (keyChar == 8US) {
+                this.backspace()
+                return true
+            }
+            if (keyChar == 13US || keyChar == 10US) {
+                this.insertNewLine()
+                return true
+            }
+            // Tab — insert literal tab for now.
+            if (keyChar == 9US) {
+                this.insertChar(9US)
+                return true
+            }
+            if (keyChar >= 32US && keyChar <= 126US) {
+                this.insertChar(keyChar)
+                return true
+            }
+            return false
+        }
+    }
+}

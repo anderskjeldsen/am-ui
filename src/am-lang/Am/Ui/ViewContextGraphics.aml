@@ -2,7 +2,7 @@
 namespace Am.Ui 
 {
 
-    #implementationPlatforms "libc", "amigaos", "amigaos-sim"
+    #implementationPlatforms "libc", "amigaos", "amigaos-sim", "morphos-ppc"
     native class ViewContextGraphics(private var viewContext: ViewContext) : Graphics {
         import Am.Lang
         import Am.Imaging
@@ -20,7 +20,9 @@ namespace Am.Ui
         native override fun setFont(font: Font)
         native override fun drawImage(image: Am.Imaging.Image, x: Short, y: Short, width: Short, height: Short)
         native override fun drawBitmap(bitmap: Bitmap, x: Short, y: Short, destWidth: Short, destHeight: Short)
-        
+
+        native override fun scrollRect(x: Short, y: Short, w: UShort, h: UShort, dx: Short, dy: Short, fillPen: UByte)
+
         // Native AmigaOS clipping using InstallClipRegion
         native override fun setClipRect(clipRect: ClipRect)
         native override fun clearClipRect()

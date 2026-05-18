@@ -1,7 +1,7 @@
 
 namespace Am.Ui 
 {
-    #implementationPlatforms "libc", "amigaos", "amigaos-sim"
+    #implementationPlatforms "libc", "amigaos", "amigaos-sim", "morphos-ppc"
     native class Window {
         import Am.Lang
 
@@ -14,6 +14,12 @@ namespace Am.Ui
         private var viewContext: ViewContextImpl
         private var graphics: LayerGraphics
         private var repaintRequested: Bool
+        // When true, the next paint clears the window background and tells
+        // every view to repaint regardless of its individual flag. Used
+        // for initial paint, resizes, and structural changes like a tree
+        // rebuild. Plain view-level requestRepaint() leaves this false so
+        // only the views that asked for it actually re-render.
+        private var fullRepaintRequested: Bool = true
         private var border: Insets
         private var backgroundPen: UByte
         private var fillBackground: Bool
@@ -23,6 +29,14 @@ namespace Am.Ui
         private var title: String = ""
         private var screenTitle: String = ""
         private var menuStrip: MenuStrip
+
+        // Window-level off-screen buffer for double-buffered painting.
+        // Lazy-allocated the first time getOffscreen() is called and sized
+        // to the host screen so any view that opts in (typically the text
+        // editor) can render into it and flush the rectangle without
+        // showing an intermediate erase phase on the visible window.
+        private var offscreen: RenderableBitmap = null
+        private var offscreenGraphics: Graphics = null
 
         var font: Font
 
@@ -50,6 +64,20 @@ namespace Am.Ui
 
         private fun setBorder(left: Short, top: Short, right: Short, bottom: Short) {
             this.border = new Insets(left, top, right, bottom)
+        }
+
+        fun setBackgroundPen(pen: UByte) {
+            this.backgroundPen = pen
+            this.requestRepaint()
+        }
+
+        fun getBackgroundPen(): UByte {
+            return this.backgroundPen
+        }
+
+        fun setFillBackground(fill: Bool) {
+            this.fillBackground = fill
+            this.requestRepaint()
         }
 
         fun setRootView(view: View) {
@@ -97,6 +125,15 @@ namespace Am.Ui
                 this.refresh()
             }
         }
+
+        // Schedule a full repaint — wipes the window background and forces
+        // every view (not just ones with their own flag) to repaint on the
+        // next paint cycle. Use for resizes / structural changes; everyday
+        // view updates should call requestRepaint() on the affected view.
+        fun requestFullRepaint() {
+            this.fullRepaintRequested = true
+            this.requestRepaint()
+        }
         // Synchronously paints the root view into the window. On native
         // platforms paint() is normally driven by the OS event loop in
         // response to refresh(); tests (and simple synchronous flows) can
@@ -107,19 +144,23 @@ namespace Am.Ui
 
         private fun paint() {
             var graphics = this.getGraphics()
-            graphics.requestRepaintAll()
-            if (this.rootView != null) {               
-                // Set up clipping for the inner window area (excluding borders)
+            var full = this.fullRepaintRequested
+            if (full) {
+                // Tell every view in the tree to repaint, even if their
+                // own flag is unset. Partial repaints leave this off, so
+                // only views with their own requestRepaint() actually paint.
+                graphics.requestRepaintAll()
+            }
+            if (this.rootView != null) {
                 var innerX = this.border.left
                 var innerY = this.border.top
                 var innerWidth = this.width - (this.border.left + this.border.right).toUShort()
                 var innerHeight = this.height - (this.border.top + this.border.bottom).toUShort()
-//                ("Window setting clip: x=" + innerX.toString() + " y=" + innerY.toString() + " w=" + innerWidth.toString() + " h=" + innerHeight.toString()).println()
-                
+
                 var windowClipRect: ClipRect = { x: innerX, y: innerY, width: innerWidth, height: innerHeight }
                 graphics.pushClipRect(windowClipRect)
-                
-                if (this.fillBackground) {
+
+                if (full && this.fillBackground) {
                     graphics.setForegroundPen(this.backgroundPen)
                     graphics.fillRect(0S + this.border.left, 0S + this.border.top, this.width.toShort() - (1S + this.border.right), this.height.toShort() - (1S + this.border.bottom))
                 }
@@ -137,10 +178,10 @@ namespace Am.Ui
                 graphics.translate(0S - innerX, 0S - innerY)
 
                 graphics.popClipRect()
-                // Restore clipping state
             }
             graphics.finalizeRepaintCycle()
             this.repaintRequested = false
+            this.fullRepaintRequested = false
         }
 
         private fun onResize(x: Short, y: Short, width: UShort, height: UShort) {
@@ -207,7 +248,7 @@ namespace Am.Ui
             each (menu in strip.menus) {
                 this.nativeAddMenu(menu.title)
                 each (item in menu.items) {
-                    this.nativeAddMenuItem(menuIndex, item, item.label)
+                    this.nativeAddMenuItem(menuIndex, item, item.label, item.commKey)
                 }
                 menuIndex++
             }
@@ -216,7 +257,7 @@ namespace Am.Ui
 
         private native fun nativeBeginMenuStrip()
         private native fun nativeAddMenu(title: String)
-        private native fun nativeAddMenuItem(menuIndex: Int, item: MenuItem, label: String)
+        private native fun nativeAddMenuItem(menuIndex: Int, item: MenuItem, label: String, commKey: String)
         private native fun nativeFinalizeMenuStrip()
         private native fun nativeClearMenuStrip()
 
@@ -240,10 +281,55 @@ namespace Am.Ui
             return this.pixelScaleY
         }
 */
+        // Lazy-allocate the window-level offscreen buffer (sized to the
+        // host screen) and return it. Used together with
+        // getOffscreenGraphics() + flushOffscreenRect() for double-buffered
+        // painting inside a view.
+        fun getOffscreen(): RenderableBitmap {
+            if (this.offscreen == null) {
+                var w = this.getHostScreenWidth()
+                var h = this.getHostScreenHeight()
+                this.offscreen = RenderableBitmap.empty(w, h, this)
+            }
+            return this.offscreen
+        }
+
+        // Cached Graphics bound to the offscreen bitmap. The translate
+        // state on this object accumulates across calls — callers should
+        // undo whatever they translate, just like with the window's own
+        // graphics.
+        fun getOffscreenGraphics(): Graphics {
+            if (this.offscreenGraphics == null) {
+                this.offscreenGraphics = this.getOffscreen().createGraphics()
+            }
+            return this.offscreenGraphics
+        }
+
+        // Blit a rectangle from the offscreen bitmap to this window at the
+        // same coords. Caller passes absolute window-relative coords;
+        // we cancel the in-flight translate on the on-screen graphics so
+        // the blit lands at the absolute (x, y) rather than at
+        // (currentTranslate + x). Without this the destination ends up
+        // double-translated (once via the caller computing x/y from
+        // graphics.getTranslateX/Y(), once via blitBitmapRect itself
+        // applying that same translate again).
+        fun flushOffscreenRect(x: Short, y: Short, w: UShort, h: UShort) {
+            var off = this.getOffscreen()
+            var g = this.graphics
+            var tx = g.getTranslateX()
+            var ty = g.getTranslateY()
+            g.blitBitmapRect(off.getBitmap(), x, y, w, h, x - tx, y - ty)
+        }
+
         native fun handleInput()
         native fun isOpen(): Bool
         private native fun refresh()
         private native fun setTitleNative(windowTitle: String, screenTitle: String)
+        // Pixel dimensions of the host Intuition screen (not this window).
+        // Used to size the lazily-allocated offscreen bitmap so any view
+        // anywhere in the window can flush into it.
+        native fun getHostScreenWidth(): UShort
+        native fun getHostScreenHeight(): UShort
 
         private native fun open(x: Short, y: Short, width: UShort, height: UShort, screen: Screen, windowManager: WindowManager, properties: WindowProperties)
         native fun close()

@@ -611,3 +611,53 @@ __exit: ;
 };
 
 
+
+
+function_result Am_Ui_ViewContextGraphics_scrollRect_0(aobject * const this,
+                                                        short x, short y,
+                                                        unsigned short w, unsigned short h,
+                                                        short dx, short dy,
+                                                        unsigned char fillPen)
+{
+	function_result __result = { .has_return_value = false };
+	bool __returning = false;
+	if (this != NULL) {
+		__increase_reference_count(this);
+	}
+
+	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
+	if (window == NULL || w == 0 || h == 0) goto __exit;
+	if (dx == 0 && dy == 0) goto __exit;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
+	if (window_data == NULL || window_data->window == NULL || window_data->window->RPort == NULL) goto __exit;
+	struct RastPort *rp = window_data->window->RPort;
+
+	short tx = translated_x(this, x);
+	short ty = translated_y(this, y);
+	short tx2 = tx + (short)w - 1;
+	short ty2 = ty + (short)h - 1;
+
+	UBYTE prevAPen = rp->FgPen;
+	UBYTE prevBPen = rp->BgPen;
+	UBYTE prevDrMd = rp->DrawMode;
+
+	SetAPen(rp, fillPen);
+	SetBPen(rp, fillPen);
+	SetDrMd(rp, JAM2);
+
+	ScrollRaster(rp, -dx, -dy, tx, ty, tx2, ty2);
+
+	SetAPen(rp, prevAPen);
+	SetBPen(rp, prevBPen);
+	SetDrMd(rp, prevDrMd);
+
+__exit: ;
+	if (window != NULL) {
+		__decrease_reference_count(window);
+	}
+	if (this != NULL) {
+		__decrease_reference_count(this);
+	}
+	return __result;
+};
+

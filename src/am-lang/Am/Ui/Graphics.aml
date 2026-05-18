@@ -16,9 +16,20 @@ namespace Am.Ui
         fun translate(x: Short, y: Short) {
             this.printOffset()
             this.xOffset = this.xOffset + x
-            this.yOffset = this.yOffset + y            
+            this.yOffset = this.yOffset + y
             this.printOffset()
+        }
 
+        // Current translation accumulator. Views that want to draw into
+        // a window-level offscreen buffer need to know where they are
+        // in absolute window coordinates, which is exactly what the
+        // translate stack tracks.
+        fun getTranslateX(): Short {
+            return this.xOffset
+        }
+
+        fun getTranslateY(): Short {
+            return this.yOffset
         }
 
         fun printOffset() {
@@ -136,6 +147,14 @@ namespace Am.Ui
             return (x >= clip.x && x < clip.x + clip.width.toShort() &&
                     y >= clip.y && y < clip.y + clip.height.toShort())
         }
+
+        // Move the existing pixels in the rectangle by (dx, dy). Positive
+        // dy scrolls the contents *down*, positive dx scrolls right
+        // (think "the same direction the content moves"). The strip that
+        // gets exposed is filled with `fillPen`. Used by TextEditor to
+        // shift lines on Enter/Backspace without re-rasterising every
+        // unchanged line.
+        abstract fun scrollRect(x: Short, y: Short, w: UShort, h: UShort, dx: Short, dy: Short, fillPen: UByte)
 
         abstract fun setForegroundPen(pen: UByte)
         abstract fun setBackgroundPen(pen: UByte)
