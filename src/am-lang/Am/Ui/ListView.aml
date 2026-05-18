@@ -78,6 +78,8 @@ namespace Am.Ui
             // (margin.l + border.l + padding.l, margin.t + border.t + padding.t)
             // inside the outer (x, y), so the clip pushed here must match the
             // outer rect — same pattern as ViewGroup.paintAll.
+            // Always walk the child — its own partial repaint needs to
+            // reach it even when this ListView itself isn't repainting.
             if (this.child != null) {
                 ix = this.x
                 iy = this.y
@@ -85,11 +87,9 @@ namespace Am.Ui
                 viewClipRect = currentClip.createInnerClipRect(ix, iy, this.width, this.height)
                 graphics.pushClipRect(viewClipRect)
 
-                if (b1 || b2) {
-                    graphics.translate(ix, iy)
-                    this.child.paintAll(graphics)
-                    graphics.translate(-ix, -iy)
-                }
+                graphics.translate(ix, iy)
+                this.child.paintAll(graphics)
+                graphics.translate(-ix, -iy)
 
                 graphics.popClipRect()
             }

@@ -7,7 +7,9 @@ namespace Am.Ui
 
         private var child: View
 
-        private var borderPens: BorderPens = new BorderPens(1UB, 1UB, 2UB, 2UB)
+        var backgroundPen: UByte = 0UB
+        var drawBorder: Bool = true
+        var borderPens: BorderPens = new BorderPens(1UB, 1UB, 2UB, 2UB)
 
         override fun setDefaultPadding() {
             this.setPadding(4S, 2S)
@@ -81,6 +83,8 @@ namespace Am.Ui
             // (x, y) — the child was laid out at (margin.l + border.l + padding.l,
             // margin.t + border.t + padding.t) inside that — so the clip pushed
             // here must match: outer (x, y, width, height). Mirrors ViewGroup.paintAll.
+            // Always walk the child so its own partial repaint reaches it
+            // even when the panel itself isn't repainting.
             if (this.child != null) {
                 ix = this.x
                 iy = this.y
@@ -88,11 +92,9 @@ namespace Am.Ui
                 viewClipRect = currentClip.createInnerClipRect(ix, iy, this.width, this.height)
                 graphics.pushClipRect(viewClipRect)
 
-                if (b1 || b2) {
-                    graphics.translate(ix, iy)
-                    this.child.paintAll(graphics)
-                    graphics.translate(-ix, -iy)
-                }
+                graphics.translate(ix, iy)
+                this.child.paintAll(graphics)
+                graphics.translate(-ix, -iy)
 
                 graphics.popClipRect()
             }
@@ -107,13 +109,14 @@ namespace Am.Ui
             var y2 = this.height.toShort() - (this.margin.bottom + this.margin.top + 1S)
 
             var borderPens = this.borderPens
-            var bgPen = 0UB
 
-            // Background bl,bt - w-br,h-bb            
-            graphics.setForegroundPen(bgPen)
+            // Background bl,bt - w-br,h-bb
+            graphics.setForegroundPen(this.backgroundPen)
             graphics.fillRect(x1, y1, x2, y2)
 
-            this.paintNativeBorder(graphics, borderPens)
+            if (this.drawBorder) {
+                this.paintNativeBorder(graphics, borderPens)
+            }
         }
 
         fun setChild(child: View) {
@@ -134,13 +137,25 @@ namespace Am.Ui
         override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
             if (this.contains(x, y)) {
                 var c = this.child
-                var lx = x - c.x 
+                var lx = x - c.x
                 var ly = y - c.y
 
                 var consumed = c.onMouseEvent(type, button, lx, ly)
                 if (consumed) {
                     return consumed
                 }
+            }
+            return false
+        }
+
+        // ViewGroup forwards keyboard events to its children; Panel
+        // holds a single child but isn't a ViewGroup, so without this
+        // override keystrokes never reach things like a TextEditor
+        // nested inside a Panel.
+        override fun onKeyboardEvent(type: KeyboardEventType, keyCode: UShort, keyChar: UShort): Bool {
+            var c = this.child
+            if (c != null) {
+                return c.onKeyboardEvent(type, keyCode, keyChar)
             }
             return false
         }

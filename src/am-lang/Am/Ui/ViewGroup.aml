@@ -60,11 +60,11 @@ namespace Am.Ui
 
             var ix = this.x + this.margin.left
             var iy = this.y + this.margin.top
-            
+
             // Set clipping area to this view's bounds (excluding margins)
             var viewWidth = this.width.toShort() - this.margin.left - this.margin.right
             var viewHeight = this.height.toShort() - this.margin.top - this.margin.bottom
-            
+
             var currentClip = graphics.getCurrentClipRect()
             var viewClipRect: ClipRect = currentClip.createInnerClipRect(ix, iy, viewWidth.toUShort(), viewHeight.toUShort())
             graphics.pushClipRect(viewClipRect)
@@ -79,27 +79,21 @@ namespace Am.Ui
             graphics.popClipRect()
 
 
-            // Paint children with proper translation
+            // Always walk children: their paintAll() decides whether they
+            // themselves need to repaint. Gating this loop on b1||b2 means
+            // a partial repaint requested by a deep descendant never
+            // reaches that descendant when its ancestors are clean.
             ix = this.x
             iy = this.y
 
             viewClipRect = currentClip.createInnerClipRect(ix, iy, this.width, this.height)
-            graphics.pushClipRect(viewClipRect)                
+            graphics.pushClipRect(viewClipRect)
 
-            if (b1 || b2) {
-                graphics.translate(ix, iy)
-                this.paintChildren(graphics)
-                graphics.translate(-ix, -iy)
-            }
-            this.markAsPainted()
-
-            graphics.popClipRect()
-/*
-            graphics.translate(ix, iy)            
+            graphics.translate(ix, iy)
             this.paintChildren(graphics)
             graphics.translate(-ix, -iy)
-            */
 
+            graphics.popClipRect()
         }
 
         open fun layoutChildren() {

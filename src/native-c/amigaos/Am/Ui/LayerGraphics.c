@@ -396,6 +396,37 @@ __exit: ;
     return __result;
 }
 
+function_result Am_Ui_LayerGraphics_blitBitmapRect_0(aobject * const this, aobject *bitmap,
+                                                       short srcX, short srcY,
+                                                       unsigned short srcW, unsigned short srcH,
+                                                       short dstX, short dstY)
+{
+    function_result __result = { .has_return_value = false };
+    bool __returning = false;
+    if (bitmap != NULL) {
+        __increase_reference_count(bitmap);
+    }
+    struct RastPort *rp = get_rp(this);
+    if (rp == NULL || bitmap == NULL) goto __exit;
+    if (srcW == 0 || srcH == 0) goto __exit;
+    {
+        Am_Ui_Bitmap_data *bitmapData =
+            (Am_Ui_Bitmap_data *)bitmap->object_properties.class_object_properties.object_data.value.custom_value;
+        if (bitmapData == NULL || bitmapData->bitmap == NULL) goto __exit;
+
+        short tx = lg_translated_x(this, dstX);
+        short ty = lg_translated_y(this, dstY);
+
+        // 0xC0 = plain copy (minterm A, no transparency).
+        BltBitMapRastPort(bitmapData->bitmap, srcX, srcY, rp, tx, ty, srcW, srcH, 0xC0);
+    }
+__exit: ;
+    if (bitmap != NULL) {
+        __decrease_reference_count(bitmap);
+    }
+    return __result;
+}
+
 function_result Am_Ui_LayerGraphics_drawBitmap_0(aobject * const this, aobject *bitmap,
                                                   short x, short y,
                                                   short destWidth, short destHeight)
@@ -445,6 +476,47 @@ __exit: ;
     if (bitmap != NULL) {
         __decrease_reference_count(bitmap);
     }
+    return __result;
+}
+
+// ScrollRaster's sign convention is opposite to ours: in ScrollRaster
+// positive dx/dy moves pixels toward (0,0) — i.e. left/up. We flip the
+// sign so callers can use the more intuitive "positive dy scrolls
+// content down" convention. The exposed strip is filled with `fillPen`
+// (via temporarily setting the rastport's APen + BPen + JAM2 mode so
+// either fill style ScrollRaster uses lands on the right colour).
+function_result Am_Ui_LayerGraphics_scrollRect_0(aobject * const this,
+                                                   short x, short y,
+                                                   unsigned short w, unsigned short h,
+                                                   short dx, short dy,
+                                                   unsigned char fillPen)
+{
+    function_result __result = { .has_return_value = false };
+    bool __returning = false;
+    struct RastPort *rp = get_rp(this);
+    if (rp == NULL || w == 0 || h == 0) goto __exit;
+    if (dx == 0 && dy == 0) goto __exit;
+
+    short tx = lg_translated_x(this, x);
+    short ty = lg_translated_y(this, y);
+    short tx2 = tx + (short)w - 1;
+    short ty2 = ty + (short)h - 1;
+
+    UBYTE prevAPen = rp->FgPen;
+    UBYTE prevBPen = rp->BgPen;
+    UBYTE prevDrMd = rp->DrawMode;
+
+    SetAPen(rp, fillPen);
+    SetBPen(rp, fillPen);
+    SetDrMd(rp, JAM2);
+
+    ScrollRaster(rp, -dx, -dy, tx, ty, tx2, ty2);
+
+    SetAPen(rp, prevAPen);
+    SetBPen(rp, prevBPen);
+    SetDrMd(rp, prevDrMd);
+
+__exit: ;
     return __result;
 }
 

@@ -55,7 +55,7 @@ function_result Am_Ui_GadgetViews_layoutNative_0(aobject * gadgetView, short x, 
 		__increase_reference_count(gadgetView);
 	}
 
-	aobject *window = Am_Ui_View_getWindow_0(gadgetView).return_value.value.object_value;
+	aobject *window = Am_Ui_View_f_getWindow_0(gadgetView).return_value.value.object_value;
 	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
 	gadget_view_holder *gvh = (gadget_view_holder *) gadgetView->object_properties.class_object_properties.object_data.value.custom_value;
 

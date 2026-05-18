@@ -22,6 +22,7 @@
 #include <proto/intuition.h>
 #include <proto/gadtools.h>
 #include <proto/graphics.h>
+#include <proto/layers.h>
 
 
 #include <libc/core_inline_functions.h>
@@ -74,7 +75,7 @@ function_result Am_Ui_ViewContextGraphics_setForegroundPen_0(aobject * const thi
 		__increase_reference_count(this);
 	}
 
-	aobject *window = Am_Ui_ViewContextGraphics_getWindow_0(this).return_value.value.object_value;
+	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
 	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
 	struct RastPort *rp = window_data->window->RPort;
 
@@ -98,7 +99,7 @@ function_result Am_Ui_ViewContextGraphics_setBackgroundPen_0(aobject * const thi
 		__increase_reference_count(this);
 	}
 
-	aobject *window = Am_Ui_ViewContextGraphics_getWindow_0(this).return_value.value.object_value;
+	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
 	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
 	struct RastPort *rp = window_data->window->RPort;
 
@@ -122,7 +123,7 @@ function_result Am_Ui_ViewContextGraphics_drawLine_0(aobject * const this, short
 		__increase_reference_count(this);
 	}
 
-	aobject *window = Am_Ui_ViewContextGraphics_getWindow_0(this).return_value.value.object_value;
+	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
 	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
 	struct RastPort *rp = window_data->window->RPort;
 
@@ -159,7 +160,7 @@ function_result Am_Ui_ViewContextGraphics_eraseRect_0(aobject * const this, shor
 		__increase_reference_count(this);
 	}
 
-	aobject *window = Am_Ui_ViewContextGraphics_getWindow_0(this).return_value.value.object_value;
+	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
 	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
 	struct RastPort *rp = window_data->window->RPort;
 
@@ -189,7 +190,7 @@ function_result Am_Ui_ViewContextGraphics_fillRect_0(aobject * const this, short
 		__increase_reference_count(this);
 	}
 
-	aobject *window = Am_Ui_ViewContextGraphics_getWindow_0(this).return_value.value.object_value;
+	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
 	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
 	struct RastPort *rp = window_data->window->RPort;
 
@@ -222,7 +223,7 @@ function_result Am_Ui_ViewContextGraphics_drawString_0(aobject * const this, aob
 		__increase_reference_count(text);
 	}
 
-	aobject *window = Am_Ui_ViewContextGraphics_getWindow_0(this).return_value.value.object_value;
+	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
 	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
 	struct RastPort *rp = window_data->window->RPort;
 	string_holder *sh = text->object_properties.class_object_properties.object_data.value.custom_value;
@@ -258,7 +259,7 @@ function_result Am_Ui_ViewContextGraphics_calculateStringWidth_0(aobject * const
 		__increase_reference_count(text);
 	}
 
-	aobject *window = Am_Ui_ViewContextGraphics_getWindow_0(this).return_value.value.object_value;
+	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
 	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
 	struct RastPort *rp = window_data->window->RPort;
 	string_holder *sh = text->object_properties.class_object_properties.object_data.value.custom_value;
@@ -288,7 +289,7 @@ function_result Am_Ui_ViewContextGraphics_getCurrentFontSize_0(aobject * const t
 		__increase_reference_count(this);
 	}
 
-	aobject *window = Am_Ui_ViewContextGraphics_getWindow_0(this).return_value.value.object_value;
+	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
 	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
 	struct RastPort *rp = window_data->window->RPort;
 
@@ -321,7 +322,7 @@ function_result Am_Ui_ViewContextGraphics_setFont_0(aobject * const this, aobjec
 		__increase_reference_count(font);
 	}
 
-	aobject *window = Am_Ui_ViewContextGraphics_getWindow_0(this).return_value.value.object_value;
+	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
 	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
 	struct RastPort *rp = window_data->window->RPort;
 
@@ -353,7 +354,7 @@ function_result Am_Ui_ViewContextGraphics_drawImage_0(aobject * const this, aobj
 		__increase_reference_count(image);
 	}
 
-	aobject *window = Am_Ui_ViewContextGraphics_getWindow_0(this).return_value.value.object_value;
+	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
 	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
 	struct RastPort *rp = window_data->window->RPort;
 
@@ -390,3 +391,128 @@ function_result Am_Ui_ViewContextGraphics_drawBitmap_0(aobject * const this,
 __exit: ;
 	return __result;
 };
+
+// Clip-region helpers — these are abstract on Graphics so every concrete
+// subclass must implement them, even when there's nothing else to do. We
+// install a single-rect Region on the window's layer (same approach as
+// the amigaos build).
+function_result Am_Ui_ViewContextGraphics_setClipRect_0(aobject * const this, struct Am_Ui_ClipRect * clipRect)
+{
+	function_result __result = { .has_return_value = false };
+	bool __returning = false;
+	if (this != NULL) {
+		__increase_reference_count(this);
+	}
+
+	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
+	if (window == NULL) goto __exit;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
+	if (window_data == NULL || window_data->window == NULL) goto __exit;
+
+	if (clipRect != NULL && window_data->clip_region != NULL) {
+		InstallClipRegion(window_data->window->WLayer, NULL);
+		ClearRegion(window_data->clip_region);
+
+		struct Rectangle rect;
+		rect.MinX = clipRect->x;
+		rect.MinY = clipRect->y;
+		rect.MaxX = clipRect->x + clipRect->width - 1;
+		rect.MaxY = clipRect->y + clipRect->height - 1;
+		OrRectRegion(window_data->clip_region, &rect);
+		InstallClipRegion(window_data->window->WLayer, window_data->clip_region);
+	}
+
+__exit: ;
+	if (window != NULL) {
+		__decrease_reference_count(window);
+	}
+	if (this != NULL) {
+		__decrease_reference_count(this);
+	}
+	return __result;
+}
+
+function_result Am_Ui_ViewContextGraphics_clearClipRect_0(aobject * const this)
+{
+	function_result __result = { .has_return_value = false };
+	bool __returning = false;
+	if (this != NULL) {
+		__increase_reference_count(this);
+	}
+
+	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
+	if (window == NULL) goto __exit;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
+	if (window_data != NULL && window_data->window != NULL) {
+		InstallClipRegion(window_data->window->WLayer, NULL);
+	}
+
+__exit: ;
+	if (window != NULL) {
+		__decrease_reference_count(window);
+	}
+	if (this != NULL) {
+		__decrease_reference_count(this);
+	}
+	return __result;
+}
+
+function_result Am_Ui_ViewContextGraphics_beginPainting_0(aobject * const this, struct Am_Ui_ClipRect * clipRect)
+{
+	return Am_Ui_ViewContextGraphics_setClipRect_0(this, clipRect);
+}
+
+function_result Am_Ui_ViewContextGraphics_endPainting_0(aobject * const this)
+{
+	return Am_Ui_ViewContextGraphics_clearClipRect_0(this);
+}
+
+
+function_result Am_Ui_ViewContextGraphics_scrollRect_0(aobject * const this,
+                                                        short x, short y,
+                                                        unsigned short w, unsigned short h,
+                                                        short dx, short dy,
+                                                        unsigned char fillPen)
+{
+	function_result __result = { .has_return_value = false };
+	bool __returning = false;
+	if (this != NULL) {
+		__increase_reference_count(this);
+	}
+
+	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
+	if (window == NULL || w == 0 || h == 0) goto __exit;
+	if (dx == 0 && dy == 0) goto __exit;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
+	if (window_data == NULL || window_data->window == NULL || window_data->window->RPort == NULL) goto __exit;
+	struct RastPort *rp = window_data->window->RPort;
+
+	short tx = translated_x(this, x);
+	short ty = translated_y(this, y);
+	short tx2 = tx + (short)w - 1;
+	short ty2 = ty + (short)h - 1;
+
+	UBYTE prevAPen = rp->FgPen;
+	UBYTE prevBPen = rp->BgPen;
+	UBYTE prevDrMd = rp->DrawMode;
+
+	SetAPen(rp, fillPen);
+	SetBPen(rp, fillPen);
+	SetDrMd(rp, JAM2);
+
+	ScrollRaster(rp, -dx, -dy, tx, ty, tx2, ty2);
+
+	SetAPen(rp, prevAPen);
+	SetBPen(rp, prevBPen);
+	SetDrMd(rp, prevDrMd);
+
+__exit: ;
+	if (window != NULL) {
+		__decrease_reference_count(window);
+	}
+	if (this != NULL) {
+		__decrease_reference_count(this);
+	}
+	return __result;
+};
+
