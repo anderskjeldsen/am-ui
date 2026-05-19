@@ -9,6 +9,14 @@ namespace Am.Ui
         private var active: Bool
         private var hovered: Bool
 
+        // Theme knobs — defaults preserve the old hardcoded look so
+        // existing callers don't change. The Label inside is created
+        // lazily and its pens are reapplied every paint so changing
+        // these vars after construction is honoured.
+        var backgroundPen: UByte       = 0UB
+        var activeBackgroundPen: UByte = 3UB
+        var textPen: UByte             = 1UB
+
         private var borderPens: BorderPens = new BorderPens(2UB, 2UB, 1UB, 1UB)
         private var activeBorderPens: BorderPens = new BorderPens(1UB, 1UB, 2UB, 2UB)
 
@@ -67,9 +75,9 @@ namespace Am.Ui
             var y2 = this.height as Short - (this.margin.bottom + this.margin.top + 1S)
 
             var borderPens = this.borderPens
-            var bgPen = 0UB
+            var bgPen = this.backgroundPen
             if (this.active && this.hovered) {
-                bgPen = 3UB
+                bgPen = this.activeBackgroundPen
                 borderPens = this.activeBorderPens
             }
 
@@ -81,6 +89,7 @@ namespace Am.Ui
 
             var label = this.ensureLabel()
             label.backgroundPen = bgPen
+            label.textPen = this.textPen
             label.paintAll(graphics)
         }
 
