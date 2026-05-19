@@ -47,6 +47,19 @@ namespace Am.Ui
             }
         }
 
+        override fun requestRepaintTree() {
+            base.requestRepaintTree()
+            each(this.children, c) {
+                c.requestRepaintTree()
+            }
+        }
+
+        override fun applyScrollOffset(dy: Short) {
+            each(this.children, c) {
+                c.y = c.y + dy
+            }
+        }
+
 
         fun paintChildren(graphics: Graphics) {
             each(this.children, c) {
@@ -135,9 +148,18 @@ namespace Am.Ui
 
 
         override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
-            if (this.contains(x, y)) {
+            // Mouse-up always propagates to children regardless of
+            // this group's own contains() result so that any descendant
+            // currently holding a drag (ScrollView thumb, SplitterView,
+            // etc.) gets a chance to clear its drag state when the user
+            // releases the button outside the group's bounds. Without
+            // this, a drag started in the sidebar but released over the
+            // editor would never see the up event and the dragging
+            // flag would stay latched on — leading to "the scrollbar
+            // keeps following my mouse after I let go".
+            if (this.contains(x, y) || type == MouseEventType.up) {
                 each(this.children, c) {
-                    var lx = x - c.x 
+                    var lx = x - c.x
                     var ly = y - c.y
 
                     var consumed = c.onMouseEvent(type, button, lx, ly)

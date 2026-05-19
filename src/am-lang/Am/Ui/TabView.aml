@@ -284,10 +284,19 @@ namespace Am.Ui
         }
 
         override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
+            // Stale-hover guard: any mouse event whose coords sit outside
+            // this tab is a signal to drop our hover mark. The bar's
+            // parent ViewGroup doesn't dispatch move events to children
+            // when the cursor leaves the bar's bounds, so without this
+            // a tab can stay visually hovered after the cursor moves on.
+            if (this.hovered && !this.contains(x, y)) {
+                this.hovered = false
+                this.requestRepaint()
+            }
             if (type == MouseEventType.move) {
                 var inside = this.contains(x, y)
-                if (inside != this.hovered) {
-                    this.hovered = inside
+                if (inside && !this.hovered) {
+                    this.hovered = true
                     this.requestRepaint()
                 }
                 // Return false so sibling tabs also see the move event and

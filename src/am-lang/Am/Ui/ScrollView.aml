@@ -1,19 +1,39 @@
 
-namespace Am.Ui 
+namespace Am.Ui
 {
 
     class ScrollView() : View {
         import Am.Lang
 
         private var child: View
-        private var scrollX: Short = 0S
         private var scrollY: Short = 0S
 
-        private var showVertical: Bool
-        private var showHorizontal: Bool
+        // Thumb / track colours. Default thumb is pen 1 (host black);
+        // owners typically override with a theme-appropriate dark grey.
+        // trackPen = 0 paints the track in pen 0 (Workbench background);
+        // matches the sidebar in the IDE theme so the thumb visually
+        // floats on the bar.
+        var scrollbarThumbPen: UByte = 1UB
+        var scrollbarTrackPen: UByte = 0UB
+
+        private static const SCROLLBAR_W: Short  = 10S
+        private static const MIN_THUMB_H: Short  = 16S
+        private static const THUMB_INSET: Short  = 1S
+
+        // Active thumb-drag state. dragMouseStartY is in local coords
+        // (relative to the scroll view); dragScrollStartY snapshots
+        // scrollY at the moment the drag began so cursor deltas map
+        // back to absolute scroll positions without compounding.
+        private var draggingThumb: Bool       = false
+        private var dragMouseStartY: Short    = 0S
+        private var dragScrollStartY: Short   = 0S
 
         override fun setDefaultPadding() {
-            this.setPadding(4S, 2S)
+            this.setPadding(0S)
+        }
+
+        override fun setDefaultBorder() {
+            this.setBorderWidths(0S)
         }
 
         override fun onAttach(viewContext: ViewContext) {
@@ -34,29 +54,120 @@ namespace Am.Ui
             return 0S
         }
 
+        // -------- geometry helpers --------
+
+        private fun contentHeight(): Short {
+            if (this.child == null) {
+                return 0S
+            }
+            return this.child.minHeight()
+        }
+
+        private fun needsScrollbar(): Bool {
+            return this.contentHeight() > this.height.toShort()
+        }
+
+        private fun viewportWidth(): Short {
+            var w = this.width.toShort()
+            if (this.needsScrollbar()) {
+                w = w - ScrollView.SCROLLBAR_W
+            }
+            return w
+        }
+
+        private fun viewportHeight(): Short {
+            return this.height.toShort()
+        }
+
+        private fun maxScrollY(): Short {
+            var m = this.contentHeight() - this.viewportHeight()
+            if (m < 0S) {
+                return 0S
+            }
+            return m
+        }
+
+        private fun clampScrollY() {
+            var max = this.maxScrollY()
+            if (this.scrollY < 0S) {
+                this.scrollY = 0S
+            }
+            if (this.scrollY > max) {
+                this.scrollY = max
+            }
+        }
+
+        private fun scrollbarX(): Short {
+            return this.width.toShort() - ScrollView.SCROLLBAR_W
+        }
+
+        private fun thumbHeight(): Short {
+            var vpH = this.viewportHeight().toInt()
+            var ch = this.contentHeight().toInt()
+            if (ch <= 0) {
+                return ScrollView.MIN_THUMB_H
+            }
+            // Thumb height = viewport² / content (the usual visible-
+            // fraction → thumb-height mapping). Promote to Int — at
+            // viewport heights above 180px, vpH*vpH overflows Short.
+            // Clamp to a minimum so very long lists still leave a
+            // draggable target.
+            var th = (vpH * vpH) / ch
+            if (th < ScrollView.MIN_THUMB_H.toInt()) {
+                th = ScrollView.MIN_THUMB_H.toInt()
+            }
+            if (th > vpH) {
+                th = vpH
+            }
+            return th.toShort()
+        }
+
+        private fun thumbY(): Short {
+            var max = this.maxScrollY().toInt()
+            if (max <= 0) {
+                return 0S
+            }
+            var travel = (this.viewportHeight() - this.thumbHeight()).toInt()
+            if (travel <= 0) {
+                return 0S
+            }
+            // Int math — scrollY*travel overflows Short for any long
+            // file list (content height > ~150 rows).
+            var ty = (this.scrollY.toInt() * travel) / max
+            return ty.toShort()
+        }
+
+        // -------- layout + paint --------
+
         override fun layout(x: Short, y: Short, width: UShort, height: UShort) {
             base.layout(x, y, width, height)
             this.layoutChildren()
         }
 
         private fun layoutChildren() {
-            var x = 0S
-            var y = 0S
-
-            var height = this.child.minHeight()
-            var width = this.child.minWidth()
-
-            this.child.layout(x, y, width.toUShort(), height.toUShort())
+            if (this.child == null) {
+                return
+            }
+            // Lay the child out at its natural height but force its
+            // width to the viewport (minus the scrollbar lane when one
+            // is needed). The scroll position is what shifts the child
+            // visually — its layout coords stay anchored at (0, 0).
+            var ch = this.child.minHeight()
+            var vw = this.viewportWidth()
+            var laidH = ch
+            if (laidH < this.height.toShort()) {
+                laidH = this.height.toShort()
+            }
+            this.child.layout(0S, 0S, vw.toUShort(), laidH.toUShort())
+            this.clampScrollY()
         }
-
 
         override fun paintAll(graphics: Graphics) {
             var b1 = graphics.shouldRepaintAll()
             var b2 = this.getRepaintRequested()
 
-            // Phase 1: paint the scroll view itself (background + border) inside
-            // a clip that excludes the margin. Clip and translate must be pushed
-            // together so descendants' createInnerClipRect math stays in sync.
+            // Phase 1: scroll view's own background (paint() is a no-op
+            // by default; subclasses or styled callers can fill).
             var ix = this.x + this.margin.left
             var iy = this.y + this.margin.top
             var viewWidth = this.width.toShort() - this.margin.left - this.margin.right
@@ -75,39 +186,82 @@ namespace Am.Ui
 
             graphics.popClipRect()
 
-            // Phase 2: paint the child shifted by (scrollX, scrollY). The clip
-            // must stay at the ScrollView's static viewport — NOT shifted by
-            // the scroll offset — otherwise content scrolls out of clip range
-            // before it's actually off-screen.
+            // Phase 2: child, clipped to the viewport (which excludes
+            // the scrollbar lane).
+            //
+            // We bake the scroll offset directly into the child's
+            // immediate children's y positions, rather than relying
+            // on a translate. createInnerClipRect computes new clips
+            // as (parent_clip_origin + child_local_xy) and clamps to
+            // the parent. A translate-only approach desyncs from this
+            // math: the child draws at the translated y but its clip
+            // sits at the unshifted y and clips the draw out. By
+            // shifting the immediate children's y values down/up by
+            // -scrollY for the duration of the paint, the natural
+            // clip-and-translate composition gives the right world
+            // positions and the labels' clips align with where they
+            // actually draw. Restored immediately after the paint so
+            // layout (which assigns these positions) stays the source
+            // of truth between frames.
             if (this.child != null) {
-                viewClipRect = currentClip.createInnerClipRect(this.x, this.y, this.width, this.height)
+                var vpW = this.viewportWidth()
+                var vpH = this.viewportHeight()
+                viewClipRect = currentClip.createInnerClipRect(this.x, this.y, vpW.toUShort(), vpH.toUShort())
                 graphics.pushClipRect(viewClipRect)
 
-                if (b1 || b2) {
-                    ix = this.x + this.scrollX
-                    iy = this.y + this.scrollY
+                this.child.applyScrollOffset(0S - this.scrollY)
 
-                    graphics.translate(ix, iy)
-                    this.child.paintAll(graphics)
-                    graphics.translate(-ix, -iy)
-                }
+                graphics.translate(this.x, this.y)
+                this.child.paintAll(graphics)
+                graphics.translate(0S - this.x, 0S - this.y)
 
+                this.child.applyScrollOffset(this.scrollY)
+
+                graphics.popClipRect()
+            }
+
+            // Phase 3: scrollbar, on top of everything else, clipped
+            // to the scroll view's full rect.
+            if (this.needsScrollbar()) {
+                viewClipRect = currentClip.createInnerClipRect(this.x, this.y, this.width, this.height)
+                graphics.pushClipRect(viewClipRect)
+                graphics.translate(this.x, this.y)
+                this.paintScrollbar(graphics)
+                graphics.translate(-this.x, -this.y)
                 graphics.popClipRect()
             }
         }
 
+        // Default paint() is a no-op — the scroll view is normally
+        // overlaid on the parent's background. Override or wrap in a
+        // Panel if you need a fill.
         override fun paint(graphics: Graphics) {
-            base.paint(graphics)
+        }
 
-            var x1 = 0S
-            var x2 = this.width.toShort() - (this.margin.right + this.margin.left + 1S)
-            var y1 = 0S
-            var y2 = this.height.toShort() - (this.margin.bottom + this.margin.top + 1S)
+        private fun paintScrollbar(graphics: Graphics) {
+            var sbX = this.scrollbarX()
+            var sbW = ScrollView.SCROLLBAR_W
+            var vpH = this.viewportHeight()
 
-            var bgPen = 0UB
+            // Track.
+            graphics.setForegroundPen(this.scrollbarTrackPen)
+            graphics.fillRect(sbX, 0S, (sbX + sbW) - 1S, vpH - 1S)
 
-            graphics.setForegroundPen(bgPen)
-            graphics.fillRect(x1, y1, x2, y2)
+            // Thumb — inset by 1 px on each side so the lane edge is
+            // visible regardless of track pen.
+            var ty = this.thumbY()
+            var th = this.thumbHeight()
+            graphics.setForegroundPen(this.scrollbarThumbPen)
+            graphics.fillRect((sbX + ScrollView.THUMB_INSET), ty, ((sbX + sbW) - ScrollView.THUMB_INSET) - 1S, (ty + th) - 1S)
+        }
+
+        // Single-child wrapper held outside ViewGroup.children, so
+        // the default walk would only mark the scroll view itself.
+        // Recurse so the wrapped content actually repaints on a
+        // subtree request.
+        override fun requestRepaintTree() {
+            base.requestRepaintTree()
+            this.child?.requestRepaintTree()
         }
 
         fun setChild(child: View) {
@@ -118,20 +272,96 @@ namespace Am.Ui
             return this.child
         }
 
-        override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
-            if (this.contains(x, y)) {
-                var c = this.child
-                var lx = x - c.x 
-                var ly = y - c.y
+        // -------- mouse handling --------
 
-                var consumed = c.onMouseEvent(type, button, lx, ly)
-                if (consumed) {
-                    return consumed
+        // Synchronous repaint helper: scroll changes have to land in
+        // the visible window *during* the drag, not after the next
+        // event loop tick. Drag-move events on AmigaOS arrive via
+        // INTUITICKS (~10Hz), so waiting for the natural refresh
+        // cadence makes the bar feel completely unresponsive.
+        private fun forceRepaintNow() {
+            this.requestRepaintTree()
+            var w = this.getWindow()
+            if (w != null) {
+                w.repaint()
+            }
+        }
+
+        override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
+            // Active drag: track move + up regardless of cursor
+            // position so the thumb keeps following even when the
+            // mouse drifts out of the scrollbar lane.
+            if (this.draggingThumb) {
+                if (type == MouseEventType.move) {
+                    var dy = (y - this.dragMouseStartY).toInt()
+                    var travel = (this.viewportHeight() - this.thumbHeight()).toInt()
+                    if (travel > 0) {
+                        // Int math: dy*max overflows Short once the
+                        // content is more than ~150 rows long.
+                        var max = this.maxScrollY().toInt()
+                        var newScroll = this.dragScrollStartY.toInt() + (dy * max) / travel
+                        this.scrollY = newScroll.toShort()
+                        this.clampScrollY()
+                        this.forceRepaintNow()
+                    }
+                    return true
                 }
+                if (type == MouseEventType.up) {
+                    this.draggingThumb = false
+                    return true
+                }
+            }
+
+            if (!this.contains(x, y)) {
+                // Mouse-up still has to reach the child so any drag
+                // state it's holding can be cleared. Other event
+                // types outside the bar can be safely ignored.
+                if (type == MouseEventType.up && this.child != null) {
+                    var ux = x - this.child.x
+                    var uy = (y - this.child.y) + this.scrollY
+                    return this.child.onMouseEvent(type, button, ux, uy)
+                }
+                return false
+            }
+
+            // Click landed in the scrollbar lane?
+            if (this.needsScrollbar() && x >= this.scrollbarX()) {
+                if (type == MouseEventType.down && button == MouseButton.left) {
+                    var ty = this.thumbY()
+                    var th = this.thumbHeight()
+                    if (y >= ty && y < ty + th) {
+                        // Begin thumb drag.
+                        this.draggingThumb = true
+                        this.dragMouseStartY = y
+                        this.dragScrollStartY = this.scrollY
+                    } else {
+                        // Track click — page by a viewport height in
+                        // the direction of the click.
+                        var page = this.viewportHeight()
+                        if (y < ty) {
+                            this.scrollY = this.scrollY - page
+                        } else {
+                            this.scrollY = this.scrollY + page
+                        }
+                        this.clampScrollY()
+                        this.forceRepaintNow()
+                    }
+                    return true
+                }
+                // Other events in the bar lane are swallowed.
+                return false
+            }
+
+            // Forward to child with the scroll offset added back in,
+            // so clicks land on whatever row is *visually* under the
+            // cursor (the child is painted shifted by -scrollY).
+            if (this.child != null) {
+                var lx = x - this.child.x
+                var ly = (y - this.child.y) + this.scrollY
+                return this.child.onMouseEvent(type, button, lx, ly)
             }
             return false
         }
-
     }
 }
 

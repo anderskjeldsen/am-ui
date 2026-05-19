@@ -207,7 +207,32 @@ namespace Am.Ui
             this.close()
         }
 
+        // Soft keyboard focus: when set, this view gets first crack
+        // at every key event before the usual rootView walk. If the
+        // focused view returns false (didn't consume), dispatch
+        // falls through to the normal tree walk. Used for views
+        // that aren't naturally first in keyboard-walk order — e.g.
+        // an inline terminal docked below an editor that always
+        // consumes keys.
+        private var keyboardFocus: View = null
+
+        fun setKeyboardFocus(view: View) {
+            this.keyboardFocus = view
+        }
+
+        fun clearKeyboardFocus(view: View) {
+            if (this.keyboardFocus == view) {
+                this.keyboardFocus = null
+            }
+        }
+
         fun onKeyboardEvent(type: KeyboardEventType, keyCode: UShort, keyChar: UShort) {
+            var kf = this.keyboardFocus
+            if (kf != null) {
+                if (kf.onKeyboardEvent(type, keyCode, keyChar)) {
+                    return
+                }
+            }
             this.rootView?.onKeyboardEvent(type, keyCode, keyChar)
         }
 

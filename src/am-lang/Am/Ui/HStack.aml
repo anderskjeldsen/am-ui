@@ -20,10 +20,8 @@ namespace Am.Ui
 
             var innerHeight = this.innerHeight()
 
-            "layout hstack".println()
             each(this.getChildren(), c) {
                 var cw = c.minWidth() + ((c.growX.toInt() * unusedWidth.toInt()) / sumGrowX.toInt()).toShort()
-                "child width ${cw}, x: ${x}".println()
                 c.layout(x, y, cw.toUShort(), innerHeight.toUShort())
                 x = x + cw + this.spacing
             }

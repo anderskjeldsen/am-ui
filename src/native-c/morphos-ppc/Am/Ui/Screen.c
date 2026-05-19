@@ -138,9 +138,19 @@ function_result Am_Ui_Screen_open_0(aobject * const this, int width, int height,
 		SA_DisplayID, displayId,
 		SA_Type, PUBLICSCREEN,
 		SA_ShowTitle, TRUE,
-		SA_Title, (ULONG) title_cstr,
-		SA_Pens, (ULONG) pens_ptr,
-		SA_Colors32, (ULONG) colors32,
+		// SA_SysFont = 1 picks the user's "Workbench screen" font (same
+		// font Workbench itself uses). Without this Intuition defaults
+		// to Topaz 8 — the bar then ends up shorter than the real WB
+		// bar and chrome that follows the user's font overflows our
+		// reserved area.
+		SA_SysFont, 1,
+		// SA_Pens=NULL degrades the DrawInfo mapping on V40+ to use only
+		// pens 0/1; same trap on SA_Colors32. TAG_IGNORE makes Intuition
+		// treat the tag as not present and fall back to its standard
+		// defaults — see the parallel comment in the amigaos Screen.c.
+		title_cstr != NULL ? SA_Title    : TAG_IGNORE, (ULONG) title_cstr,
+		pens_ptr   != NULL ? SA_Pens     : TAG_IGNORE, (ULONG) pens_ptr,
+		colors32   != NULL ? SA_Colors32 : TAG_IGNORE, (ULONG) colors32,
 		TAG_DONE, TAG_DONE,
 	};
 
@@ -165,6 +175,13 @@ function_result Am_Ui_Screen_open_0(aobject * const this, int width, int height,
 			FreeScreenDrawInfo(screen, dri);
 		} else {
 			printf("  Screen DRI: NULL\n");
+		}
+
+		struct Screen * wb = LockPubScreen("Workbench");
+		if (wb != NULL) {
+			printf("  WB BarHeight=%d (ours=%d)\n",
+				(int) wb->BarHeight, (int) screen->BarHeight);
+			UnlockPubScreen(NULL, wb);
 		}
 	}
 
@@ -322,6 +339,185 @@ function_result Am_Ui_Screen_setColor_0(aobject * const this, int index, unsigne
 		((ULONG) r) * 0x01010101UL,
 		((ULONG) g) * 0x01010101UL,
 		((ULONG) b) * 0x01010101UL);
+
+__exit: ;
+	__decrease_reference_count(this);
+	return __result;
+}
+
+function_result Am_Ui_Screen_fillHostPaletteColors_0(aobject * out, int count)
+{
+	function_result __result = { .has_return_value = false };
+	if (out != NULL) {
+		__increase_reference_count(out);
+	}
+
+	if (out == NULL || count <= 0) goto __exit;
+	if (count > 32) count = 32;
+
+	array_holder * ah = (array_holder *) &out[1];
+	unsigned int * dst = (unsigned int *) ah->array_data;
+	int cap = (int) ah->size;
+	if (count > cap) count = cap;
+	if (count <= 0) goto __exit;
+
+	SysBase = *((struct ExecBase **)4UL);
+	if (IntuitionBase == NULL) {
+		IntuitionBase = (struct IntuitionBase *) __ensure_library("intuition.library", 0L);
+	}
+
+	struct Screen * pub = LockPubScreen((STRPTR) "Workbench");
+	if (pub == NULL) {
+		pub = LockPubScreen(NULL);
+	}
+	if (pub == NULL) {
+		printf("Screen fillHostPaletteColors: LockPubScreen returned NULL\n");
+		goto __exit;
+	}
+
+	ULONG channels[32 * 3];
+	GetRGB32(pub->ViewPort.ColorMap, 0, count, channels);
+
+	struct DrawInfo * pubDri = GetScreenDrawInfo(pub);
+	if (pubDri != NULL) {
+		printf("Screen fillHostPaletteColors: host DRI version=%u numPens=%u depth=%u ",
+			(unsigned) pubDri->dri_Version, (unsigned) pubDri->dri_NumPens,
+			(unsigned) pubDri->dri_Depth);
+		printf("pens:");
+		int d = 0;
+		while (d < pubDri->dri_NumPens) {
+			printf(" %d=%u", d, (unsigned) pubDri->dri_Pens[d]);
+			d = d + 1;
+		}
+		printf("\n");
+		FreeScreenDrawInfo(pub, pubDri);
+	} else {
+		printf("Screen fillHostPaletteColors: host DRI = NULL\n");
+	}
+
+	UnlockPubScreen(NULL, pub);
+
+	int i = 0;
+	while (i < count) {
+		unsigned int r = (channels[i * 3 + 0] >> 24) & 0xFF;
+		unsigned int g = (channels[i * 3 + 1] >> 24) & 0xFF;
+		unsigned int b = (channels[i * 3 + 2] >> 24) & 0xFF;
+		dst[i] = (r << 16) | (g << 8) | b;
+		printf("  host pen %d: r=%02x g=%02x b=%02x\n", i, r, g, b);
+		i = i + 1;
+	}
+	printf("Screen fillHostPaletteColors: read %d host pens\n", count);
+
+__exit: ;
+	if (out != NULL) {
+		__decrease_reference_count(out);
+	}
+	return __result;
+}
+
+function_result Am_Ui_Screen_fillHostDrawInfoPens_0(aobject * out, int count)
+{
+	function_result __result = { .has_return_value = false };
+	if (out != NULL) {
+		__increase_reference_count(out);
+	}
+
+	if (out == NULL || count <= 0) goto __exit;
+	if (count > 16) count = 16;
+
+	array_holder * ah = (array_holder *) &out[1];
+	unsigned char * dst = (unsigned char *) ah->array_data;
+	int cap = (int) ah->size;
+	if (count > cap) count = cap;
+	if (count <= 0) goto __exit;
+
+	SysBase = *((struct ExecBase **)4UL);
+	if (IntuitionBase == NULL) {
+		IntuitionBase = (struct IntuitionBase *) __ensure_library("intuition.library", 0L);
+	}
+
+	struct Screen * pub = LockPubScreen((STRPTR) "Workbench");
+	if (pub == NULL) {
+		pub = LockPubScreen(NULL);
+	}
+	if (pub == NULL) {
+		printf("Screen fillHostDrawInfoPens: LockPubScreen returned NULL\n");
+		goto __exit;
+	}
+
+	struct DrawInfo * dri = GetScreenDrawInfo(pub);
+	if (dri == NULL) {
+		printf("Screen fillHostDrawInfoPens: GetScreenDrawInfo returned NULL\n");
+		UnlockPubScreen(NULL, pub);
+		goto __exit;
+	}
+
+	int actual = (int) dri->dri_NumPens;
+	if (count > actual) count = actual;
+
+	int i = 0;
+	while (i < count) {
+		UWORD pen = dri->dri_Pens[i];
+		if (pen > 255) {
+			pen = 255;
+		}
+		dst[i] = (unsigned char) pen;
+		i = i + 1;
+	}
+
+	FreeScreenDrawInfo(pub, dri);
+	UnlockPubScreen(NULL, pub);
+	printf("Screen fillHostDrawInfoPens: copied %d host DRI pens\n", count);
+
+__exit: ;
+	if (out != NULL) {
+		__decrease_reference_count(out);
+	}
+	return __result;
+}
+
+function_result Am_Ui_Screen_copyHostPens_0(aobject * const this, int count)
+{
+	function_result __result = { .has_return_value = false };
+	__increase_reference_count(this);
+
+	Am_Ui_Screen_data * const data = (Am_Ui_Screen_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
+	if (data == NULL || data->screen == NULL || count <= 0) {
+		goto __exit;
+	}
+	if (count > 32) {
+		count = 32;
+	}
+
+	if (IntuitionBase == NULL) {
+		IntuitionBase = (struct IntuitionBase *) __ensure_library("intuition.library", 0L);
+	}
+
+	struct Screen * pub = LockPubScreen(NULL);
+	if (pub == NULL) {
+		printf("Screen copyHostPens: LockPubScreen returned NULL\n");
+		goto __exit;
+	}
+
+	ULONG channels[32 * 3];
+	GetRGB32(pub->ViewPort.ColorMap, 0, count, channels);
+	UnlockPubScreen(NULL, pub);
+
+	int i = 0;
+	while (i < count) {
+		SetRGB32(&data->screen->ViewPort, (ULONG) i,
+			channels[i * 3 + 0],
+			channels[i * 3 + 1],
+			channels[i * 3 + 2]);
+		i = i + 1;
+	}
+	printf("Screen copyHostPens: copied %d pens from host pub screen\n", count);
+
+	// Same as on amigaos: chunky/RTG screens don't repaint
+	// already-drawn chrome when the colour map changes, so we have to
+	// trigger a re-render of the title bar explicitly.
+	ShowTitle(data->screen, FALSE);
+	ShowTitle(data->screen, TRUE);
 
 __exit: ;
 	__decrease_reference_count(this);

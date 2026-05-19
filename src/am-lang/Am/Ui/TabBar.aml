@@ -433,6 +433,24 @@ namespace Am.Ui
                     }
                 }
             }
+            // ViewGroup's default dispatch only forwards mouse events
+            // to children when the bar itself contains the point. For
+            // `move` events that means a tab can stay hovered after
+            // the cursor leaves the bar entirely. Forward move events
+            // to every tab manually so each one gets a chance to drop
+            // its hover state — the tabs return false for moves so
+            // routing isn't disrupted.
+            if (type == MouseEventType.move && !this.contains(x, y)) {
+                var i = 0
+                while (i < this.tabs.getSize()) {
+                    var t = this.tabs.get(i)
+                    var lx = x - t.x
+                    var ly = y - t.y
+                    t.onMouseEvent(type, button, lx, ly)
+                    i = i + 1
+                }
+                return false
+            }
             return base.onMouseEvent(type, button, x, y)
         }
 

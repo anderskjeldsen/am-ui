@@ -138,6 +138,14 @@ function_result Am_Ui_Screen_open_0(aobject * const this, int width, int height,
 		printf("\n");
 	}
 
+	// Passing SA_Pens=NULL is NOT the same as omitting the tag — Intuition
+	// interprets a NULL pens pointer as "an empty array", which on V40+
+	// degrades the DrawInfo mapping to only use pens 0 and 1 (you can
+	// see this in the DRI dump after open: every role maps to 0 or 1).
+	// That makes BARBLOCKPEN resolve to pen 1 = black on most palettes,
+	// which is why the title bar showed up black. Use TAG_IGNORE on
+	// optional tags whose values are NULL so Intuition treats them as
+	// "tag not present" and uses its standard defaults.
 	struct TagItem screenTags[] = {
 		SA_Left, 0,
 		SA_Top, 0,
@@ -147,9 +155,16 @@ function_result Am_Ui_Screen_open_0(aobject * const this, int width, int height,
 		SA_DisplayID, displayId,
 		SA_Type, PUBLICSCREEN,
 		SA_ShowTitle, TRUE,
-		SA_Title, (ULONG) title_cstr,
-		SA_Pens, (ULONG) pens_ptr,
-		SA_Colors32, (ULONG) colors32,
+		// SA_SysFont = 1 picks the user's "Workbench screen" font from
+		// Prefs (which is also what Workbench itself uses). Without this
+		// Intuition falls back to Topaz 8 and the bar ends up shorter
+		// than the real Workbench bar — chrome painted by Magic Menu /
+		// other patches that follow the user's font will then overflow
+		// the BarHeight we report to callers.
+		SA_SysFont, 1,
+		title_cstr  != NULL ? SA_Title     : TAG_IGNORE, (ULONG) title_cstr,
+		pens_ptr    != NULL ? SA_Pens      : TAG_IGNORE, (ULONG) pens_ptr,
+		colors32    != NULL ? SA_Colors32  : TAG_IGNORE, (ULONG) colors32,
 		TAG_DONE, TAG_DONE,
 	};
 
@@ -178,6 +193,15 @@ function_result Am_Ui_Screen_open_0(aobject * const this, int width, int height,
 			FreeScreenDrawInfo(screen, dri);
 		} else {
 			printf("  Screen DRI: NULL\n");
+		}
+
+		// Log Workbench's BarHeight so we can see whether our screen's
+		// bar font / chrome height matches.
+		struct Screen * wb = LockPubScreen("Workbench");
+		if (wb != NULL) {
+			printf("  WB BarHeight=%d (ours=%d)\n",
+				(int) wb->BarHeight, (int) screen->BarHeight);
+			UnlockPubScreen(NULL, wb);
 		}
 	}
 
@@ -361,6 +385,234 @@ function_result Am_Ui_Screen_setColor_0(aobject * const this, int index, unsigne
 		((ULONG) r) * 0x01010101UL,
 		((ULONG) g) * 0x01010101UL,
 		((ULONG) b) * 0x01010101UL);
+
+__exit: ;
+	__decrease_reference_count(this);
+	return __result;
+}
+
+// Read pens 0..count-1 from the host pub screen into `out` as packed
+// 0x00RRGGBB. Returns silently on any failure so AmLang gets a buffer of
+// zeros it can detect and fall back from.
+function_result Am_Ui_Screen_fillHostPaletteColors_0(aobject * out, int count)
+{
+	function_result __result = { .has_return_value = false };
+	if (out != NULL) {
+		__increase_reference_count(out);
+	}
+
+	if (out == NULL || count <= 0) goto __exit;
+	if (count > 32) count = 32;
+
+	array_holder * ah = (array_holder *) &out[1];
+	unsigned int * dst = (unsigned int *) ah->array_data;
+	int cap = (int) ah->size;
+	if (count > cap) count = cap;
+	if (count <= 0) goto __exit;
+
+	SysBase = *((struct ExecBase **)4UL);
+	if (IntuitionBase == NULL) {
+		IntuitionBase = (struct IntuitionBase *) __ensure_library("intuition.library", 0L);
+	}
+
+	struct Screen * pub = LockPubScreen((STRPTR) "Workbench");
+	if (pub == NULL) {
+		pub = LockPubScreen(NULL);
+	}
+	if (pub == NULL) {
+		printf("Screen fillHostPaletteColors: LockPubScreen returned NULL\n");
+		goto __exit;
+	}
+
+	ULONG channels[32 * 3];
+	GetRGB32(pub->ViewPort.ColorMap, 0, count, channels);
+
+	// Diagnostic: dump the host screen's DrawInfo so we can compare its
+	// pen-role mapping (SA_Pens) against the one our screen ends up with.
+	// If Workbench's DRI maps roles into the same 0/1 register range,
+	// the host itself is on a degraded palette mapping. If WB's DRI uses
+	// pens 2/3 too, then OUR screen needs the same SA_Pens to look like
+	// it.
+	struct DrawInfo * pubDri = GetScreenDrawInfo(pub);
+	if (pubDri != NULL) {
+		printf("Screen fillHostPaletteColors: host DRI version=%u numPens=%u depth=%u ",
+			(unsigned) pubDri->dri_Version, (unsigned) pubDri->dri_NumPens,
+			(unsigned) pubDri->dri_Depth);
+		printf("pens:");
+		int d = 0;
+		while (d < pubDri->dri_NumPens) {
+			printf(" %d=%u", d, (unsigned) pubDri->dri_Pens[d]);
+			d = d + 1;
+		}
+		printf("\n");
+		FreeScreenDrawInfo(pub, pubDri);
+	} else {
+		printf("Screen fillHostPaletteColors: host DRI = NULL\n");
+	}
+
+	UnlockPubScreen(NULL, pub);
+
+	int i = 0;
+	while (i < count) {
+		// GetRGB32 returns full 32-bit fixed-point channels (top byte
+		// = 8-bit representation). Repack as 0x00RRGGBB for AmLang.
+		unsigned int r = (channels[i * 3 + 0] >> 24) & 0xFF;
+		unsigned int g = (channels[i * 3 + 1] >> 24) & 0xFF;
+		unsigned int b = (channels[i * 3 + 2] >> 24) & 0xFF;
+		dst[i] = (r << 16) | (g << 8) | b;
+		printf("  host pen %d: r=%02x g=%02x b=%02x\n", i, r, g, b);
+		i = i + 1;
+	}
+	printf("Screen fillHostPaletteColors: read %d host pens\n", count);
+
+__exit: ;
+	if (out != NULL) {
+		__decrease_reference_count(out);
+	}
+	return __result;
+}
+
+// Read pens 0..count-1 of the host pub screen's DrawInfo (dri_Pens) into
+// `out` as UByte pen indices. Pair with fillHostPaletteColors to give a
+// new screen the same role → register mapping the user has on Workbench
+// — otherwise Intuition can hand a TrueColor screen a defensive mapping
+// that routes all roles into pens 0 and 1, which makes chrome look very
+// wrong (e.g. BARBLOCKPEN → pen 1 = black title bar).
+function_result Am_Ui_Screen_fillHostDrawInfoPens_0(aobject * out, int count)
+{
+	function_result __result = { .has_return_value = false };
+	if (out != NULL) {
+		__increase_reference_count(out);
+	}
+
+	if (out == NULL || count <= 0) goto __exit;
+	if (count > 16) count = 16;
+
+	array_holder * ah = (array_holder *) &out[1];
+	unsigned char * dst = (unsigned char *) ah->array_data;
+	int cap = (int) ah->size;
+	if (count > cap) count = cap;
+	if (count <= 0) goto __exit;
+
+	SysBase = *((struct ExecBase **)4UL);
+	if (IntuitionBase == NULL) {
+		IntuitionBase = (struct IntuitionBase *) __ensure_library("intuition.library", 0L);
+	}
+
+	struct Screen * pub = LockPubScreen((STRPTR) "Workbench");
+	if (pub == NULL) {
+		pub = LockPubScreen(NULL);
+	}
+	if (pub == NULL) {
+		printf("Screen fillHostDrawInfoPens: LockPubScreen returned NULL\n");
+		goto __exit;
+	}
+
+	struct DrawInfo * dri = GetScreenDrawInfo(pub);
+	if (dri == NULL) {
+		printf("Screen fillHostDrawInfoPens: GetScreenDrawInfo returned NULL\n");
+		UnlockPubScreen(NULL, pub);
+		goto __exit;
+	}
+
+	int actual = (int) dri->dri_NumPens;
+	if (count > actual) count = actual;
+
+	int i = 0;
+	while (i < count) {
+		// dri_Pens entries are UWORDs but pen indices fit in a byte
+		// on any normal palette. Clamp at 255 just in case.
+		UWORD pen = dri->dri_Pens[i];
+		if (pen > 255) {
+			pen = 255;
+		}
+		dst[i] = (unsigned char) pen;
+		i = i + 1;
+	}
+
+	FreeScreenDrawInfo(pub, dri);
+	UnlockPubScreen(NULL, pub);
+	printf("Screen fillHostDrawInfoPens: copied %d host DRI pens\n", count);
+
+__exit: ;
+	if (out != NULL) {
+		__decrease_reference_count(out);
+	}
+	return __result;
+}
+
+function_result Am_Ui_Screen_copyHostPens_0(aobject * const this, int count)
+{
+	function_result __result = { .has_return_value = false };
+	__increase_reference_count(this);
+
+	Am_Ui_Screen_data * const data = (Am_Ui_Screen_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
+	if (data == NULL || data->screen == NULL || count <= 0) {
+		printf("Screen copyHostPens: bailing (data=%p screen=%p count=%d)\n",
+			(void *)data, data ? (void *)data->screen : NULL, count);
+		goto __exit;
+	}
+	if (count > 32) {
+		count = 32;
+	}
+
+	if (IntuitionBase == NULL) {
+		IntuitionBase = (struct IntuitionBase *) __ensure_library("intuition.library", 0L);
+	}
+
+	// Lock the Workbench by name first — when our own screen is opened
+	// with SA_Type=PUBLICSCREEN it joins the public-screen list, and
+	// LockPubScreen(NULL) on some configurations returns our own
+	// screen instead of Workbench. Falling back to NULL covers
+	// systems where the default pub screen has a different name.
+	struct Screen * pub = LockPubScreen((STRPTR) "Workbench");
+	if (pub == NULL) {
+		pub = LockPubScreen(NULL);
+	}
+	if (pub == NULL) {
+		printf("Screen copyHostPens: LockPubScreen returned NULL\n");
+		goto __exit;
+	}
+
+	if (pub == data->screen) {
+		// We've ended up locking ourselves — nothing to copy. Log and
+		// bail rather than no-op the SetRGB32 calls below.
+		printf("Screen copyHostPens: pub screen IS our own screen (%p) — skipping\n", (void *)pub);
+		UnlockPubScreen(NULL, pub);
+		goto __exit;
+	}
+
+	printf("Screen copyHostPens: pub=%p our=%p depth=%d count=%d\n",
+		(void *)pub, (void *)data->screen,
+		(int)GetBitMapAttr(pub->RastPort.BitMap, BMA_DEPTH), count);
+
+	// GetRGB32 emits three ULONG channel values per pen; 32 pens = 96
+	// ULONGs = 384 bytes on the stack.
+	ULONG channels[32 * 3];
+	GetRGB32(pub->ViewPort.ColorMap, 0, count, channels);
+	UnlockPubScreen(NULL, pub);
+
+	int i = 0;
+	while (i < count) {
+		printf("  pen %d: r=%08lx g=%08lx b=%08lx\n",
+			i,
+			(unsigned long) channels[i * 3 + 0],
+			(unsigned long) channels[i * 3 + 1],
+			(unsigned long) channels[i * 3 + 2]);
+		SetRGB32(&data->screen->ViewPort, (ULONG) i,
+			channels[i * 3 + 0],
+			channels[i * 3 + 1],
+			channels[i * 3 + 2]);
+		i = i + 1;
+	}
+
+	// On chunky / RTG screens (Picasso96, CGX HiColor, TrueColor) the
+	// title bar pixels are stored as baked RGB, not pen indices — so
+	// the SetRGB32 calls above don't repaint anything already drawn.
+	// Force Intuition to re-render the bar so it picks up the new
+	// pen values for the title text and depth gadget.
+	ShowTitle(data->screen, FALSE);
+	ShowTitle(data->screen, TRUE);
 
 __exit: ;
 	__decrease_reference_count(this);

@@ -15,11 +15,13 @@
 #include <exec/types.h>
 #include <intuition/intuition.h>
 #include <libraries/gadtools.h>
+#include <devices/inputevent.h>
 
 #include <proto/exec.h>
 #include <proto/intuition.h>
 #include <proto/gadtools.h>
 #include <proto/graphics.h>
+#include <proto/keymap.h>
 
 #include <libc/core_inline_functions.h>
 
@@ -241,7 +243,7 @@ function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHO
 		WA_Height, height,
 		WA_DetailPen, 1,
 		WA_BlockPen, 2,
-		WA_IDCMP, IDCMP_CLOSEWINDOW | IDCMP_GADGETUP | MENUPICK | MOUSEBUTTONS | REFRESHWINDOW | IDCMP_INTUITICKS | IDCMP_NEWSIZE | IDCMP_MOUSEBUTTONS,
+		WA_IDCMP, IDCMP_CLOSEWINDOW | IDCMP_GADGETUP | MENUPICK | MOUSEBUTTONS | REFRESHWINDOW | IDCMP_INTUITICKS | IDCMP_NEWSIZE | IDCMP_MOUSEBUTTONS | IDCMP_RAWKEY,
 		WA_Flags, window_flags,
 		WA_Borderless, borderless ? TRUE : FALSE,
 		WA_Gadgets, 0, // (ULONG) data->context_gadget,
@@ -368,10 +370,61 @@ void handle_message(aobject * this, struct IntuiMessage * msg) {
 			break;
 		case IDCMP_MOUSEMOVE:
 		case IDCMP_INTUITICKS:
-			if (msg->MouseX != window_data->last_mouse_x && msg->MouseY != window_data->last_mouse_y) {
+			if (msg->MouseX != window_data->last_mouse_x || msg->MouseY != window_data->last_mouse_y) {
 				window_data->last_mouse_x = msg->MouseX;
 				window_data->last_mouse_y = msg->MouseY;
 				Am_Ui_Window_f_onMouseEvent_0(this, 1, 0, msg->MouseX, msg->MouseY);
+			}
+			break;
+		case IDCMP_RAWKEY:
+			{
+				// Intuition's raw-key code: low 7 bits are the key index,
+				// bit 7 set indicates a key release. We ignore releases
+				// for now (the AmLang side gets a single type=down event).
+				if (msg->Code & 0x80) {
+					break;
+				}
+
+				// Special keys (arrows, backspace, delete) are recognised
+				// directly by their AmigaOS raw codes — same as the
+				// amigaos build — because MapRawKey doesn't produce
+				// useful ASCII for them. keyChar=1 piggybacks shift state
+				// onto arrow keys so the AmLang side can implement
+				// shift+arrow selection without us inventing a second
+				// modifier channel.
+				if (msg->Code == 65) {
+					Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, 8); // backspace
+				} else if (msg->Code == 70) {
+					Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, 127); // delete
+				} else if (msg->Code == 79) { // left
+					UBYTE shifted = (msg->Qualifier & (IEQUALIFIER_LSHIFT | IEQUALIFIER_RSHIFT)) ? 1 : 0;
+					Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, shifted);
+				} else if (msg->Code == 78) { // right
+					UBYTE shifted = (msg->Qualifier & (IEQUALIFIER_LSHIFT | IEQUALIFIER_RSHIFT)) ? 1 : 0;
+					Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, shifted);
+				} else if (msg->Code == 76) { // up
+					UBYTE shifted = (msg->Qualifier & (IEQUALIFIER_LSHIFT | IEQUALIFIER_RSHIFT)) ? 1 : 0;
+					Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, shifted);
+				} else if (msg->Code == 77) { // down
+					UBYTE shifted = (msg->Qualifier & (IEQUALIFIER_LSHIFT | IEQUALIFIER_RSHIFT)) ? 1 : 0;
+					Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, shifted);
+				} else {
+					// Everything else: translate to ASCII via the
+					// currently-installed keymap.
+					struct InputEvent input_event;
+					input_event.ie_Class = IECLASS_RAWKEY;
+					input_event.ie_Code = msg->Code;
+					input_event.ie_Qualifier = msg->Qualifier;
+					input_event.ie_position.ie_addr = 0;
+
+					UBYTE key_buffer[8];
+					WORD actual_length = MapRawKey(&input_event, (STRPTR) key_buffer, 8, NULL);
+					UBYTE ascii_char = 0;
+					if (actual_length > 0) {
+						ascii_char = key_buffer[0];
+					}
+					Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, ascii_char);
+				}
 			}
 			break;
 	}

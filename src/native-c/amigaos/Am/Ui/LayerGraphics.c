@@ -214,7 +214,6 @@ function_result Am_Ui_LayerGraphics_setForegroundPen_0(aobject * const this, uns
     function_result __result = { .has_return_value = false };
     bool __returning = false;
     struct RastPort *rp = get_rp(this);
-    printf("[pen] setForegroundPen=%u\n", (unsigned)pen);
     if (rp != NULL) SetAPen(rp, pen);
 __exit: ;
     return __result;
@@ -237,8 +236,6 @@ function_result Am_Ui_LayerGraphics_drawLine_0(aobject * const this, short x, sh
     struct RastPort *rp = get_rp(this);
     short tx1 = lg_translated_x(this, x), ty1 = lg_translated_y(this, y);
     short tx2 = lg_translated_x(this, x2), ty2 = lg_translated_y(this, y2);
-    printf("[line] (%d,%d)->(%d,%d) [translated %d,%d->%d,%d]\n",
-           (int)x, (int)y, (int)x2, (int)y2, (int)tx1, (int)ty1, (int)tx2, (int)ty2);
     if (rp == NULL) goto __exit;
     Move(rp, tx1, ty1);
     Draw(rp, tx2, ty2);
@@ -253,8 +250,6 @@ function_result Am_Ui_LayerGraphics_fillRect_0(aobject * const this, short x, sh
     struct RastPort *rp = get_rp(this);
     short tx1 = lg_translated_x(this, x), ty1 = lg_translated_y(this, y);
     short tx2 = lg_translated_x(this, x2), ty2 = lg_translated_y(this, y2);
-    printf("[fill] (%d,%d)->(%d,%d) [translated %d,%d->%d,%d]\n",
-           (int)x, (int)y, (int)x2, (int)y2, (int)tx1, (int)ty1, (int)tx2, (int)ty2);
     if (rp == NULL) goto __exit;
     RectFill(rp, tx1, ty1, tx2, ty2);
 __exit: ;
@@ -268,8 +263,6 @@ function_result Am_Ui_LayerGraphics_eraseRect_0(aobject * const this, short x, s
     struct RastPort *rp = get_rp(this);
     short tx1 = lg_translated_x(this, x), ty1 = lg_translated_y(this, y);
     short tx2 = lg_translated_x(this, x2), ty2 = lg_translated_y(this, y2);
-    printf("[erase] (%d,%d)->(%d,%d) [translated %d,%d->%d,%d]\n",
-           (int)x, (int)y, (int)x2, (int)y2, (int)tx1, (int)ty1, (int)tx2, (int)ty2);
     if (rp == NULL) goto __exit;
     EraseRect(rp, tx1, ty1, tx2, ty2);
 __exit: ;
@@ -292,10 +285,7 @@ function_result Am_Ui_LayerGraphics_drawString_0(aobject * const this, aobject *
         short ysize = tf ? tf->tf_YSize : 0;
         short tx = lg_translated_x(this, x);
         short ty = lg_translated_y(this, y + baseline);
-        printf("[text] '%.*s' (%d,%d) baseline=%d ysize=%d -> Move(%d,%d) [text top y=%d]\n",
-               (int)sh->length, sh->string_value,
-               (int)x, (int)y, (int)baseline, (int)ysize,
-               (int)tx, (int)ty, (int)(ty - baseline));
+        (void)ysize;
         Move(rp, tx, ty);
         Text(rp, sh->string_value, sh->length);
     }
@@ -331,7 +321,6 @@ function_result Am_Ui_LayerGraphics_getCurrentFontSize_0(aobject * const this)
     bool __returning = false;
     struct RastPort *rp = get_rp(this);
     if (rp != NULL && rp->Font != NULL) {
-        printf("font size: %d\n", rp->Font->tf_YSize);
         __result.return_value.value.uchar_value = rp->Font->tf_YSize;
     }
 __exit: ;
@@ -533,7 +522,6 @@ function_result Am_Ui_LayerGraphics_clearClipRect_0(aobject * const this)
     bool __returning = false;
 
     struct Layer *layer = get_layer(this);
-    printf("[clip] clearClipRect layer=%p\n", (void*)layer);
     if (layer != NULL) {
         InstallClipRegion(layer, NULL);
     }
@@ -560,7 +548,6 @@ function_result Am_Ui_LayerGraphics_endPainting_0(aobject * const this)
     bool __returning = false;
 
     struct Layer *layer = get_layer(this);
-    printf("[clip] endPainting layer=%p\n", (void*)layer);
     if (layer != NULL) {
         InstallClipRegion(layer, NULL);
     }
