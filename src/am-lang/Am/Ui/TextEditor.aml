@@ -72,6 +72,12 @@ namespace Am.Ui
         // owning tab's dirty flag.
         var contentChangeListener: () => Bool = null
 
+        // Fired whenever cursorLine or cursorCol changes — including
+        // on setText (which moves the cursor back to 0,0) so a tab
+        // switch can immediately resync any external display. Used
+        // by the IDE to keep the status-bar Ln/Col indicator live.
+        var cursorChangeListener: (line: Int, col: Int) => Bool = null
+
         // Incremental-repaint state. -1 = no pending partial repaint, do
         // a full render on the next paint() (the default state after
         // every paint cycle).
@@ -207,6 +213,7 @@ namespace Am.Ui
             this.scrollLine = 0
             this.forceFullRepaint()
             this.requestRepaint()
+            this.fireCursorChanged()
         }
 
         fun getText(): String {
@@ -288,6 +295,7 @@ namespace Am.Ui
                 this.forceFullRepaint()
             }
             this.requestRepaint()
+            this.fireCursorChanged()
         }
 
         private fun moveCursorRight() {
@@ -304,6 +312,7 @@ namespace Am.Ui
                 this.forceFullRepaint()
             }
             this.requestRepaint()
+            this.fireCursorChanged()
         }
 
         private fun moveCursorUp() {
@@ -317,6 +326,7 @@ namespace Am.Ui
                 this.forceFullRepaint()
             }
             this.requestRepaint()
+            this.fireCursorChanged()
         }
 
         private fun moveCursorDown() {
@@ -330,6 +340,7 @@ namespace Am.Ui
                 this.forceFullRepaint()
             }
             this.requestRepaint()
+            this.fireCursorChanged()
         }
 
         // Page Up / Page Down — move the cursor by one viewport's worth
@@ -351,6 +362,7 @@ namespace Am.Ui
             this.ensureCursorVisible()
             this.forceFullRepaint()
             this.requestRepaint()
+            this.fireCursorChanged()
         }
 
         private fun pageUp() {
@@ -366,6 +378,7 @@ namespace Am.Ui
             this.ensureCursorVisible()
             this.forceFullRepaint()
             this.requestRepaint()
+            this.fireCursorChanged()
         }
 
         // -------- edits --------
@@ -388,6 +401,7 @@ namespace Am.Ui
             }
             this.requestRepaint()
             this.fireContentChanged()
+            this.fireCursorChanged()
         }
 
         private fun insertNewLine() {
@@ -424,6 +438,7 @@ namespace Am.Ui
             }
             this.requestRepaint()
             this.fireContentChanged()
+            this.fireCursorChanged()
         }
 
         private fun fireContentChanged() {
@@ -431,6 +446,21 @@ namespace Am.Ui
             if (cb != null) {
                 cb()
             }
+        }
+
+        private fun fireCursorChanged() {
+            var cb = this.cursorChangeListener
+            if (cb != null) {
+                cb(this.cursorLine, this.cursorCol)
+            }
+        }
+
+        fun getCursorLine(): Int {
+            return this.cursorLine
+        }
+
+        fun getCursorCol(): Int {
+            return this.cursorCol
         }
 
         private fun backspace() {
@@ -480,6 +510,7 @@ namespace Am.Ui
             this.requestRepaint()
             if (hadChange) {
                 this.fireContentChanged()
+                this.fireCursorChanged()
             }
         }
 
@@ -494,18 +525,13 @@ namespace Am.Ui
         }
 
         // Render every visible line — used for full repaints (initial
-        // paint, expose, setText, etc.). We start by wiping the whole
-        // viewport with the editor's background pen so any pixels left
-        // over from a previous layout (e.g. a scroll-induced shift)
-        // can't bleed through — drawString in JAM2 only repaints the
-        // bounding boxes of the glyphs we draw, not the gaps between
-        // them, so without this clear a row that used to be longer
-        // than the new content keeps its trailing characters.
+        // paint, expose, setText, etc.). renderLines paints each row
+        // with JAM2 (so each glyph cell carries its own bg) and the
+        // right-of-text fill, and fillBelowLastLine covers the rows
+        // past the buffer end — so every visible pixel is touched
+        // without needing an extra full-viewport clear up front. The
+        // clear is what was causing the visible flash on every scroll.
         private fun renderContent(graphics: Graphics) {
-            if (this.fillBackground) {
-                graphics.setForegroundPen(this.backgroundPen)
-                graphics.fillRect(0S, 0S, this.width.toShort() - 1S, this.height.toShort() - 1S)
-            }
             this.renderLines(graphics, 0, this.lines.getSize() - 1, true)
             this.fillBelowLastLine(graphics)
         }
@@ -685,10 +711,12 @@ namespace Am.Ui
         // the character whose midpoint is past `pixelX`.
         private fun colForPixelX(line: String, pixelX: Short): Int {
             if (pixelX <= 0S || line.length() == 0) {
+                "[col] early-out pixelX=${pixelX} lineLen=${line.length()}".println()
                 return 0
             }
             var f = this.getUsedFont()
             if (f == null) {
+                "[col] no font".println()
                 return 0
             }
             var len = line.length()
@@ -698,6 +726,9 @@ namespace Am.Ui
                 var prefix = line.substring(0UI, (col + 1).toUInt())
                 var curWidth = f.calculateStringWidth(prefix)
                 var glyphMid = (prevWidth.toShort() + curWidth.toShort()) / 2S
+                if (col < 3) {
+                    "[col] probe col=${col} curW=${curWidth} mid=${glyphMid} pixelX=${pixelX}".println()
+                }
                 if (pixelX < glyphMid) {
                     return col
                 }
@@ -730,6 +761,7 @@ namespace Am.Ui
                 this.cursorCol = newCol
                 this.markCursorMoveDirty(oldLine)
                 this.requestRepaint()
+                this.fireCursorChanged()
                 return true
             }
             return base.onMouseEvent(type, button, x, y)
