@@ -29,31 +29,35 @@ namespace Am.Ui
 
         override fun minHeight(): Short {
             var font = this.getUsedFont()
+            var textH = 0S
             if (font != null) {
-                return font.getSize().toShort()
+                textH = font.getSize().toShort()
+            } else {
+                var vc = this.getViewContext()
+                if (vc != null) {
+                    var win = vc.getWindow()
+                    textH = win.getCurrentFontSize().toShort()
+                }
             }
-            var vc = this.getViewContext()  
-            if (vc != null) {
-                var win = vc.getWindow()
-                var fontSize = win.getCurrentFontSize()
-                return fontSize.toShort()
-//                return vc.getWindow().getCurrentFontSize().toShort()
-            }
-            return 0S
+            return textH + this.padding.top + this.padding.bottom + this.margin.top + this.margin.bottom + this.borderWidths.top + this.borderWidths.bottom
         }
 
         override fun minWidth(): Short {
             var font = this.getUsedFont()
-//            ("text width: " + this.getViewContext() .getWindow().calculateStringWidth(font, this.text).toString()).println()
-
-            return this.getViewContext().getWindow().calculateStringWidth(font, this.text).toShort()
+            var textW = this.getViewContext().getWindow().calculateStringWidth(font, this.text).toShort()
+            // Match minHeight: report the full bounding box so HStack
+            // layout actually reserves room for horizontal padding /
+            // margin / border. Without this, the text draws at
+            // x = padding.left but the label's width = textW, so any
+            // glyph past textW is clipped — a Label with padding
+            // wider than its glyph (e.g. an icon button) renders
+            // invisible until you hover it (the hover bg is anchored
+            // at x=0 and is visible up to the clipped width).
+            return textW + this.padding.left + this.padding.right + this.margin.left + this.margin.right + this.borderWidths.left + this.borderWidths.right
         }
 
         override fun paint(graphics: Graphics) {
             base.paint(graphics)
-
-            var x1 = 0S
-            var y1 = 0S
 
             var bgPen = this.backgroundPen
             if (this.hoverEnabled && this.hovered) {
@@ -62,12 +66,15 @@ namespace Am.Ui
             // When hover is in play, always paint the whole row's bg — on
             // an un-hover frame this is what wipes the previous hover
             // colour. Plain labels keep their original transparent
-            // rendering when hover is disabled.
+            // rendering when hover is disabled. The bg covers the full
+            // label rect (including any vertical padding) so the hover
+            // colour reads as a padded row, not a tight strip behind
+            // the glyphs.
             if (this.hoverEnabled) {
                 var x2 = this.width.toShort() - 1S
                 var y2 = this.height.toShort() - 1S
                 graphics.setForegroundPen(bgPen)
-                graphics.fillRect(x1, y1, x2, y2)
+                graphics.fillRect(0S, 0S, x2, y2)
             }
 
             graphics.setBackgroundPen(bgPen)
@@ -77,8 +84,12 @@ namespace Am.Ui
                 graphics.setFont(font)
             }
 
-            "draw String: ${this.text} to (${x1}, ${y1})".println()
-            graphics.drawString(this.text, x1, y1)
+            // Text sits inside the padding so vertical padding pushes
+            // the glyphs down off the top edge — gives the hover bg
+            // its visible breathing room above + below the text.
+            var textX = this.margin.left + this.borderWidths.left + this.padding.left
+            var textY = this.margin.top + this.borderWidths.top + this.padding.top
+            graphics.drawString(this.text, textX, textY)
         }
 
         override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {

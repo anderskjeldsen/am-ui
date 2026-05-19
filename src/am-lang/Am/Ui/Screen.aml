@@ -69,6 +69,43 @@ namespace Am.Ui
         // pass an enum value (via .getValue()) directly.
         native fun setColor(index: Int, r: UByte, g: UByte, b: UByte)
 
+        // Copy the first `count` colour registers from the host's default
+        // public screen (the Workbench, usually) into this screen so that
+        // pens 0..count-1 visually match what the user has configured.
+        // Use this on a custom screen if you want Intuition chrome — the
+        // title bar, depth/close gadgets, drop-down menus, etc. — to
+        // render in the host's theme instead of Intuition's factory
+        // defaults.
+        //
+        // Note: on chunky / RTG screens (Picasso96, CGX HiColor /
+        // TrueColor) this can't repaint chrome that's already been drawn
+        // — pixels are baked RGB at draw time. Prefer fillHostPaletteColors
+        // + passing the host colours via the openScreen palette arg so
+        // the screen is painted with the right colours from the first
+        // frame.
+        native fun copyHostPens(count: Int)
+
+        // Read the first `count` colour registers from the host's default
+        // public screen (Workbench) into `out` as packed 0x00RRGGBB UInt
+        // values. Call BEFORE openScreen so the colours can be passed in
+        // via the palette argument — that's the only way to get
+        // host-themed chrome (title bar, drag bar, menus) on chunky /
+        // RTG screens where the bar is painted exactly once at OpenScreen
+        // time. `out` is filled in-place; entries past `count` are left
+        // untouched. Internally clamped at 32.
+        static native fun fillHostPaletteColors(out: UInt[], count: Int)
+
+        // Read the first `count` DrawInfo pen-role mappings (DETAILPEN /
+        // BLOCKPEN / TEXTPEN / SHINEPEN / SHADOWPEN / FILLPEN /
+        // FILLTEXTPEN / BACKGROUNDPEN / HIGHLIGHTTEXTPEN / BARDETAILPEN /
+        // BARBLOCKPEN / BARTRIMPEN) from the host's default public
+        // screen into `out`. Pass the resulting array as `systemPens` to
+        // openScreen so chrome on the new screen uses the same role →
+        // register mapping the user has configured for Workbench —
+        // without this, Intuition assigns a defensive minimal mapping on
+        // chunky / TrueColor screens that routes everything to pens 0/1.
+        static native fun fillHostDrawInfoPens(out: UByte[], count: Int)
+
         // Push every entry of `palette` into this screen's colour map
         // starting at index 0.
         fun setPalette(palette: Palette) {

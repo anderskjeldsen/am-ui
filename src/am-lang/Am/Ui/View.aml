@@ -174,6 +174,26 @@ namespace Am.Ui
             }
         }
 
+        // Mark this view dirty. ViewGroup overrides to recurse into
+        // children — use this after swapping the contents of a host
+        // view so the freshly-attached subtree actually paints, without
+        // invalidating siblings (which requestFullRepaint() would do).
+        open fun requestRepaintTree() {
+            this.requestRepaint()
+        }
+
+        // Temporarily shift this view's immediate children by `dy` on
+        // the y axis. Used by ScrollView to bake the scroll offset
+        // into the layout positions before paint, then undo it after,
+        // because the standard clip-and-translate math (parent clip
+        // origin + child.y) doesn't compose with a plain translate
+        // shift — labels would end up with clip rects at their
+        // unscrolled world positions and get clipped out of their
+        // actual draw position. Default is a no-op; ViewGroup
+        // overrides to walk its children.
+        open fun applyScrollOffset(dy: Short) {
+        }
+
         open fun layout(x: Short, y: Short, width: UShort, height: UShort) {
             this.x = x
             this.y = y
