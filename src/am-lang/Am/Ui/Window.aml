@@ -94,6 +94,35 @@ namespace Am.Ui
             }
         }
 
+        // Optional second view rendered ON TOP of the rootView and
+        // given first crack at mouse + keyboard events. Used for
+        // popovers / drawers that need to float above the regular
+        // IDE chrome instead of displacing it (e.g. a settings
+        // drawer). Caller sets via setOverlayView(); paint, layout
+        // and event dispatch include it automatically while it's
+        // non-null.
+        private var overlayView: View
+
+        fun setOverlayView(view: View) {
+            var prev = this.overlayView
+            if (prev == view) {
+                return
+            }
+            if (prev != null) {
+                prev.onDetach()
+            }
+            this.overlayView = view
+            if (view != null) {
+                view.onAttach(this.viewContext)
+            }
+            this.requestFullRepaint()
+        }
+
+        fun getOverlayView(): View {
+            return this.overlayView
+        }
+
+
         static fun openWindow(x: Short, y: Short, width: UShort, height: UShort, screen: Screen, windowManager: WindowManager): Window {
             var properties: WindowProperties = { borderless: false }
             return Window.openWindow(x, y, width, height, screen, windowManager, properties)
@@ -175,6 +204,19 @@ namespace Am.Ui
                 // window-frame coords while their clips are at content coords.
                 graphics.translate(innerX, innerY)
                 this.rootView.paintAll(graphics)
+                // Overlay layer (if any) renders AFTER the rootView
+                // so its pixels land on top. The whole subtree is
+                // marked dirty before paintAll so it ALWAYS renders
+                // — without that, paintAll skips views with a clean
+                // flag, and any partial repaint inside the rootView
+                // (cursor blink, hover) would draw pixels over the
+                // overlay and leave them there until the overlay was
+                // explicitly dirtied. Re-painting the drawer on every
+                // cycle is cheap and guarantees it stays on top.
+                if (this.overlayView != null) {
+                    this.overlayView.requestRepaintTree()
+                    this.overlayView.paintAll(graphics)
+                }
                 graphics.translate(0S - innerX, 0S - innerY)
 
                 graphics.popClipRect()
@@ -193,13 +235,14 @@ namespace Am.Ui
         }
 
         fun layout() {
+            var b = this.border
+            var innerW = this.width - (b.left + b.right).toUShort()
+            var innerH = this.height - (b.top + b.bottom).toUShort()
             if (this.rootView != null) {
-                var b = this.border
-                // rootView lives in content-local coords (origin at the inside
-                // of the window border). Window.paint() translates by
-                // (b.left, b.top) before delegating, so passing those again as
-                // the rootView position would double-count the border.
-                this.rootView.layout(0S, 0S, this.width - (b.left + b.right).toUShort(), this.height - (b.top + b.bottom).toUShort())
+                this.rootView.layout(0S, 0S, innerW, innerH)
+            }
+            if (this.overlayView != null) {
+                this.overlayView.layout(0S, 0S, innerW, innerH)
             }
         }
 
@@ -233,13 +276,32 @@ namespace Am.Ui
                     return
                 }
             }
+            // Overlay layer gets first crack after the focused view —
+            // a popover drawer should swallow keys aimed at the
+            // chrome behind it.
+            if (this.overlayView != null) {
+                if (this.overlayView.onKeyboardEvent(type, keyCode, keyChar)) {
+                    return
+                }
+            }
             this.rootView?.onKeyboardEvent(type, keyCode, keyChar)
         }
 
         fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short) {
-//            var lx = this.border.left
-//            ("Window click: " + button.toString() + " " + x.toString() + " " + y.toString()).println()
-            this.rootView?.onMouseEvent(type, button, x - this.border.left, y - this.border.top)
+            var lx = x - this.border.left
+            var ly = y - this.border.top
+            // Overlay sees mouse events before the rootView; if it
+            // consumes (typically because the click landed on its
+            // panel), the rootView is bypassed. Otherwise the click
+            // falls through to whatever the rootView would normally
+            // handle — that's how clicks in the "see-through" area
+            // around the overlay still hit the IDE chrome.
+            if (this.overlayView != null) {
+                if (this.overlayView.onMouseEvent(type, button, lx, ly)) {
+                    return
+                }
+            }
+            this.rootView?.onMouseEvent(type, button, lx, ly)
         }
 
         fun calculateStringWidth(font: Font, text: String): UShort {
