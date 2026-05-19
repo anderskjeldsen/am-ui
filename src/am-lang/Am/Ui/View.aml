@@ -259,13 +259,30 @@ namespace Am.Ui
             return false
         }
 
+        // Secondary click handler for right-mouse-button releases.
+        // Used for "context menu"-style affordances (right-click a
+        // folder tree row to open a terminal in that folder, etc.).
+        // On AmigaOS, RMB is normally consumed by Intuition to
+        // display the window's menu strip — so this only fires for
+        // windows without a menu, or via IDCMP_MENUVERIFY interception
+        // (not currently wired). On libc / morphos it works
+        // unconditionally.
+        var rightClickListener: (view: View) => Bool = null
+
         // returns true if consumed
         open fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
             if (this.contains(x, y)) {
                 if (type == MouseEventType.up) {
-                    var cl = this.clickListener
-                    if (cl != null) {
-                        return cl(this)
+                    if (button == MouseButton.right) {
+                        var rcl = this.rightClickListener
+                        if (rcl != null) {
+                            return rcl(this)
+                        }
+                    } else {
+                        var cl = this.clickListener
+                        if (cl != null) {
+                            return cl(this)
+                        }
                     }
                 }
                 return true
