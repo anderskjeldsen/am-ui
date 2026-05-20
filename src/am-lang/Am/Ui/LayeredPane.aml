@@ -1,0 +1,147 @@
+namespace Am.Ui
+{
+    // A ViewGroup whose children are stacked by z-index. Paint walks
+    // ascending z (later layers stamp on top); down/up/wheel mouse
+    // events walk descending z (topmost gets first crack — first
+    // consumer wins). Move events still broadcast across all layers
+    // so each can decide whether to clear hover state — same shape
+    // ViewGroup uses for siblings.
+    //
+    // Used as Window's overlay slot so docked sidebar apps and
+    // popup menus can co-exist on the same surface: dock panels at
+    // a lower z, popups at a higher z, popups always paint on top
+    // and absorb clicks before reaching the panel underneath.
+    //
+    // Layers report their own desired position — LayeredPane lays
+    // every child out at (0, 0, paneWidth, paneHeight) and lets the
+    // child position any inner content inside that frame. Same
+    // convention as OverlayHost (which positions a single AppPanel
+    // against an edge inside the host's full-pane bounds).
+    class LayeredPane() : ViewGroup {
+        import Am.Lang
+        import Am.Collections
+
+        // Parallel to `children`. Always sorted ascending; we
+        // maintain the invariant by inserting in the right place
+        // in addLayer().
+        private var zs: List<Int> = new List<Int>()
+
+        // Add `view` at the given z. Higher z = on top. Ties go to
+        // the later-added layer (it sits just above same-z views).
+        fun addLayer(view: View, z: Int) {
+            var idx = this.findInsertIndex(z)
+            this.getChildren().insertAt(idx, view)
+            this.zs.insertAt(idx, z)
+            // Match ViewGroup.addChild's lazy-attach: only fire
+            // onAttach when this pane is already attached itself.
+            if (this.getViewContext() != null) {
+                view.onAttach(this.getViewContext())
+            }
+        }
+
+        fun removeLayer(view: View) {
+            var n = this.getChildren().getSize()
+            var i = 0
+            while (i < n) {
+                if (this.getChildren().get(i) == view) {
+                    this.getChildren().removeAt(i)
+                    this.zs.removeAt(i)
+                    view.onDetach()
+                    return
+                }
+                i = i + 1
+            }
+        }
+
+        // True when `view` is currently mounted as a layer.
+        fun containsLayer(view: View): Bool {
+            var n = this.getChildren().getSize()
+            var i = 0
+            while (i < n) {
+                if (this.getChildren().get(i) == view) {
+                    return true
+                }
+                i = i + 1
+            }
+            return false
+        }
+
+        // Topmost layer (highest z) — useful for "close the top
+        // popup on outside click" loops.
+        fun topLayer(): View {
+            var n = this.getChildren().getSize()
+            if (n == 0) {
+                return null
+            }
+            return this.getChildren().get(n - 1)
+        }
+
+        // Walk the parallel zs list to find where a new entry with
+        // z=`z` should land so the list stays ascending. Same-z ties
+        // go AFTER existing entries so a fresh layer added at the
+        // current top z ends up on top.
+        private fun findInsertIndex(z: Int): Int {
+            var n = this.zs.getSize()
+            var i = 0
+            while (i < n) {
+                if (this.zs.get(i) > z) {
+                    return i
+                }
+                i = i + 1
+            }
+            return n
+        }
+
+        // Every layer gets the full pane area; layers handle their
+        // own inner positioning. innerWidth/innerHeight are
+        // method-call equivalents — direct `this.width` field
+        // access trips the AmLang binder here for reasons we don't
+        // fully understand (see TODO).
+        override fun layoutChildren() {
+            var iw = this.innerWidth().toUShort()
+            var ih = this.innerHeight().toUShort()
+            each(this.getChildren(), c) {
+                c.layout(0S, 0S, iw, ih)
+            }
+        }
+
+        override fun minWidth(): Short {
+            return 0S
+        }
+
+        override fun minHeight(): Short {
+            return 0S
+        }
+
+        // Mouse routing: move broadcasts (same as ViewGroup so each
+        // layer can clear hover state); other events walk topmost
+        // first and stop at the first consumer.
+        override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
+            if (type == MouseEventType.move) {
+                var anyConsumed = false
+                each(this.getChildren(), c) {
+                    var lx = x - c.x
+                    var ly = y - c.y
+                    if (c.onMouseEvent(type, button, lx, ly)) {
+                        anyConsumed = true
+                    }
+                }
+                return anyConsumed
+            }
+
+            // down / up / wheel: topmost first.
+            var n = this.getChildren().getSize()
+            var i = n - 1
+            while (i >= 0) {
+                var c = this.getChildren().get(i)
+                var lx = x - c.x
+                var ly = y - c.y
+                if (c.onMouseEvent(type, button, lx, ly)) {
+                    return true
+                }
+                i = i - 1
+            }
+            return false
+        }
+    }
+}
