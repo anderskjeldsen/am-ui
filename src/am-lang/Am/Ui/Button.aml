@@ -20,6 +20,28 @@ namespace Am.Ui
         private var borderPens: BorderPens = new BorderPens(2UB, 2UB, 1UB, 1UB)
         private var activeBorderPens: BorderPens = new BorderPens(1UB, 1UB, 2UB, 2UB)
 
+        // When false, skip the bevel border in paint(). The View's
+        // borderWidths still affect layout unless callers also call
+        // setBorderWidths(0S) — keep both knobs so themes can pick
+        // "flat fill, same footprint" vs "no border at all".
+        var drawBorder: Bool = true
+
+        // Optional hover overlay: a 1px solid border stamped on top
+        // of the existing chrome whenever the cursor is over the
+        // button. Drawn AFTER the bg fill / bevel so it sits visually
+        // on top, and uses the button's existing outer rect — no
+        // layout change. Disabled by default; themed callers opt in
+        // (Settings save button = white).
+        var hoverBorderEnabled: Bool = false
+        var hoverBorderPen: UByte    = 1UB
+
+        // When non-zero, the label + hover border are translated by
+        // this many pixels DOWN while the button is held pressed
+        // (active + hovered). The bg fill stays full-extent so the
+        // press doesn't reveal the parent's colour on row 0. Default
+        // 0 keeps existing buttons unchanged.
+        var pressTranslateY: Short = 0S
+
         override fun setDefaultPadding() {
             this.setPadding(5S)
         }
@@ -85,12 +107,51 @@ namespace Am.Ui
             graphics.setForegroundPen(bgPen)
             graphics.fillRect(x1, y1, x2, y2)
 
-            this.paintNativeBorder(graphics, borderPens)
+            if (this.drawBorder) {
+                this.paintNativeBorder(graphics, borderPens)
+            }
 
+            // Press translate: while the button is held pressed
+            // (active + hovered), shift the label + hover border 1px
+            // (or whatever pressTranslateY is) down. The bg fill
+            // stays at full extent so the press doesn't reveal the
+            // parent's colour on the top row.
+            var pressDy = 0S
+            if (this.active && this.hovered) {
+                pressDy = this.pressTranslateY
+            }
+
+            // Hover overlay border — a flat single-pen rectangle
+            // stamped on top of bg + (optional) bevel, INSIDE the
+            // button's outer rect so the total dimensions don't
+            // change. Drawn last so it always wins the pixel.
+            if (this.hovered && this.hoverBorderEnabled) {
+                graphics.setForegroundPen(this.hoverBorderPen)
+                var hx1 = x1
+                var hx2 = x2
+                var hy1 = y1 + pressDy
+                var hy2 = y2 + pressDy
+                graphics.drawLine(hx1, hy1, hx2, hy1)
+                graphics.drawLine(hx1, hy2, hx2, hy2)
+                graphics.drawLine(hx1, hy1, hx1, hy2)
+                graphics.drawLine(hx2, hy1, hx2, hy2)
+            }
+
+            // Draw label. Use Label.paint() directly (not paintAll)
+            // because the label is a private field — outside any
+            // children list — so subtree-dirty walks never mark it
+            // and paintAll's b1||b2 gate would short-circuit. The
+            // Button is repainting right now anyway, so we just
+            // always render the label too, replicating paintAll's
+            // outer translate (margin) by hand.
             var label = this.ensureLabel()
             label.backgroundPen = bgPen
             label.textPen = this.textPen
-            label.paintAll(graphics)
+            var labelIx = label.x + label.margin.left
+            var labelIy = label.y + label.margin.top + pressDy
+            graphics.translate(labelIx, labelIy)
+            label.paint(graphics)
+            graphics.translate(0S - labelIx, 0S - labelIy)
         }
 
         override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
@@ -117,13 +178,17 @@ namespace Am.Ui
                     this.active = true
                     this.requestRepaint()
                 } else if (type == MouseEventType.move) {
-//                    ("Mouse move "  + x.toString() + ", " + y.toString()).println()
+                    // Repaint on hover transition when any visible
+                    // state depends on hovered — that's `active` (press
+                    // bevel / press translate) OR the optional hover
+                    // border overlay. Vanilla buttons with neither
+                    // skip the repaint so we don't churn paint cycles
+                    // every time the cursor crosses one.
                     if (!wasHovered) {
-                        if (this.active) {
+                        if (this.active || this.hoverBorderEnabled) {
                             this.requestRepaint()
                         }
                     }
-
                 }
 
             } else {
@@ -134,8 +199,12 @@ namespace Am.Ui
                         this.active = false
                         this.requestRepaint()
                     }
-                } else if (wasHovered && this.active) {
-                    this.requestRepaint()
+                } else if (wasHovered) {
+                    // Same reasoning as the enter case — repaint on
+                    // exit if there's something visible to clear.
+                    if (this.active || this.hoverBorderEnabled) {
+                        this.requestRepaint()
+                    }
                 }
 
 

@@ -15,6 +15,11 @@ namespace Am.Ui
         // floats on the bar.
         var scrollbarThumbPen: UByte = 1UB
         var scrollbarTrackPen: UByte = 0UB
+        // Highlight pen used while the cursor sits over the thumb or
+        // a drag is in progress. Default matches the idle pen so
+        // unthemed scrollers behave as before; themed callers set
+        // this to their accent colour.
+        var scrollbarThumbHoverPen: UByte = 1UB
 
         private static const SCROLLBAR_W: Short  = 10S
         private static const MIN_THUMB_H: Short  = 16S
@@ -27,6 +32,12 @@ namespace Am.Ui
         private var draggingThumb: Bool       = false
         private var dragMouseStartY: Short    = 0S
         private var dragScrollStartY: Short   = 0S
+
+        // Hover state for the thumb. Tracked separately from the
+        // drag flag so the highlight stays lit during a drag even
+        // if the cursor wanders off the lane (matches the OS
+        // conventions for scrollbar feedback).
+        private var thumbHovered: Bool        = false
 
         override fun setDefaultPadding() {
             this.setPadding(0S)
@@ -251,8 +262,44 @@ namespace Am.Ui
             // visible regardless of track pen.
             var ty = this.thumbY()
             var th = this.thumbHeight()
-            graphics.setForegroundPen(this.scrollbarThumbPen)
+            var thumbPen = this.scrollbarThumbPen
+            if (this.thumbHovered || this.draggingThumb) {
+                thumbPen = this.scrollbarThumbHoverPen
+            }
+            graphics.setForegroundPen(thumbPen)
             graphics.fillRect((sbX + ScrollView.THUMB_INSET), ty, ((sbX + sbW) - ScrollView.THUMB_INSET) - 1S, (ty + th) - 1S)
+        }
+
+        // Wheel ticks scroll the thumb when the cursor is over the
+        // viewport. Inner scrollers get first crack — a nested
+        // ScrollView under the cursor handles before we do, which is
+        // the standard "innermost scrollable wins" rule. Forwarding
+        // uses the same scroll-shifted local-coord conversion as
+        // mouse clicks so the inner view sees coords in its own
+        // post-scroll frame.
+        override fun onMouseWheel(deltaY: Short, x: Short, y: Short): Bool {
+            if (!this.contains(x, y)) {
+                return false
+            }
+            var c = this.child
+            if (c != null) {
+                var lx = x - c.x
+                var ly = (y - c.y) + this.scrollY
+                if (c.onMouseWheel(deltaY, lx, ly)) {
+                    return true
+                }
+            }
+            if (!this.needsScrollbar()) {
+                return false
+            }
+            // 30 px per wheel tick — about three rows of Topaz/8.
+            // deltaY > 0 means wheel rolled DOWN (content moves up,
+            // scrollY increases).
+            var step = (deltaY.toInt() * 30)
+            this.scrollY = (this.scrollY.toInt() + step).toShort()
+            this.clampScrollY()
+            this.forceRepaintNow()
+            return true
         }
 
         // Single-child wrapper held outside ViewGroup.children, so
@@ -287,6 +334,32 @@ namespace Am.Ui
             }
         }
 
+        // Cursor-over-thumb test. Caller passes coordinates already
+        // in the scroll view's local frame.
+        private fun isPointOverThumb(x: Short, y: Short): Bool {
+            if (!this.needsScrollbar()) {
+                return false
+            }
+            if (x < this.scrollbarX()) {
+                return false
+            }
+            var ty = this.thumbY()
+            var th = this.thumbHeight()
+            return y >= ty && y < ty + th
+        }
+
+        // Update hover state and force a synchronous repaint if it
+        // actually changed. Centralised so every code path that
+        // changes hover (move-in-lane, move-out-of-view, drag end)
+        // funnels through the same paint trigger.
+        private fun setThumbHovered(hovered: Bool) {
+            if (this.thumbHovered == hovered) {
+                return
+            }
+            this.thumbHovered = hovered
+            this.forceRepaintNow()
+        }
+
         override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
             // Active drag: track move + up regardless of cursor
             // position so the thumb keeps following even when the
@@ -313,15 +386,29 @@ namespace Am.Ui
             }
 
             if (!this.contains(x, y)) {
+                // Cursor left the view — clear the hover highlight.
+                this.setThumbHovered(false)
                 // Mouse-up still has to reach the child so any drag
-                // state it's holding can be cleared. Other event
-                // types outside the bar can be safely ignored.
-                if (type == MouseEventType.up && this.child != null) {
-                    var ux = x - this.child.x
-                    var uy = (y - this.child.y) + this.scrollY
-                    return this.child.onMouseEvent(type, button, ux, uy)
+                // state it's holding can be cleared. Mouse-move also
+                // has to reach the child so any *hover* state it's
+                // holding (a Label's [...] glyph, etc.) can clear
+                // when the cursor slides off into a sibling view.
+                if (this.child != null) {
+                    if (type == MouseEventType.up || type == MouseEventType.move) {
+                        var ux = x - this.child.x
+                        var uy = (y - this.child.y) + this.scrollY
+                        return this.child.onMouseEvent(type, button, ux, uy)
+                    }
                 }
                 return false
+            }
+
+            // Hover-state update for every move that lands inside
+            // the view. Runs before the lane-vs-child dispatch so a
+            // cursor sliding from the content into the scrollbar
+            // (or vice versa) lights up the highlight correctly.
+            if (type == MouseEventType.move) {
+                this.setThumbHovered(this.isPointOverThumb(x, y))
             }
 
             // Click landed in the scrollbar lane?

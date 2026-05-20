@@ -157,12 +157,14 @@ namespace Am.Ui
         }
 
         override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
-            // Same rationale as ViewGroup.onMouseEvent: mouse-up has
-            // to reach the wrapped child even when the cursor has
-            // moved off the panel, otherwise a drag started inside
-            // the panel (e.g. a ScrollView thumb) never sees the
-            // release and stays latched.
-            if (this.contains(x, y) || type == MouseEventType.up) {
+            // Same rationale as ViewGroup.onMouseEvent: mouse-up and
+            // mouse-move have to reach the wrapped child even when
+            // the cursor has moved off the panel. `up` so a drag
+            // started inside the panel (e.g. a ScrollView thumb)
+            // sees the release; `move` so visual hover state (the
+            // thumb hover highlight, button hover) can clear when
+            // the cursor slides off the panel into a sibling.
+            if (this.contains(x, y) || type == MouseEventType.up || type == MouseEventType.move) {
                 var c = this.child
                 var lx = x - c.x
                 var ly = y - c.y
@@ -185,6 +187,22 @@ namespace Am.Ui
                 return c.onKeyboardEvent(type, keyCode, keyChar)
             }
             return false
+        }
+
+        // Wheel goes by cursor position, not by focus — forward to
+        // the wrapped child only when the cursor is inside us. Mirror
+        // of the ViewGroup dispatch but for a single-child container.
+        override fun onMouseWheel(deltaY: Short, x: Short, y: Short): Bool {
+            if (!this.contains(x, y)) {
+                return false
+            }
+            var c = this.child
+            if (c == null) {
+                return false
+            }
+            var lx = x - c.x
+            var ly = y - c.y
+            return c.onMouseWheel(deltaY, lx, ly)
         }
 
     }

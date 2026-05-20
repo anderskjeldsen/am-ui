@@ -16,6 +16,17 @@ namespace Am.Ui
         var hoverBackgroundPen: UByte = 0UB
         private var hovered: Bool = false
 
+        // Optional trailing affordance — when set, this string is
+        // painted at the right edge of the label whenever the mouse
+        // is over the row, and clicking it fires
+        // `trailingClickListener` instead of the regular
+        // `clickListener`. Used by the folder tree for the per-row
+        // [...] context-menu glyph; null on every other Label so
+        // nothing changes for existing call sites.
+        var trailingGlyph: String = null
+        var trailingPen: UByte = 1UB
+        var trailingClickListener: (view: View) => Bool = null
+
         fun getUsedFont(): Font {
             if (this.font != null) {
                 return this.font
@@ -90,6 +101,45 @@ namespace Am.Ui
             var textX = this.margin.left + this.borderWidths.left + this.padding.left
             var textY = this.margin.top + this.borderWidths.top + this.padding.top
             graphics.drawString(this.text, textX, textY)
+
+            // Trailing affordance — only when the row is hovered.
+            // Painted *after* the text so it sits on top of any
+            // glyph the title would otherwise have written into the
+            // right edge of the row.
+            if (this.hovered && this.trailingGlyph != null) {
+                var tx = this.trailingGlyphX(graphics)
+                graphics.setForegroundPen(this.trailingPen)
+                graphics.drawString(this.trailingGlyph, tx, textY)
+            }
+        }
+
+        // X coordinate where the trailing glyph starts. Pulled out of
+        // paint() so onMouseEvent can hit-test against the same value
+        // without re-deriving it. Returns -1 when there's no glyph
+        // configured.
+        private fun trailingGlyphX(graphics: Graphics): Short {
+            if (this.trailingGlyph == null) {
+                return -1S
+            }
+            var glyphW = graphics.calculateStringWidth(this.trailingGlyph).toShort()
+            var rightInset = this.margin.right + this.borderWidths.right + this.padding.right
+            return (this.width.toShort() - rightInset) - glyphW
+        }
+
+        // Mouse-side version — onMouseEvent doesn't have Graphics in
+        // hand, so it goes via Window.calculateStringWidth (uses the
+        // same font drawString picks up at paint time).
+        private fun trailingGlyphXFromWindow(): Short {
+            if (this.trailingGlyph == null) {
+                return -1S
+            }
+            var vc = this.getViewContext()
+            if (vc == null) {
+                return -1S
+            }
+            var glyphW = vc.getWindow().calculateStringWidth(this.getUsedFont(), this.trailingGlyph).toShort()
+            var rightInset = this.margin.right + this.borderWidths.right + this.padding.right
+            return (this.width.toShort() - rightInset) - glyphW
         }
 
         override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
@@ -104,6 +154,26 @@ namespace Am.Ui
                 // Return false so sibling labels also see the move event
                 // and can clear their own hover state.
                 return false
+            }
+            // Trailing-affordance click intercept — left-mouse-up that
+            // lands at or past where the [...] glyph is drawn fires
+            // trailingClickListener instead of the row-wide
+            // clickListener. The trailing area is only "live" when
+            // the row is hovered, matching the visual state (we
+            // don't paint the glyph otherwise so a click that
+            // misses the visible glyph shouldn't get the trailing
+            // behaviour).
+            if (type == MouseEventType.up && button == MouseButton.left && this.contains(x, y)) {
+                if (this.hovered && this.trailingGlyph != null) {
+                    var tx = this.trailingGlyphXFromWindow()
+                    if (tx >= 0S && x >= tx) {
+                        var tcb = this.trailingClickListener
+                        if (tcb != null) {
+                            return tcb(this)
+                        }
+                        return true
+                    }
+                }
             }
             return base.onMouseEvent(type, button, x, y)
         }

@@ -259,6 +259,18 @@ namespace Am.Ui
             return false
         }
 
+        // Per-view mouse-wheel hook. `deltaY` is positive when the
+        // wheel was scrolled DOWN (content moves up). x/y are local
+        // coords inside this view — Window dispatches to whichever
+        // view sits under the cursor (hit-test via contains()), so
+        // wheel ticks affect what the user is *pointing at*, not
+        // what holds keyboard focus. Default no-op; ScrollView /
+        // TextEditor override to actually scroll. Return true to
+        // consume.
+        open fun onMouseWheel(deltaY: Short, x: Short, y: Short): Bool {
+            return false
+        }
+
         // Secondary click handler for right-mouse-button releases.
         // Used for "context menu"-style affordances (right-click a
         // folder tree row to open a terminal in that folder, etc.).

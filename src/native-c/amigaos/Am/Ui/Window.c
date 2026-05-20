@@ -246,7 +246,14 @@ function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHO
 		WA_Height, height,
 		WA_DetailPen, 1,
 		WA_BlockPen, 2,
-		WA_IDCMP, IDCMP_CLOSEWINDOW | IDCMP_GADGETUP | MENUPICK | MOUSEBUTTONS | REFRESHWINDOW | IDCMP_INTUITICKS | IDCMP_NEWSIZE | IDCMP_MOUSEBUTTONS | IDCMP_RAWKEY,
+		// IDCMP_EXTENDEDMOUSE (added in OS 3.5 / V45) carries
+		// mouse-wheel events as IDCMP_MOUSEMOVE messages whose
+		// Code field holds IMSGCODE_INTUIWHEELDATA and whose
+		// IAddress points to an IntuiWheelData struct. The amiga-gcc
+		// 3.2/3.5 NDK declares both — on pre-V45 systems Intuition
+		// silently ignores the unknown flag, so the rest of the
+		// IDCMP mask still works.
+		WA_IDCMP, IDCMP_CLOSEWINDOW | IDCMP_GADGETUP | MENUPICK | MOUSEBUTTONS | REFRESHWINDOW | IDCMP_INTUITICKS | IDCMP_NEWSIZE | IDCMP_MOUSEBUTTONS | IDCMP_RAWKEY | IDCMP_EXTENDEDMOUSE,
 		WA_Flags, window_flags,
 		WA_Borderless, borderless ? TRUE : FALSE,
 		WA_Gadgets, 0, // (ULONG) data->context_gadget,
@@ -373,6 +380,20 @@ void handle_message(aobject * this, struct IntuiMessage * msg) {
 			break;
 		case IDCMP_MOUSEMOVE:
 		case IDCMP_INTUITICKS:
+			// IDCMP_EXTENDEDMOUSE delivers wheel events as
+			// IDCMP_MOUSEMOVE messages tagged with
+			// IMSGCODE_INTUIWHEELDATA in Code; msg->IAddress
+			// points at a struct IntuiWheelData. We skip the
+			// cursor-tracking path on wheel events — wheel msgs
+			// can carry MouseX/Y matching the last position but
+			// the axis we care about is wd->WheelY.
+			if (msg->Code == IMSGCODE_INTUIWHEELDATA && msg->IAddress != NULL) {
+				struct IntuiWheelData *wd = (struct IntuiWheelData *) msg->IAddress;
+				if (wd->WheelY != 0) {
+					Am_Ui_Window_f_onMouseWheel_0(this, wd->WheelY, msg->MouseX, msg->MouseY);
+				}
+				break;
+			}
 			if (msg->MouseX != window_data->last_mouse_x || msg->MouseY != window_data->last_mouse_y) {
 				window_data->last_mouse_x = msg->MouseX;
 				window_data->last_mouse_y = msg->MouseY;

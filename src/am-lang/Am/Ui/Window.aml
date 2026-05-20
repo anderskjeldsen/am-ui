@@ -94,32 +94,57 @@ namespace Am.Ui
             }
         }
 
-        // Optional second view rendered ON TOP of the rootView and
-        // given first crack at mouse + keyboard events. Used for
-        // popovers / drawers that need to float above the regular
-        // IDE chrome instead of displacing it (e.g. a settings
-        // drawer). Caller sets via setOverlayView(); paint, layout
-        // and event dispatch include it automatically while it's
-        // non-null.
-        private var overlayView: View
+        // Overlay surface — a LayeredPane that floats over the
+        // rootView and gets first crack at mouse + keyboard events.
+        // Holds at most one "dock" view (set via setOverlayView, at
+        // z=0 in the pane) plus any number of stacked popups (at
+        // z=POPUP_Z and above, opened via openPopup). Constructed
+        // lazily in openWindow(): inline `new LayeredPane()` here
+        // crashed at startup, presumably because native-class
+        // instance fields don't run constructor initializers
+        // before the C side of `new Window()` returns.
+        private var overlayPane: LayeredPane = null
+
+        // The single "dock" slot — Settings / NewProject sit here.
+        // Tracked separately from the pane so setOverlayView can
+        // swap in a new view without disturbing any popups stacked
+        // above it.
+        private var dockLayer: View = null
+
+        // Z-index used for popups. Higher than the dock slot so
+        // popups always paint on top and absorb clicks first.
+        static const POPUP_Z: Int = 100
 
         fun setOverlayView(view: View) {
-            var prev = this.overlayView
-            if (prev == view) {
+            if (this.dockLayer == view) {
                 return
             }
-            if (prev != null) {
-                prev.onDetach()
+            if (this.dockLayer != null) {
+                this.overlayPane.removeLayer(this.dockLayer)
             }
-            this.overlayView = view
+            this.dockLayer = view
             if (view != null) {
-                view.onAttach(this.viewContext)
+                this.overlayPane.addLayer(view, 0)
             }
             this.requestFullRepaint()
         }
 
         fun getOverlayView(): View {
-            return this.overlayView
+            return this.dockLayer
+        }
+
+        // Mount `view` on the overlay at POPUP_Z. Multiple calls
+        // stack — the latest-added popup sits on top of any earlier
+        // popups (LayeredPane breaks same-z ties in insertion
+        // order). Pair with closePopup() to remove.
+        fun openPopup(view: View) {
+            this.overlayPane.addLayer(view, Window.POPUP_Z)
+            this.requestFullRepaint()
+        }
+
+        fun closePopup(view: View) {
+            this.overlayPane.removeLayer(view)
+            this.requestFullRepaint()
         }
 
 
@@ -143,7 +168,27 @@ namespace Am.Ui
             w.open(x, y, width, height, screen, windowManager, properties)
             var graphics = LayerGraphics.fromWindow(w)
             w.graphics = graphics
-//            vc.setGraphics(graphics)
+            // Construct the overlay pane after the native window is
+            // open and viewContext is set. Attach it to vc so any
+            // layer added via setOverlayView / openPopup gets its
+            // onAttach call (LayeredPane.addLayer is conditional on
+            // the pane itself being attached).
+            //
+            // Diagnostic prints: if the "View already attached"
+            // exception fires below, one of the printlns will be
+            // the last visible line — narrows the failure to the
+            // pane allocation vs. the attach.
+            "[Window] before new LayeredPane".println()
+            w.overlayPane = new LayeredPane()
+            "[Window] new LayeredPane returned".println()
+            var paneVcBefore = w.overlayPane.getViewContext()
+            if (paneVcBefore != null) {
+                "[Window] pane already has a viewContext after new!".println()
+            } else {
+                "[Window] pane viewContext is null (expected)".println()
+            }
+            w.overlayPane.onAttach(vc)
+            "[Window] overlayPane.onAttach returned".println()
             return w
         }
 
@@ -213,10 +258,14 @@ namespace Am.Ui
                 // overlay and leave them there until the overlay was
                 // explicitly dirtied. Re-painting the drawer on every
                 // cycle is cheap and guarantees it stays on top.
-                if (this.overlayView != null) {
-                    this.overlayView.requestRepaintTree()
-                    this.overlayView.paintAll(graphics)
-                }
+                // Overlay pane paints AFTER the rootView so its
+                // pixels land on top. Always present (empty pane =
+                // no-op); requestRepaintTree forces the pane and
+                // every layer in it to re-paint each cycle so a
+                // partial repaint inside the rootView can't leave
+                // stale pixels over a layer.
+                this.overlayPane.requestRepaintTree()
+                this.overlayPane.paintAll(graphics)
                 graphics.translate(0S - innerX, 0S - innerY)
 
                 graphics.popClipRect()
@@ -241,9 +290,9 @@ namespace Am.Ui
             if (this.rootView != null) {
                 this.rootView.layout(0S, 0S, innerW, innerH)
             }
-            if (this.overlayView != null) {
-                this.overlayView.layout(0S, 0S, innerW, innerH)
-            }
+            // Overlay pane fills the same area as rootView; each
+            // layer inside picks its own positioning.
+            this.overlayPane.layout(0S, 0S, innerW, innerH)
         }
 
         fun onCloseButtonClick() {
@@ -269,6 +318,15 @@ namespace Am.Ui
             }
         }
 
+        // Read the current keyboard-focused view (or null). Used by
+        // views like TextEditor and CliView to gate their key
+        // handling — they consume only when they're the focused
+        // view, so a click elsewhere makes them stop swallowing
+        // every keystroke.
+        fun getKeyboardFocus(): View {
+            return this.keyboardFocus
+        }
+
         fun onKeyboardEvent(type: KeyboardEventType, keyCode: UShort, keyChar: UShort) {
             var kf = this.keyboardFocus
             if (kf != null) {
@@ -276,30 +334,42 @@ namespace Am.Ui
                     return
                 }
             }
-            // Overlay layer gets first crack after the focused view —
+            // Overlay pane gets first crack after the focused view —
             // a popover drawer should swallow keys aimed at the
             // chrome behind it.
-            if (this.overlayView != null) {
-                if (this.overlayView.onKeyboardEvent(type, keyCode, keyChar)) {
-                    return
-                }
+            if (this.overlayPane.onKeyboardEvent(type, keyCode, keyChar)) {
+                return
             }
             this.rootView?.onKeyboardEvent(type, keyCode, keyChar)
+        }
+
+        // Mouse-wheel dispatch. Routed by cursor position (the
+        // overlay view + rootView each hit-test x/y), NOT by
+        // keyboard focus — wheeling over the editor scrolls the
+        // editor even when the terminal has key focus, and vice
+        // versa. Called from the native event loop when an
+        // IDCMP_EXTENDEDMOUSE wheel event arrives.
+        fun onMouseWheel(deltaY: Short, x: Short, y: Short) {
+            var lx = x - this.border.left
+            var ly = y - this.border.top
+            if (this.overlayPane.onMouseWheel(deltaY, lx, ly)) {
+                return
+            }
+            this.rootView?.onMouseWheel(deltaY, lx, ly)
         }
 
         fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short) {
             var lx = x - this.border.left
             var ly = y - this.border.top
-            // Overlay sees mouse events before the rootView; if it
-            // consumes (typically because the click landed on its
-            // panel), the rootView is bypassed. Otherwise the click
-            // falls through to whatever the rootView would normally
-            // handle — that's how clicks in the "see-through" area
-            // around the overlay still hit the IDE chrome.
-            if (this.overlayView != null) {
-                if (this.overlayView.onMouseEvent(type, button, lx, ly)) {
-                    return
-                }
+            // Overlay pane sees mouse events before the rootView; if
+            // any layer consumes (typically because the click
+            // landed on its panel / popup), the rootView is
+            // bypassed. Otherwise the click falls through to
+            // whatever the rootView would normally handle — that's
+            // how clicks in the "see-through" area around an
+            // overlay still hit the IDE chrome.
+            if (this.overlayPane.onMouseEvent(type, button, lx, ly)) {
+                return
             }
             this.rootView?.onMouseEvent(type, button, lx, ly)
         }
