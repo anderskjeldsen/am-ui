@@ -45,6 +45,19 @@ namespace Am.Ui
         // -1 when no row is hovered.
         private var hoveredIndex: Int = -1
 
+        // Currently-mounted submenu (and the parent row index it
+        // belongs to). When the cursor moves to a different row,
+        // any open submenu is closed before the new one is opened
+        // — so menus cascade on hover, not click, with no manual
+        // close needed by the caller.
+        private var activeSubmenu: PopupMenu = null
+        private var activeSubmenuIdx: Int = -1
+
+        // Pixel gap between an item's label and the trailing ">"
+        // submenu marker — kept identical to the left padding so
+        // the marker visually mirrors the leading inset.
+        private static const SUBMENU_MARKER_GAP: Short = 8S
+
         // Called when the popup wants to dismiss itself — either
         // because an item fired its action or because the user
         // clicked outside the menu rect. Mounting code wires this
@@ -89,17 +102,32 @@ namespace Am.Ui
             var win = vc.getWindow()
             var f = this.getUsedFont()
             var maxW = 0S
+            var hasSubmenu = false
             var n = this.items.getSize()
             var i = 0
             while (i < n) {
-                var w = win.calculateStringWidth(f, this.items.get(i).label).toShort()
+                var item = this.items.get(i)
+                var w = win.calculateStringWidth(f, item.label).toShort()
                 if (w > maxW) {
                     maxW = w
                 }
+                if (item.submenu != null) {
+                    hasSubmenu = true
+                }
                 i = i + 1
             }
+            // Add room for the trailing ">" cascade marker if any
+            // item in this menu has a submenu — otherwise the
+            // marker overlaps the label text. The marker is
+            // measured here against the same font drawString picks
+            // up at paint, so the geometry matches.
+            var markerExtent = 0S
+            if (hasSubmenu) {
+                var markerW = win.calculateStringWidth(f, ">").toShort()
+                markerExtent = PopupMenu.SUBMENU_MARKER_GAP + markerW
+            }
             // Padding on both sides, plus 1px border each side.
-            return (maxW + (PopupMenu.PADDING_X * 2S)) + 2S
+            return ((maxW + markerExtent) + (PopupMenu.PADDING_X * 2S)) + 2S
         }
 
         fun menuHeight(): Short {
@@ -188,9 +216,90 @@ namespace Am.Ui
                 var textX = rowX + PopupMenu.PADDING_X
                 var textY = rowY + PopupMenu.ROW_VPAD
                 graphics.drawString(item.label, textX, textY)
+                // Hint that a submenu is available — a ">" pointer at
+                // the right edge of the row, drawn in the same pen
+                // as the row text so it picks up the hover-state
+                // colour automatically.
+                if (item.submenu != null) {
+                    var marker = ">"
+                    var win = this.getViewContext().getWindow()
+                    var markerW = win.calculateStringWidth(this.getUsedFont(), marker).toShort()
+                    var markerX = ((rowX + rowW) - PopupMenu.PADDING_X) - markerW
+                    graphics.drawString(marker, markerX, textY)
+                }
                 rowY = rowY + rh
                 i = i + 1
             }
+        }
+
+        // Open `sub` as a cascading submenu of `this`, replacing
+        // whichever submenu was previously open. The parent stays
+        // mounted; only the active submenu is swapped.
+        //
+        // The submenu's closeListener is wired to *both* unmount
+        // the submenu AND fire this parent's close — so when the
+        // user picks an action item inside the submenu (or
+        // outside-clicks while it's open), the whole cascade
+        // dismisses, not just the submenu.
+        private fun swapToSubmenu(sub: PopupMenu, idx: Int) {
+            if (this.activeSubmenu == sub) {
+                return
+            }
+            this.closeActiveSubmenu()
+            var vc = this.getViewContext()
+            if (vc == null) {
+                return
+            }
+            var win = vc.getWindow()
+            sub.anchorX = (this.anchorX + this.menuWidth()) - 1S
+            sub.anchorY = ((this.anchorY + 1S) + PopupMenu.PADDING_Y) + (idx.toShort() * this.rowHeight())
+            sub.backgroundPen = this.backgroundPen
+            sub.textPen       = this.textPen
+            sub.hoverBgPen    = this.hoverBgPen
+            sub.hoverTextPen  = this.hoverTextPen
+            sub.borderPen     = this.borderPen
+            var capturedWin    = win
+            var capturedSub    = sub
+            var capturedParent = this
+            sub.closeListener = () => {
+                capturedWin.closePopup(capturedSub)
+                capturedParent.activeSubmenu = null
+                capturedParent.activeSubmenuIdx = -1
+                // Cascade the dismissal upward — picking an item
+                // in a submenu (or outside-clicking it) should
+                // close the entire menu chain, not just the
+                // submenu. fireClose hits the parent's listener
+                // which the IDE wires to closePopup the parent.
+                capturedParent.fireClose()
+                return true
+            }
+            win.openPopup(sub)
+            this.activeSubmenu = sub
+            this.activeSubmenuIdx = idx
+        }
+
+        // "Soft close" — unmount the currently-open submenu without
+        // cascading to the parent. Used when the cursor moves to a
+        // different parent row and we want to swap submenus (or
+        // hide the cascade entirely if the new row has no submenu).
+        private fun closeActiveSubmenu() {
+            if (this.activeSubmenu == null) {
+                return
+            }
+            var vc = this.getViewContext()
+            if (vc == null) {
+                return
+            }
+            var win = vc.getWindow()
+            var sub = this.activeSubmenu
+            // Wipe the chained closeListener so the upcoming
+            // closePopup doesn't fire its body — that body would
+            // cascade-close the parent (which is the OPPOSITE of
+            // what soft-close means).
+            sub.closeListener = null
+            win.closePopup(sub)
+            this.activeSubmenu = null
+            this.activeSubmenuIdx = -1
         }
 
         // -------- mouse --------
@@ -202,14 +311,28 @@ namespace Am.Ui
         // for everything inside the window.
         override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
             // Move events update hover highlight when over an item,
-            // and clear it otherwise. Always return false so the
-            // sibling layers also see move events and can clear
-            // their own hover state when the cursor enters us.
+            // and cascade the open-submenu state:
+            //   - cursor over a row with a submenu → open it
+            //     (closing whichever submenu was open before, if any)
+            //   - cursor over a non-submenu row → close any open
+            //     submenu
+            //   - cursor outside this menu's items (-1) → leave the
+            //     submenu alone, because the cursor may have moved
+            //     INTO the submenu and any close here would dismiss
+            //     it before the user can interact with it
             if (type == MouseEventType.move) {
                 var newHover = this.itemIndexAt(x, y)
                 if (newHover != this.hoveredIndex) {
                     this.hoveredIndex = newHover
                     this.requestRepaint()
+                    if (newHover >= 0) {
+                        var hovered = this.items.get(newHover)
+                        if (hovered.submenu != null) {
+                            this.swapToSubmenu(hovered.submenu, newHover)
+                        } else {
+                            this.closeActiveSubmenu()
+                        }
+                    }
                 }
                 return false
             }
@@ -219,6 +342,13 @@ namespace Am.Ui
                     var idx = this.itemIndexAt(x, y)
                     if (idx >= 0) {
                         var item = this.items.get(idx)
+                        // Items with a submenu are pure navigation —
+                        // they don't fire actions on click. The
+                        // submenu has already been opened by the
+                        // hover handler; clicks here are no-ops.
+                        if (item.submenu != null) {
+                            return true
+                        }
                         var act = item.action
                         if (act != null) {
                             act()

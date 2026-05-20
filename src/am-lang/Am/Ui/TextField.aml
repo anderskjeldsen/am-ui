@@ -16,6 +16,13 @@ namespace Am.Ui
         var placeholder: String = ""
         var readOnly: Bool = false
         var passwordMode: Bool = false
+
+        // Fires on Tab or Enter while focused. Receives the current
+        // text. Used by callers (e.g. FolderTreeView's inline
+        // create-new-entry flow) to commit the edit.
+        var submitListener: (text: String) => Bool = null
+        // Fires on ESC. Used to cancel an in-progress inline edit.
+        var cancelListener: () => Bool = null
         
         var textPen: UByte = 1UB
         var backgroundPen: UByte = 0UB
@@ -25,12 +32,12 @@ namespace Am.Ui
         var cursorPen: UByte = 3UB
         
         // Outer border: 2UB on left and upper, 1UB on lower and right
-        private var outerBorderPens: BorderPens = new BorderPens(2UB, 2UB, 1UB, 1UB)
-        private var focusedOuterBorderPens: BorderPens = new BorderPens(2UB, 2UB, 1UB, 1UB)
-        
-        // Inner border: 1UB on upper and left, 2UB on lower and right  
-        private var innerBorderPens: BorderPens = new BorderPens(1UB, 1UB, 2UB, 2UB)
-        private var focusedInnerBorderPens: BorderPens = new BorderPens(1UB, 1UB, 2UB, 2UB)
+        var outerBorderPens: BorderPens = new BorderPens(2UB, 2UB, 1UB, 1UB)
+        var focusedOuterBorderPens: BorderPens = new BorderPens(2UB, 2UB, 1UB, 1UB)
+
+        // Inner border: 1UB on upper and left, 2UB on lower and right
+        var innerBorderPens: BorderPens = new BorderPens(1UB, 1UB, 2UB, 2UB)
+        var focusedInnerBorderPens: BorderPens = new BorderPens(1UB, 1UB, 2UB, 2UB)
 
         fun getText(): String {
             return this.text
@@ -832,10 +839,19 @@ namespace Am.Ui
                     this.pasteText()
                     return true
                 } else if (keyChar == 9US) { // Tab
-                    // Could handle tab here if needed
+                    if (this.submitListener != null) {
+                        return this.submitListener(this.text)
+                    }
                     return false
                 } else if (keyChar == 13US || keyChar == 10US) { // Return/Enter
-                    // Could handle enter here if needed
+                    if (this.submitListener != null) {
+                        return this.submitListener(this.text)
+                    }
+                    return false
+                } else if (keyChar == 27US) { // ESC
+                    if (this.cancelListener != null) {
+                        return this.cancelListener()
+                    }
                     return false
                 } else if (keyChar >= 32US && keyChar <= 126US) { // Printable ASCII from keyChar
                     // Convert keyChar to string and use existing insertText method
