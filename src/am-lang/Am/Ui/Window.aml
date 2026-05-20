@@ -137,8 +137,23 @@ namespace Am.Ui
         // stack — the latest-added popup sits on top of any earlier
         // popups (LayeredPane breaks same-z ties in insertion
         // order). Pair with closePopup() to remove.
+        //
+        // The freshly-attached layer has width=height=0 (View's
+        // default) until something calls layout() on it. Without
+        // this explicit layout, paint's clip rect collapses to
+        // zero pixels and the popup is invisible — even though
+        // it's in the pane's children list and onMouseEvent reaches
+        // it. We give it the pane's current bounds; LayeredPane
+        // would do the same on the next layout pass.
         fun openPopup(view: View) {
             this.overlayPane.addLayer(view, Window.POPUP_Z)
+            // innerWidth() / innerHeight() instead of the raw .width
+            // / .height fields — LayeredPane already documents that
+            // direct field access trips the AmLang binder on this
+            // subclass; the method-call form binds cleanly.
+            var pw = this.overlayPane.innerWidth().toUShort()
+            var ph = this.overlayPane.innerHeight().toUShort()
+            view.layout(0S, 0S, pw, ph)
             this.requestFullRepaint()
         }
 
@@ -358,9 +373,30 @@ namespace Am.Ui
             this.rootView?.onMouseWheel(deltaY, lx, ly)
         }
 
+        // Most recent mouse event's content-local coords (window
+        // coords minus border). Cached here so listeners deep in
+        // the view tree — where x/y have been progressively
+        // localised by every parent in the dispatch chain — can
+        // still ask "where was the click in window space?" via
+        // getLastMouseX/Y. Updated on every mouse event before the
+        // dispatch walk, so the value is current at the moment any
+        // synchronous listener runs.
+        private var lastMouseX: Short = 0S
+        private var lastMouseY: Short = 0S
+
+        fun getLastMouseX(): Short {
+            return this.lastMouseX
+        }
+
+        fun getLastMouseY(): Short {
+            return this.lastMouseY
+        }
+
         fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short) {
             var lx = x - this.border.left
             var ly = y - this.border.top
+            this.lastMouseX = lx
+            this.lastMouseY = ly
             // Overlay pane sees mouse events before the rootView; if
             // any layer consumes (typically because the click
             // landed on its panel / popup), the rootView is

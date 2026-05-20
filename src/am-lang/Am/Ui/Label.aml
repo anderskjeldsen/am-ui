@@ -27,6 +27,19 @@ namespace Am.Ui
         var trailingPen: UByte = 1UB
         var trailingClickListener: (view: View) => Bool = null
 
+        // Optional leading affordance — when set, this string paints
+        // at the left edge of the label *always* (no hover gating),
+        // pushing the regular `text` to the right by the glyph's
+        // width plus a small gap. Used by the folder tree to mark
+        // git-repo rows with a clickable "G" before the folder name.
+        // Clicking the leading glyph fires `leadingClickListener`
+        // instead of the row-wide click.
+        var leadingGlyph: String = null
+        var leadingPen: UByte = 1UB
+        var leadingClickListener: (view: View) => Bool = null
+        // Pixels of gap between the leading glyph and the regular text.
+        var leadingGap: Short = 4S
+
         fun getUsedFont(): Font {
             if (this.font != null) {
                 return this.font
@@ -55,7 +68,12 @@ namespace Am.Ui
 
         override fun minWidth(): Short {
             var font = this.getUsedFont()
-            var textW = this.getViewContext().getWindow().calculateStringWidth(font, this.text).toShort()
+            var win = this.getViewContext().getWindow()
+            var textW = win.calculateStringWidth(font, this.text).toShort()
+            var leadW = 0S
+            if (this.leadingGlyph != null) {
+                leadW = win.calculateStringWidth(font, this.leadingGlyph).toShort() + this.leadingGap
+            }
             // Match minHeight: report the full bounding box so HStack
             // layout actually reserves room for horizontal padding /
             // margin / border. Without this, the text draws at
@@ -64,7 +82,7 @@ namespace Am.Ui
             // wider than its glyph (e.g. an icon button) renders
             // invisible until you hover it (the hover bg is anchored
             // at x=0 and is visible up to the clipped width).
-            return textW + this.padding.left + this.padding.right + this.margin.left + this.margin.right + this.borderWidths.left + this.borderWidths.right
+            return textW + leadW + this.padding.left + this.padding.right + this.margin.left + this.margin.right + this.borderWidths.left + this.borderWidths.right
         }
 
         override fun paint(graphics: Graphics) {
@@ -100,6 +118,17 @@ namespace Am.Ui
             // its visible breathing room above + below the text.
             var textX = this.margin.left + this.borderWidths.left + this.padding.left
             var textY = this.margin.top + this.borderWidths.top + this.padding.top
+
+            // Leading glyph (always visible). Painted first; text
+            // shifts right by the glyph width + gap.
+            if (this.leadingGlyph != null) {
+                graphics.setForegroundPen(this.leadingPen)
+                graphics.drawString(this.leadingGlyph, textX, textY)
+                var leadW = graphics.calculateStringWidth(this.leadingGlyph).toShort()
+                textX = textX + leadW + this.leadingGap
+                graphics.setForegroundPen(this.textPen)
+            }
+
             graphics.drawString(this.text, textX, textY)
 
             // Trailing affordance — only when the row is hovered.
@@ -111,6 +140,22 @@ namespace Am.Ui
                 graphics.setForegroundPen(this.trailingPen)
                 graphics.drawString(this.trailingGlyph, tx, textY)
             }
+        }
+
+        // X coordinate where the leading glyph ENDS (the click zone
+        // extends from textX up to this value). Mirrors trailing's
+        // window-side helper.
+        private fun leadingGlyphRightX(): Short {
+            if (this.leadingGlyph == null) {
+                return -1S
+            }
+            var vc = this.getViewContext()
+            if (vc == null) {
+                return -1S
+            }
+            var leftInset = this.margin.left + this.borderWidths.left + this.padding.left
+            var glyphW = vc.getWindow().calculateStringWidth(this.getUsedFont(), this.leadingGlyph).toShort()
+            return leftInset + glyphW
         }
 
         // X coordinate where the trailing glyph starts. Pulled out of
@@ -172,6 +217,17 @@ namespace Am.Ui
                             return tcb(this)
                         }
                         return true
+                    }
+                }
+                // Leading glyph click — independent of hover state.
+                if (this.leadingGlyph != null) {
+                    var lx2 = this.leadingGlyphRightX()
+                    var leftInset = this.margin.left + this.borderWidths.left + this.padding.left
+                    if (lx2 >= 0S && x >= leftInset && x <= lx2) {
+                        var lcb = this.leadingClickListener
+                        if (lcb != null) {
+                            return lcb(this)
+                        }
                     }
                 }
             }
