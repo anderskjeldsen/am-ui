@@ -13,8 +13,12 @@ namespace Am.Ui
         var checkMarkPen: UByte = 1UB
         var checkedBackgroundPen: UByte = 0UB
         
-        private var borderPens: BorderPens = new BorderPens(1UB, 1UB, 2UB, 2UB)
-        private var checkedBorderPens: BorderPens = new BorderPens(2UB, 2UB, 1UB, 1UB)
+        // Public so themed callers (settings panels, dark-mode
+        // skins) can swap the default bevel for a flat single-pen
+        // border. Construct a `new BorderPens(p, p, p, p)` to get a
+        // uniform colour on all four sides.
+        var borderPens: BorderPens = new BorderPens(1UB, 1UB, 2UB, 2UB)
+        var checkedBorderPens: BorderPens = new BorderPens(2UB, 2UB, 1UB, 1UB)
 
         fun isChecked(): Bool {
             return this.checked
@@ -166,11 +170,21 @@ namespace Am.Ui
                 graphics.drawLine(midX, midY, endX, endY)
             }
 
-            // Draw label
+            // Draw label. Use Label.paint() directly (not paintAll)
+            // because the label is a private field — outside any
+            // children list — so subtree-dirty walks never mark it
+            // and paintAll's b1||b2 gate would short-circuit. The
+            // CheckBox is repainting right now anyway, so we just
+            // always render the label too, replicating paintAll's
+            // outer translate (margin) by hand.
             var label2 = this.ensureLabel()
             label2.backgroundPen = this.backgroundPen
             label2.textPen = this.textPen
-            label2.paintAll(graphics)
+            var labelIx = label2.x + label2.margin.left
+            var labelIy = label2.y + label2.margin.top
+            graphics.translate(labelIx, labelIy)
+            label2.paint(graphics)
+            graphics.translate(0S - labelIx, 0S - labelIy)
         }
 
         override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {

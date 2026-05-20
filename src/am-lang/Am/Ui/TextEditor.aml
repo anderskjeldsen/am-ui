@@ -42,6 +42,38 @@ namespace Am.Ui
         var cursorPen: UByte = 1UB
         var fillBackground: Bool = false
         var backgroundPen: UByte = 0UB
+
+        // Scrollbar pens. Defaults match the historical "host pens"
+        // colours so untouched code keeps rendering the same way;
+        // themed callers swap these for editor-appropriate greys.
+        var scrollbarThumbPen: UByte = 1UB
+        var scrollbarTrackPen: UByte = 0UB
+        var scrollbarThumbHoverPen: UByte = 1UB
+
+        // Tab character render width, in pixels (not "tab stops" — a
+        // tab is a fixed pixel advance, matching the user's chosen
+        // editor convention). Used everywhere we measure or draw a
+        // line, so colForPixelX / cursor X / segment drawing all stay
+        // in sync.
+        var tabWidthPx: Short = 4S
+
+        // Horizontal skip distance for Shift+Left / Shift+Right.
+        // Cursor advances by this many cols at once, clamped to the
+        // start / end of the CURRENT line (no wrap into siblings).
+        var horizontalSkipCols: Int = 5
+
+        private static const SCROLLBAR_W: Short = 10S
+        private static const MIN_THUMB_H: Short = 16S
+        private static const THUMB_INSET: Short = 1S
+
+        // Thumb hover / drag state. Same shape as ScrollView's, but
+        // local to the editor because TextEditor manages its own
+        // scrolling (incremental ScrollRaster + dirty-line book-
+        // keeping) rather than delegating to a ScrollView wrapper.
+        private var thumbHovered: Bool = false
+        private var draggingThumb: Bool = false
+        private var dragMouseStartY: Short = 0S
+        private var dragScrollStartLine: Int = 0
         // useOffscreen routes paints through the window's screen-sized
         // offscreen buffer for flicker-free rendering. The offscreen path
         // currently always does a full content render — the incremental
@@ -168,6 +200,121 @@ namespace Am.Ui
                 return 1
             }
             return n.toInt()
+        }
+
+        // -------- scrollbar geometry --------
+
+        private fun needsScrollbar(): Bool {
+            return this.lines.getSize() > this.visibleLineCount()
+        }
+
+        private fun scrollbarX(): Short {
+            return this.width.toShort() - TextEditor.SCROLLBAR_W
+        }
+
+        // Width of the text area, excluding the scrollbar lane when
+        // one is visible. Used by renderers + scrollRect so the
+        // scrollbar pixels aren't shifted along with the text rows.
+        private fun viewportWidth(): Short {
+            var w = this.width.toShort()
+            if (this.needsScrollbar()) {
+                w = w - TextEditor.SCROLLBAR_W
+            }
+            return w
+        }
+
+        private fun maxScrollLine(): Int {
+            var m = this.lines.getSize() - this.visibleLineCount()
+            if (m < 0) {
+                return 0
+            }
+            return m
+        }
+
+        private fun thumbHeight(): Short {
+            var vpH = this.height.toShort().toInt()
+            var visible = this.visibleLineCount()
+            var total = this.lines.getSize()
+            if (total <= 0) {
+                return TextEditor.MIN_THUMB_H
+            }
+            // Visible-fraction → thumb-height mapping. Promote to
+            // Int so the (vpH * visible) product doesn't overflow on
+            // long viewports.
+            var th = (vpH * visible) / total
+            if (th < TextEditor.MIN_THUMB_H.toInt()) {
+                th = TextEditor.MIN_THUMB_H.toInt()
+            }
+            if (th > vpH) {
+                th = vpH
+            }
+            return th.toShort()
+        }
+
+        private fun thumbY(): Short {
+            var maxS = this.maxScrollLine()
+            if (maxS <= 0) {
+                return 0S
+            }
+            var travel = (this.height.toShort() - this.thumbHeight()).toInt()
+            if (travel <= 0) {
+                return 0S
+            }
+            var ty = (this.scrollLine * travel) / maxS
+            return ty.toShort()
+        }
+
+        private fun isPointOverThumb(x: Short, y: Short): Bool {
+            if (!this.needsScrollbar()) {
+                return false
+            }
+            if (x < this.scrollbarX()) {
+                return false
+            }
+            var ty = this.thumbY()
+            var th = this.thumbHeight()
+            return y >= ty && y < ty + th
+        }
+
+        // Synchronous repaint helper. Mirrors ScrollView's — drag
+        // updates need to land in the visible window during the
+        // drag, not after the next event-loop tick.
+        private fun forceRepaintNow() {
+            this.forceFullRepaint()
+            this.requestRepaint()
+            var w = this.getWindow()
+            if (w != null) {
+                w.repaint()
+            }
+        }
+
+        private fun setThumbHovered(hovered: Bool) {
+            if (this.thumbHovered == hovered) {
+                return
+            }
+            this.thumbHovered = hovered
+            this.forceRepaintNow()
+        }
+
+        private fun paintScrollbar(graphics: Graphics) {
+            if (!this.needsScrollbar()) {
+                return
+            }
+            var sbX = this.scrollbarX()
+            var sbW = TextEditor.SCROLLBAR_W
+            var vpH = this.height.toShort()
+
+            graphics.setForegroundPen(this.scrollbarTrackPen)
+            graphics.fillRect(sbX, 0S, (sbX + sbW) - 1S, vpH - 1S)
+
+            var ty = this.thumbY()
+            var th = this.thumbHeight()
+            var thumbPen = this.scrollbarThumbPen
+            if (this.thumbHovered || this.draggingThumb) {
+                thumbPen = this.scrollbarThumbHoverPen
+            }
+            graphics.setForegroundPen(thumbPen)
+            graphics.fillRect((sbX + TextEditor.THUMB_INSET), ty, ((sbX + sbW) - TextEditor.THUMB_INSET) - 1S, (ty + th) - 1S)
         }
 
         // Adjust scrollLine so the cursor sits inside the viewport.
@@ -343,6 +490,48 @@ namespace Am.Ui
             this.fireCursorChanged()
         }
 
+        // Skip Left / Skip Right — Shift+arrow horizontal. Jumps
+        // `horizontalSkipCols` cols at a time, clamped to the current
+        // line. Crucially does NOT wrap into the previous / next line
+        // the way moveCursorLeft / moveCursorRight do — at the line
+        // end, the cursor just stops.
+        private fun skipLeft() {
+            var oldLine = this.cursorLine
+            var newCol = this.cursorCol - this.horizontalSkipCols
+            if (newCol < 0) {
+                newCol = 0
+            }
+            if (newCol == this.cursorCol) {
+                return
+            }
+            this.cursorCol = newCol
+            this.markCursorMoveDirty(oldLine)
+            if (this.ensureCursorVisible()) {
+                this.forceFullRepaint()
+            }
+            this.requestRepaint()
+            this.fireCursorChanged()
+        }
+
+        private fun skipRight() {
+            var oldLine = this.cursorLine
+            var lineLen = this.currentLine().length()
+            var newCol = this.cursorCol + this.horizontalSkipCols
+            if (newCol > lineLen) {
+                newCol = lineLen
+            }
+            if (newCol == this.cursorCol) {
+                return
+            }
+            this.cursorCol = newCol
+            this.markCursorMoveDirty(oldLine)
+            if (this.ensureCursorVisible()) {
+                this.forceFullRepaint()
+            }
+            this.requestRepaint()
+            this.fireCursorChanged()
+        }
+
         // Page Up / Page Down — move the cursor by one viewport's worth
         // of lines, clamped to the buffer. After moving we always force
         // a full repaint because we know the viewport shifted (saves
@@ -449,6 +638,14 @@ namespace Am.Ui
         }
 
         private fun fireCursorChanged() {
+            // Defensive re-clamp before reporting. Every caller already
+            // calls clampCursorCol() after a line change, but if any
+            // path ever leaks a stale cursorCol (e.g. pageUp into a
+            // shorter line where the clamp didn't take), the status
+            // bar would otherwise display a column that doesn't match
+            // where the cursor actually renders. clampCursorCol() is
+            // a no-op when cursorCol is already in [0, lineLength].
+            this.clampCursorCol()
             var cb = this.cursorChangeListener
             if (cb != null) {
                 cb(this.cursorLine, this.cursorCol)
@@ -516,12 +713,98 @@ namespace Am.Ui
 
         // -------- rendering --------
 
+        // Pixel width of `s` with tabs counted as `tabWidthPx`.
+        // Splits the string on tab and sums each segment's natural
+        // width plus one tab gap between consecutive segments.
+        //
+        // Two flavours because the editor measures from two
+        // contexts: the paint path has Graphics in hand (and
+        // Graphics always has a font set on the underlying
+        // RastPort, even before our `font` field is populated by
+        // onAttach); the click path only has the Font reference.
+        // Falling back to Graphics in the paint path matters — on
+        // the very first paint after a file is opened, getUsedFont()
+        // can still return null, and the old "Font-only" measure
+        // returned 0 here, which made the right-of-text fill cover
+        // the entire row and erase the line we'd just drawn.
+        //
+        // Fast path: a line with no tab is a single
+        // calculateStringWidth call, no array allocation.
+        private fun measureLineWidthG(graphics: Graphics, s: String): Short {
+            if (s == null || s.length() == 0) {
+                return 0S
+            }
+            if (s.indexOf("\t") < 0) {
+                return graphics.calculateStringWidth(s).toShort()
+            }
+            var parts = s.split(0x0009US)
+            var w = 0S
+            var i = 0
+            var n = parts.length()
+            while (i < n) {
+                var seg = parts[i]
+                if (seg.length() > 0) {
+                    w = w + graphics.calculateStringWidth(seg).toShort()
+                }
+                if (i < n - 1) {
+                    w = w + this.tabWidthPx
+                }
+                i = i + 1
+            }
+            return w
+        }
+
+        private fun measureLineWidthF(f: Font, s: String): Short {
+            if (f == null || s == null || s.length() == 0) {
+                return 0S
+            }
+            if (s.indexOf("\t") < 0) {
+                return f.calculateStringWidth(s).toShort()
+            }
+            var parts = s.split(0x0009US)
+            var w = 0S
+            var i = 0
+            var n = parts.length()
+            while (i < n) {
+                var seg = parts[i]
+                if (seg.length() > 0) {
+                    w = w + f.calculateStringWidth(seg).toShort()
+                }
+                if (i < n - 1) {
+                    w = w + this.tabWidthPx
+                }
+                i = i + 1
+            }
+            return w
+        }
+
         // Subclasses override this when they want to render the line as
         // multiple coloured runs (syntax highlighting). Default draws
-        // the entire line with `this.textPen`.
+        // the entire line with `this.textPen`, with tab characters
+        // expanded to a `tabWidthPx`-wide gap.
         open fun drawLine(graphics: Graphics, line: String, lineIndex: Int, x: Short, y: Short) {
             graphics.setForegroundPen(this.textPen)
-            graphics.drawString(line, x, y)
+            // Fast path: no tabs, just dump the line. drawString is
+            // a single native call vs. one per segment.
+            if (line.indexOf("\t") < 0) {
+                graphics.drawString(line, x, y)
+                return
+            }
+            var parts = line.split(0x0009US)
+            var curX = x
+            var i = 0
+            var n = parts.length()
+            while (i < n) {
+                var seg = parts[i]
+                if (seg.length() > 0) {
+                    graphics.drawString(seg, curX, y)
+                    curX = curX + graphics.calculateStringWidth(seg).toShort()
+                }
+                if (i < n - 1) {
+                    curX = curX + this.tabWidthPx
+                }
+                i = i + 1
+            }
         }
 
         // Render every visible line — used for full repaints (initial
@@ -556,7 +839,9 @@ namespace Am.Ui
 
             var lineHeight = this.getLineHeight()
             var availableHeight = this.height.toShort()
-            var viewWidth = this.width.toShort()
+            // Excludes the scrollbar lane when one is visible — keep
+            // the right-of-text fill from painting over the bar.
+            var viewWidth = this.viewportWidth()
 
             // Clamp the requested range to lines that fall inside the
             // current viewport. `scrollLine` is the line currently at
@@ -582,7 +867,15 @@ namespace Am.Ui
                 this.drawLine(graphics, line, i, 0S, y)
 
                 if (this.fillBackground) {
-                    var textWidth = graphics.calculateStringWidth(line).toShort()
+                    // Tabs expand to a fixed pixel width, so the line's
+                    // on-screen extent isn't just calculateStringWidth.
+                    // Go via graphics — our `f` reference can still be
+                    // null on the very first paint after a file opens,
+                    // and a 0-width result here would make the fill
+                    // cover the whole row and erase the text we just
+                    // drew (was leaving the editor blank until the
+                    // first scroll forced a font set elsewhere).
+                    var textWidth = this.measureLineWidthG(graphics, line)
                     if (textWidth < viewWidth) {
                         graphics.setForegroundPen(this.backgroundPen)
                         graphics.fillRect(textWidth, y, viewWidth - 1S, lineBottom)
@@ -593,7 +886,7 @@ namespace Am.Ui
                     var cursorX = 0S
                     if (this.cursorCol > 0) {
                         var before = line.substring(0UI, this.cursorCol.toUInt())
-                        cursorX = graphics.calculateStringWidth(before).toShort()
+                        cursorX = this.measureLineWidthG(graphics, before)
                     }
                     graphics.setForegroundPen(this.cursorPen)
                     graphics.fillRect(cursorX, y, cursorX, lineBottom)
@@ -617,7 +910,7 @@ namespace Am.Ui
             }
             if (y < availableHeight) {
                 graphics.setForegroundPen(this.backgroundPen)
-                graphics.fillRect(0S, y, this.width.toShort() - 1S, availableHeight - 1S)
+                graphics.fillRect(0S, y, this.viewportWidth() - 1S, availableHeight - 1S)
             }
         }
 
@@ -647,7 +940,9 @@ namespace Am.Ui
             if (h <= 0S) {
                 return
             }
-            graphics.scrollRect(0S, startY, this.width, h.toUShort(), 0S, this.pendingScrollDy, this.backgroundPen)
+            // viewportWidth excludes the scrollbar lane so the bar
+            // pixels stay put while the text rows shift.
+            graphics.scrollRect(0S, startY, this.viewportWidth().toUShort(), h.toUShort(), 0S, this.pendingScrollDy, this.backgroundPen)
         }
 
         // Render via the window-level offscreen buffer (no flicker, but
@@ -693,6 +988,12 @@ namespace Am.Ui
                 this.renderLineRange(graphics, this.dirtyLineFrom, this.dirtyLineTo)
             }
 
+            // Re-stamp the scrollbar on every paint — partial paints
+            // never touch the lane (viewportWidth() excludes it), so
+            // we just paint the bar unconditionally to keep the thumb
+            // in sync with scrollLine + total line count.
+            this.paintScrollbar(graphics)
+
             // Consume the partial-repaint state — the next paint starts
             // from "full repaint" again unless an edit op reschedules.
             this.pendingFullRepaint = false
@@ -711,24 +1012,23 @@ namespace Am.Ui
         // the character whose midpoint is past `pixelX`.
         private fun colForPixelX(line: String, pixelX: Short): Int {
             if (pixelX <= 0S || line.length() == 0) {
-                "[col] early-out pixelX=${pixelX} lineLen=${line.length()}".println()
                 return 0
             }
             var f = this.getUsedFont()
             if (f == null) {
-                "[col] no font".println()
                 return 0
             }
             var len = line.length()
-            var prevWidth = 0US
+            var prevWidth = 0S
             var col = 0
             while (col < len) {
                 var prefix = line.substring(0UI, (col + 1).toUInt())
-                var curWidth = f.calculateStringWidth(prefix)
-                var glyphMid = (prevWidth.toShort() + curWidth.toShort()) / 2S
-                if (col < 3) {
-                    "[col] probe col=${col} curW=${curWidth} mid=${glyphMid} pixelX=${pixelX}".println()
-                }
+                // Tab-aware so a click after a tab lands in the
+                // right column (the prior measurement used raw
+                // calculateStringWidth, which counted tabs as the
+                // font's default glyph width).
+                var curWidth = this.measureLineWidthF(f, prefix)
+                var glyphMid = (prevWidth + curWidth) / 2S
                 if (pixelX < glyphMid) {
                     return col
                 }
@@ -742,7 +1042,89 @@ namespace Am.Ui
         // cursor to the character cell under the pointer. Mid-button and
         // motion events fall through to the base handler.
         override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
+            // Active thumb drag — track move/up regardless of where
+            // the cursor went so the bar keeps following.
+            if (this.draggingThumb) {
+                if (type == MouseEventType.move) {
+                    var dy = (y - this.dragMouseStartY).toInt()
+                    var travel = (this.height.toShort() - this.thumbHeight()).toInt()
+                    if (travel > 0) {
+                        var maxS = this.maxScrollLine()
+                        var newScroll = this.dragScrollStartLine + (dy * maxS) / travel
+                        if (newScroll < 0) { newScroll = 0 }
+                        if (newScroll > maxS) { newScroll = maxS }
+                        if (newScroll != this.scrollLine) {
+                            this.scrollLine = newScroll
+                            this.forceRepaintNow()
+                        }
+                    }
+                    return true
+                }
+                if (type == MouseEventType.up) {
+                    this.draggingThumb = false
+                    this.forceRepaintNow()
+                    return true
+                }
+            }
+
+            if (!this.contains(x, y)) {
+                this.setThumbHovered(false)
+                return base.onMouseEvent(type, button, x, y)
+            }
+
+            // Hover lighting — runs on every in-bounds move.
+            if (type == MouseEventType.move) {
+                this.setThumbHovered(this.isPointOverThumb(x, y))
+            }
+
+            // Click landed in the scrollbar lane?
+            if (this.needsScrollbar() && x >= this.scrollbarX()) {
+                if (type == MouseEventType.down && button == MouseButton.left) {
+                    var ty = this.thumbY()
+                    var th = this.thumbHeight()
+                    if (y >= ty && y < ty + th) {
+                        this.draggingThumb = true
+                        this.dragMouseStartY = y
+                        this.dragScrollStartLine = this.scrollLine
+                    } else {
+                        // Track click — page by a viewport's worth of
+                        // lines toward the click.
+                        var page = this.visibleLineCount()
+                        var maxS = this.maxScrollLine()
+                        var newScroll = this.scrollLine
+                        if (y < ty) {
+                            newScroll = newScroll - page
+                        } else {
+                            newScroll = newScroll + page
+                        }
+                        if (newScroll < 0) { newScroll = 0 }
+                        if (newScroll > maxS) { newScroll = maxS }
+                        if (newScroll != this.scrollLine) {
+                            this.scrollLine = newScroll
+                            this.forceRepaintNow()
+                        }
+                    }
+                    return true
+                }
+                // Other events inside the lane are swallowed so they
+                // don't fall through into the cursor-positioning path
+                // and move the cursor under the bar.
+                return false
+            }
+
             if (type == MouseEventType.down && button == MouseButton.left && this.contains(x, y)) {
+                // Claim keyboard focus so subsequent typing routes to
+                // this editor — the CliView in a bottom panel
+                // otherwise keeps focus from its own click and
+                // would swallow our keys.
+                var vc = this.getViewContext()
+                if (vc != null) {
+                    var w = vc.getWindow()
+                    if (w != null) {
+                        w.setKeyboardFocus(this)
+                    }
+                }
+
                 var oldLine = this.cursorLine
                 var lineHeight = this.getLineHeight()
                 var lastLine = this.lines.getSize() - 1
@@ -767,9 +1149,53 @@ namespace Am.Ui
             return base.onMouseEvent(type, button, x, y)
         }
 
+        // Wheel scrolls the buffer without moving the cursor.
+        // 3 lines per tick — fast enough to feel responsive on long
+        // files, slow enough to land on a specific row.
+        override fun onMouseWheel(deltaY: Short, x: Short, y: Short): Bool {
+            if (!this.contains(x, y)) {
+                return false
+            }
+            var totalLines = this.lines.getSize()
+            var visible = this.visibleLineCount()
+            var maxScroll = totalLines - visible
+            if (maxScroll < 0) {
+                maxScroll = 0
+            }
+            var newScroll = this.scrollLine + (deltaY.toInt() * 3)
+            if (newScroll < 0) {
+                newScroll = 0
+            }
+            if (newScroll > maxScroll) {
+                newScroll = maxScroll
+            }
+            if (newScroll == this.scrollLine) {
+                return true
+            }
+            this.scrollLine = newScroll
+            this.forceFullRepaint()
+            this.requestRepaint()
+            return true
+        }
+
         override fun onKeyboardEvent(type: KeyboardEventType, keyCode: UShort, keyChar: UShort): Bool {
             if (type != KeyboardEventType.down) {
                 return false
+            }
+            // Focus gate: only consume keys when we're the focused
+            // view, so typing in the terminal isn't echoed into the
+            // active editor as well. A null focus means "nothing is
+            // claiming keys" — in that case let the editor handle
+            // so initial typing still works without a click.
+            var vc = this.getViewContext()
+            if (vc != null) {
+                var w = vc.getWindow()
+                if (w != null) {
+                    var focus = w.getKeyboardFocus()
+                    if (focus != null && focus != this) {
+                        return false
+                    }
+                }
             }
             // AmigaOS raw key codes for arrows. The native handler
             // tags shifted arrows with keyChar=1 — we route Shift+Up
@@ -782,6 +1208,17 @@ namespace Am.Ui
             }
             if (keyCode == 77US && keyChar == 1US) {
                 this.pageDown()
+                return true
+            }
+            // Shift+Left / Shift+Right — same keyChar=1 shift marker
+            // as the page-nav arrows. Jumps several cols at a time,
+            // clamped to the line — no wrap into the prev/next line.
+            if (keyCode == 79US && keyChar == 1US) {
+                this.skipLeft()
+                return true
+            }
+            if (keyCode == 78US && keyChar == 1US) {
+                this.skipRight()
                 return true
             }
             if (keyCode == 79US) {

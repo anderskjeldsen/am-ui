@@ -243,7 +243,12 @@ function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHO
 		WA_Height, height,
 		WA_DetailPen, 1,
 		WA_BlockPen, 2,
-		WA_IDCMP, IDCMP_CLOSEWINDOW | IDCMP_GADGETUP | MENUPICK | MOUSEBUTTONS | REFRESHWINDOW | IDCMP_INTUITICKS | IDCMP_NEWSIZE | IDCMP_MOUSEBUTTONS | IDCMP_RAWKEY,
+		// IDCMP_EXTENDEDMOUSE = 0x00400000 delivers wheel events.
+		// The MorphOS NDK in this docker image doesn't declare the
+		// symbol (or the IntuiWheelData struct), so we define the
+		// value inline rather than tying the build to a specific
+		// NDK vintage. MorphOS itself supports the flag at runtime.
+		WA_IDCMP, IDCMP_CLOSEWINDOW | IDCMP_GADGETUP | MENUPICK | MOUSEBUTTONS | REFRESHWINDOW | IDCMP_INTUITICKS | IDCMP_NEWSIZE | IDCMP_MOUSEBUTTONS | IDCMP_RAWKEY | 0x00400000UL,
 		WA_Flags, window_flags,
 		WA_Borderless, borderless ? TRUE : FALSE,
 		WA_Gadgets, 0, // (ULONG) data->context_gadget,
@@ -370,6 +375,20 @@ void handle_message(aobject * this, struct IntuiMessage * msg) {
 			break;
 		case IDCMP_MOUSEMOVE:
 		case IDCMP_INTUITICKS:
+			// IDCMP_EXTENDEDMOUSE wheel events arrive as
+			// IDCMP_MOUSEMOVE with Code == IMSGCODE_INTUIWHEELDATA
+			// (0x40000001), IAddress at a struct whose first field
+			// is a UWORD Version, followed by WORDs WheelX, WheelY.
+			// Read by offset since this NDK doesn't declare
+			// IntuiWheelData.
+			if (msg->Code == 0x40000001UL && msg->IAddress != NULL) {
+				const short *wd = (const short *)((const char *)msg->IAddress + 2);
+				short wheelY = wd[1];
+				if (wheelY != 0) {
+					Am_Ui_Window_f_onMouseWheel_0(this, wheelY, msg->MouseX, msg->MouseY);
+				}
+				break;
+			}
 			if (msg->MouseX != window_data->last_mouse_x || msg->MouseY != window_data->last_mouse_y) {
 				window_data->last_mouse_x = msg->MouseX;
 				window_data->last_mouse_y = msg->MouseY;

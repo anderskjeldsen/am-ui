@@ -136,6 +136,24 @@ namespace Am.Ui
             return null
         }
 
+        // Walk children when the cursor sits inside this group. First
+        // child that consumes wins. We gate on `contains` so wheel
+        // ticks in empty padding around a group don't get absorbed
+        // by an unrelated child further down the chain.
+        override fun onMouseWheel(deltaY: Short, x: Short, y: Short): Bool {
+            if (!this.contains(x, y)) {
+                return false
+            }
+            each(this.children, c) {
+                var lx = x - c.x
+                var ly = y - c.y
+                if (c.onMouseWheel(deltaY, lx, ly)) {
+                    return true
+                }
+            }
+            return false
+        }
+
         override fun onKeyboardEvent(type: KeyboardEventType, keyCode: UShort, keyChar: UShort): Bool {
             each(this.children, c) {
                 var consumed = c.onKeyboardEvent(type, keyCode, keyChar)
@@ -148,6 +166,25 @@ namespace Am.Ui
 
 
         override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
+            // Mouse-move broadcasts to every child regardless of this
+            // group's contains() result, and regardless of whether an
+            // earlier child consumed the event. Children rely on
+            // receiving moves to detect "cursor just left me" — that's
+            // how scrollbar / button hover state clears when the cursor
+            // slides off into a sibling. Short-circuiting on the first
+            // consumer would leave later children visually latched.
+            if (type == MouseEventType.move) {
+                var anyConsumed = false
+                each(this.children, c) {
+                    var lx = x - c.x
+                    var ly = y - c.y
+                    if (c.onMouseEvent(type, button, lx, ly)) {
+                        anyConsumed = true
+                    }
+                }
+                return anyConsumed
+            }
+
             // Mouse-up always propagates to children regardless of
             // this group's own contains() result so that any descendant
             // currently holding a drag (ScrollView thumb, SplitterView,
