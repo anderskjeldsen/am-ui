@@ -1,0 +1,21 @@
+namespace Am.Ui
+{
+    // One row in a PopupMenu. Either an action item (label + on-click
+    // callback) or — once cascading is in — a submenu trigger. For
+    // step 2 we only need actions; the submenu field is reserved
+    // for step 3 so callers can already wire up cascading menus
+    // without us reworking the data shape.
+    class PopupMenuItem(var label: String) {
+        import Am.Lang
+
+        // Fired when the row is clicked. Return value follows the
+        // usual View click-listener convention (true = consumed).
+        // The PopupMenu will close itself after the action fires.
+        var action: () => Bool = null
+
+        // Reserved for cascading menus (step 3). When set, hovering
+        // this row should open the submenu to the right; clicking
+        // would do the same. PopupMenu in step 2 ignores this field.
+        var submenu: PopupMenu = null
+    }
+}
