@@ -37,6 +37,12 @@ struct _Am_Ui_Window_data {
     bool pending_resize;
     bool inside_handle_input;
     bool deferred_full_close;
+    // Set TRUE between IDCMP_MENUVERIFY and IDCMP_MENUPICK so the
+    // mouse-event path can drop events that arrive while a menu is
+    // up. WFLG_MENUSTATE on the Window struct covers most Intuition
+    // cases, but older MagicMenu versions don't always set it for
+    // their popup overlay — the explicit flag catches those.
+    bool menu_active;
     short last_mouse_x;
     short last_mouse_y;
     Am_Ui_Window_menu_builder * menu_builder;

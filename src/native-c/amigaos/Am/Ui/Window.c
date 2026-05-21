@@ -253,7 +253,12 @@ function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHO
 		// 3.2/3.5 NDK declares both — on pre-V45 systems Intuition
 		// silently ignores the unknown flag, so the rest of the
 		// IDCMP mask still works.
-		WA_IDCMP, IDCMP_CLOSEWINDOW | IDCMP_GADGETUP | MENUPICK | MOUSEBUTTONS | REFRESHWINDOW | IDCMP_INTUITICKS | IDCMP_NEWSIZE | IDCMP_MOUSEBUTTONS | IDCMP_RAWKEY | IDCMP_EXTENDEDMOUSE,
+		// IDCMP_MENUVERIFY pairs with IDCMP_MENUPICK to mark when a
+		// menu is active so the mouse-event branches below can
+		// suppress events that fire during menu interaction (stale
+		// hover, phantom clicks when the menu closes). Replying to
+		// MENUVERIFY with msg->Code = MENUHOT lets the menu open.
+		WA_IDCMP, IDCMP_CLOSEWINDOW | IDCMP_GADGETUP | MENUPICK | MOUSEBUTTONS | REFRESHWINDOW | IDCMP_INTUITICKS | IDCMP_NEWSIZE | IDCMP_MOUSEBUTTONS | IDCMP_RAWKEY | IDCMP_EXTENDEDMOUSE | IDCMP_MENUVERIFY,
 		WA_Flags, window_flags,
 		WA_Borderless, borderless ? TRUE : FALSE,
 		WA_Gadgets, 0, // (ULONG) data->context_gadget,
@@ -341,7 +346,20 @@ void handle_message(aobject * this, struct IntuiMessage * msg) {
 				window_data->pending_refresh = TRUE;
 			}
 			break;
+		case IDCMP_MENUVERIFY:
+			// Intuition fires this before showing the menu. Acking
+			// with MENUHOT lets the menu open; MENUCANCEL would
+			// suppress it. We always accept and just flip the
+			// menu_active gate so the mouse paths below stop
+			// publishing events to the AmLang view tree.
+			window_data->menu_active = TRUE;
+			msg->Code = MENUHOT;
+			break;
 		case IDCMP_MENUPICK:
+			// MENUPICK arrives whether the user picked an item
+			// or cancelled — either way the menu is gone, so
+			// clear the gate before dispatching the selection.
+			window_data->menu_active = FALSE;
 			{
 				USHORT code = msg->Code;
 				while (code != MENUNULL && window_data->menu_strip != NULL) {
@@ -366,6 +384,13 @@ void handle_message(aobject * this, struct IntuiMessage * msg) {
 			break;
 		case IDCMP_MOUSEBUTTONS:
 //			printf("Mouse click %d\n", msg->Code);
+			// Drop button events while a menu is up — the explicit
+			// menu_active flag covers MagicMenu popups; WFLG_MENUSTATE
+			// covers stock Intuition. Either set means the click
+			// belongs to the menu interaction, not the view tree.
+			if (window_data->menu_active || (win->Flags & WFLG_MENUSTATE)) {
+				break;
+			}
 			if (msg->Code == MENUUP) // Check for right mouse button // IECODE_RBUTTON
 			{
 				Am_Ui_Window_f_onMouseEvent_0(this, 2, 2, msg->MouseX, msg->MouseY);
@@ -380,18 +405,25 @@ void handle_message(aobject * this, struct IntuiMessage * msg) {
 			break;
 		case IDCMP_MOUSEMOVE:
 		case IDCMP_INTUITICKS:
-			// IDCMP_EXTENDEDMOUSE delivers wheel events as
-			// IDCMP_MOUSEMOVE messages tagged with
-			// IMSGCODE_INTUIWHEELDATA in Code; msg->IAddress
-			// points at a struct IntuiWheelData. We skip the
-			// cursor-tracking path on wheel events — wheel msgs
-			// can carry MouseX/Y matching the last position but
-			// the axis we care about is wd->WheelY.
+			// Same menu-up gate as MOUSEBUTTONS — but wheel events
+			// are checked first because they're carried over
+			// IDCMP_MOUSEMOVE and we want wheel scroll to keep
+			// working even if a menu somehow leaks one through.
 			if (msg->Code == IMSGCODE_INTUIWHEELDATA && msg->IAddress != NULL) {
+				// IDCMP_EXTENDEDMOUSE delivers wheel events as
+				// IDCMP_MOUSEMOVE messages tagged with
+				// IMSGCODE_INTUIWHEELDATA in Code; msg->IAddress
+				// points at a struct IntuiWheelData. We skip the
+				// cursor-tracking path on wheel events — wheel msgs
+				// can carry MouseX/Y matching the last position but
+				// the axis we care about is wd->WheelY.
 				struct IntuiWheelData *wd = (struct IntuiWheelData *) msg->IAddress;
 				if (wd->WheelY != 0) {
 					Am_Ui_Window_f_onMouseWheel_0(this, wd->WheelY, msg->MouseX, msg->MouseY);
 				}
+				break;
+			}
+			if (window_data->menu_active || (win->Flags & WFLG_MENUSTATE)) {
 				break;
 			}
 			if (msg->MouseX != window_data->last_mouse_x || msg->MouseY != window_data->last_mouse_y) {

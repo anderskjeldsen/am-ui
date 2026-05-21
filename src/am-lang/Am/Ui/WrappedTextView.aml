@@ -1,0 +1,270 @@
+namespace Am.Ui
+{
+    // Multi-line, word-wrapping text view.
+    //
+    // - Honors embedded "\n" in the text.
+    // - Breaks long lines at word boundaries to fit the view's
+    //   current width. Falls back to per-character breaks for
+    //   words that are themselves wider than the available space.
+    //
+    // The wrapped line list is recomputed inside layout() whenever
+    // the assigned width changes (or the text is replaced). minHeight
+    // then reflects the wrapped row count, so VStack / HStack lay
+    // the view out at its correct natural height.
+    //
+    // Two-pass layout caveat: on the very first layoutChildren after
+    // a new WrappedTextView is added to a container, the parent calls
+    // minHeight BEFORE layout — at that point the view doesn't yet
+    // know its width, so minHeight returns the single-line fallback.
+    // The first layout() then computes wrapping at the assigned width
+    // and caches it. A *second* layoutChildren on the parent (or any
+    // later layout pass — resize, append, etc.) re-asks minHeight and
+    // gets the correct multi-row height. Callers that need the
+    // correct height on the very first frame should call the parent's
+    // `layoutChildren()` twice after appending.
+    class WrappedTextView : View {
+        import Am.Lang
+        import Am.Collections
+
+        var text: String = ""
+        var textPen: UByte = 1UB
+        var backgroundPen: UByte = 0UB
+        // Custom font override. null falls back to the window default.
+        var font: Font = null
+        // Extra blank pixels added to each line's vertical slot. The
+        // text is centred within the (fontHeight + lineSpacing)-tall
+        // slot so half the gap sits above the glyphs and half below
+        // — same spacing both at the top of the first line and the
+        // bottom of the last, so paragraphs read as evenly-spaced
+        // rows. 0 (default) renders glyphs row-to-row with no extra
+        // breathing room, matching the original tight layout.
+        var lineSpacing: Short = 0S
+
+        // Cached wrap result. lineWidthHint is the width the cache was
+        // built for; if layout() is called with a different width we
+        // rebuild. Null lines means "not yet computed".
+        private var cachedLines: List<String> = null
+        private var lineWidthHint: Short = -1S
+
+        fun setText(text: String) {
+            if (text == null) {
+                text = ""
+            }
+            if (this.text == text) {
+                return
+            }
+            this.text = text
+            // Force a rewrap on the next layout — the new text may
+            // change the line list entirely.
+            this.cachedLines = null
+            this.lineWidthHint = -1S
+            this.requestRepaint()
+        }
+
+        fun getUsedFont(): Font {
+            if (this.font != null) {
+                return this.font
+            }
+            var vc = this.getViewContext()
+            if (vc != null) {
+                return vc.getWindow().font
+            }
+            return null
+        }
+
+        // Single-line font height — the per-row stride when painting.
+        private fun fontHeight(): Short {
+            var f = this.getUsedFont()
+            if (f != null) {
+                return f.getSize().toShort()
+            }
+            var vc = this.getViewContext()
+            if (vc != null) {
+                return vc.getWindow().getCurrentFontSize().toShort()
+            }
+            return 8S
+        }
+
+        override fun minWidth(): Short {
+            // Reports a small minimum so the parent doesn't refuse to
+            // narrow this view. Wrapping handles whatever it gets.
+            return 16S + this.padding.left + this.padding.right + this.margin.left + this.margin.right + this.borderWidths.left + this.borderWidths.right
+        }
+
+        override fun minHeight(): Short {
+            var rows = 1
+            if (this.cachedLines != null) {
+                rows = this.cachedLines.getSize()
+                if (rows < 1) {
+                    rows = 1
+                }
+            }
+            // Each line occupies (fontHeight + lineSpacing) pixels —
+            // the spacing is split half above / half below the
+            // glyphs in paint(), so the total reservation has to
+            // include it for every row.
+            var contentH = (this.fontHeight() + this.lineSpacing) * rows.toShort()
+            return contentH + this.padding.top + this.padding.bottom + this.margin.top + this.margin.bottom + this.borderWidths.top + this.borderWidths.bottom
+        }
+
+        override fun layout(x: Short, y: Short, width: UShort, height: UShort) {
+            base.layout(x, y, width, height)
+            // innerWidth() depends on `this.width` (just set) plus
+            // padding/border, so compute it AFTER base.layout.
+            var avail = this.innerWidth()
+            if (avail < 0S) {
+                avail = 0S
+            }
+            if (avail != this.lineWidthHint || this.cachedLines == null) {
+                this.rewrap(avail)
+            }
+        }
+
+        private fun rewrap(maxWidth: Short) {
+            this.lineWidthHint = maxWidth
+            this.cachedLines = this.wrapText(this.text, maxWidth)
+        }
+
+        // Split `text` first on '\n', then word-wrap each segment to
+        // fit `maxWidth` pixels. Words longer than maxWidth get cut
+        // mid-word so they don't drop off the right edge.
+        private fun wrapText(text: String, maxWidth: Short): List<String> {
+            var result = new List<String>()
+            if (text == null) {
+                return result
+            }
+            var vc = this.getViewContext()
+            if (vc == null) {
+                result.add(text)
+                return result
+            }
+            if (maxWidth <= 0S) {
+                result.add(text)
+                return result
+            }
+            var win = vc.getWindow()
+            var f = this.getUsedFont()
+            var paragraphs = text.splitByString("\n")
+            var pi = 0UI
+            while (pi < paragraphs.length()) {
+                var paragraph = paragraphs[pi]
+                if (paragraph.length() == 0) {
+                    result.add("")
+                } else {
+                    this.wrapParagraph(win, f, paragraph, maxWidth, result)
+                }
+                pi++
+            }
+            return result
+        }
+
+        // Greedy word-wrap a single paragraph into `out`. Words wider
+        // than maxWidth get character-split as a fallback.
+        private fun wrapParagraph(win: Window, font: Font, paragraph: String, maxWidth: Short, out: List<String>) {
+            var words = paragraph.splitByString(" ")
+            var line = ""
+            var wi = 0UI
+            while (wi < words.length()) {
+                var word = words[wi]
+                if (word.length() == 0) {
+                    wi++
+                    continue
+                }
+                var candidate = ""
+                if (line.length() == 0) {
+                    candidate = word
+                } else {
+                    candidate = line + " " + word
+                }
+                var candidateW = win.calculateStringWidth(font, candidate).toShort()
+                if (candidateW <= maxWidth) {
+                    line = candidate
+                } else {
+                    // Word doesn't fit on the current line. Flush
+                    // what we have, then deal with the long word.
+                    if (line.length() > 0) {
+                        out.add(line)
+                        line = ""
+                    }
+                    var wordW = win.calculateStringWidth(font, word).toShort()
+                    if (wordW <= maxWidth) {
+                        line = word
+                    } else {
+                        // Word itself is too long — character-split.
+                        // Whatever's left over after the splits seeds
+                        // the next iteration's `line`.
+                        line = this.splitLongWord(win, font, word, maxWidth, out)
+                    }
+                }
+                wi++
+            }
+            if (line.length() > 0) {
+                out.add(line)
+            }
+        }
+
+        // Break a single word that exceeds maxWidth into chunks, push
+        // every fully-formed chunk into `out`, and return the trailing
+        // chunk so the caller can keep appending after it.
+        private fun splitLongWord(win: Window, font: Font, word: String, maxWidth: Short, out: List<String>): String {
+            var current = ""
+            var i = 0UI
+            while (i < word.length().toUInt()) {
+                var ch = word.substring(i, 1UI)
+                var probe = current + ch
+                var probeW = win.calculateStringWidth(font, probe).toShort()
+                if (probeW > maxWidth) {
+                    if (current.length() == 0) {
+                        // Single character wider than maxWidth — emit
+                        // it anyway so we make progress.
+                        out.add(ch)
+                        current = ""
+                    } else {
+                        out.add(current)
+                        current = ch
+                    }
+                } else {
+                    current = probe
+                }
+                i++
+            }
+            return current
+        }
+
+        override fun paint(graphics: Graphics) {
+            base.paint(graphics)
+
+            // Fill our own bg first so a shrinking wrap doesn't leave
+            // stale glyph pixels from a previous longer wrap behind.
+            var x2 = this.width.toShort() - (this.margin.right + this.margin.left + 1S)
+            var y2 = this.height.toShort() - (this.margin.bottom + this.margin.top + 1S)
+            graphics.setForegroundPen(this.backgroundPen)
+            graphics.fillRect(0S, 0S, x2, y2)
+
+            if (this.cachedLines == null) {
+                return
+            }
+            var f = this.getUsedFont()
+            if (f != null) {
+                graphics.setFont(f)
+            }
+            graphics.setBackgroundPen(this.backgroundPen)
+            graphics.setForegroundPen(this.textPen)
+
+            var textX = this.margin.left + this.borderWidths.left + this.padding.left
+            // Each line gets a (fontHeight + lineSpacing)-tall slot
+            // with the glyphs centred — half the spacing above the
+            // baseline, half below — so the gap reads symmetrically
+            // both between lines AND above the first / below the
+            // last (matching the contentH reservation in minHeight).
+            var stride = this.fontHeight() + this.lineSpacing
+            var y = this.margin.top + this.borderWidths.top + this.padding.top + (this.lineSpacing / 2S)
+            var i = 0
+            while (i < this.cachedLines.getSize()) {
+                graphics.drawString(this.cachedLines.get(i), textX, y)
+                y = y + stride
+                i = i + 1
+            }
+        }
+    }
+}

@@ -1,0 +1,12 @@
+namespace Am.Ui
+{
+    // Snapshot of a single mouse event handed to a window-level
+    // MouseEventListener. Coords are window-absolute (the caller is
+    // responsible for converting to local coords when hit-testing
+    // against a specific view) so listeners that watch from
+    // anywhere in the tree don't need a parent chain to interpret
+    // the position.
+    class MouseEvent(var type: MouseEventType, var button: MouseButton, var x: Short, var y: Short) {
+        import Am.Lang
+    }
+}

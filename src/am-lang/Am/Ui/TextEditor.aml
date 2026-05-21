@@ -54,13 +54,23 @@ namespace Am.Ui
         // tab is a fixed pixel advance, matching the user's chosen
         // editor convention). Used everywhere we measure or draw a
         // line, so colForPixelX / cursor X / segment drawing all stay
-        // in sync.
-        var tabWidthPx: Short = 4S
+        // in sync. Default 32 = four Topaz/8 character cells (the
+        // common "tab = 4 spaces" feel); themes with a wider font
+        // should bump this to keep tabs visually 4 char-widths.
+        var tabWidthPx: Short = 32S
 
         // Horizontal skip distance for Shift+Left / Shift+Right.
         // Cursor advances by this many cols at once, clamped to the
         // start / end of the CURRENT line (no wrap into siblings).
         var horizontalSkipCols: Int = 5
+
+        // Pixels of vertical gap below each line of text. Folded
+        // into getLineHeight() so layout, scrolling, cursor maths
+        // and click hit-testing all see the same row stride.
+        // Default 0 keeps the existing tight rendering; Program
+        // bumps this on the editors it builds for visual breathing
+        // room.
+        var lineSpacing: Short = 0S
 
         private static const SCROLLBAR_W: Short = 10S
         private static const MIN_THUMB_H: Short = 16S
@@ -392,15 +402,17 @@ namespace Am.Ui
         }
 
         private fun getLineHeight(): Short {
+            var fh = 8S
             var f = this.getUsedFont()
             if (f != null) {
-                return f.getSize().toShort()
+                fh = f.getSize().toShort()
+            } else {
+                var vc = this.getViewContext()
+                if (vc != null) {
+                    fh = vc.getWindow().getCurrentFontSize().toShort()
+                }
             }
-            var vc = this.getViewContext()
-            if (vc != null) {
-                return vc.getWindow().getCurrentFontSize().toShort()
-            }
-            return 8S
+            return fh + this.lineSpacing
         }
 
         override fun minWidth(): Short {
@@ -737,21 +749,34 @@ namespace Am.Ui
             if (s.indexOf("\t") < 0) {
                 return graphics.calculateStringWidth(s).toShort()
             }
-            var parts = s.split(0x0009US)
-            var w = 0S
+            // Character-walk instead of split() because AmLang's
+            // String.split drops trailing-separator segments: "\t"
+            // and "abc\t" both split to a single element, so a
+            // split-based gap count undercounts by 1 whenever the
+            // string ends on a tab — and the cursor X for cursorCol
+            // past such a tab would land at 0, not tabWidthPx.
+            var nonTabWidth = 0S
+            var tabCount = 0
+            var sb = new StringBuilder()
+            var len = s.length()
             var i = 0
-            var n = parts.length()
-            while (i < n) {
-                var seg = parts[i]
-                if (seg.length() > 0) {
-                    w = w + graphics.calculateStringWidth(seg).toShort()
-                }
-                if (i < n - 1) {
-                    w = w + this.tabWidthPx
+            while (i < len) {
+                var c = s.characterAt(i.toUInt())
+                if (c == 0x0009US) {
+                    if (sb.getLength() > 0) {
+                        nonTabWidth = nonTabWidth + graphics.calculateStringWidth(sb.toString()).toShort()
+                        sb = new StringBuilder()
+                    }
+                    tabCount = tabCount + 1
+                } else {
+                    sb.addChar(c)
                 }
                 i = i + 1
             }
-            return w
+            if (sb.getLength() > 0) {
+                nonTabWidth = nonTabWidth + graphics.calculateStringWidth(sb.toString()).toShort()
+            }
+            return nonTabWidth + (tabCount.toShort() * this.tabWidthPx)
         }
 
         private fun measureLineWidthF(f: Font, s: String): Short {
@@ -761,21 +786,30 @@ namespace Am.Ui
             if (s.indexOf("\t") < 0) {
                 return f.calculateStringWidth(s).toShort()
             }
-            var parts = s.split(0x0009US)
-            var w = 0S
+            // See measureLineWidthG above for why this can't use
+            // split() — same trailing-tab undercount.
+            var nonTabWidth = 0S
+            var tabCount = 0
+            var sb = new StringBuilder()
+            var len = s.length()
             var i = 0
-            var n = parts.length()
-            while (i < n) {
-                var seg = parts[i]
-                if (seg.length() > 0) {
-                    w = w + f.calculateStringWidth(seg).toShort()
-                }
-                if (i < n - 1) {
-                    w = w + this.tabWidthPx
+            while (i < len) {
+                var c = s.characterAt(i.toUInt())
+                if (c == 0x0009US) {
+                    if (sb.getLength() > 0) {
+                        nonTabWidth = nonTabWidth + f.calculateStringWidth(sb.toString()).toShort()
+                        sb = new StringBuilder()
+                    }
+                    tabCount = tabCount + 1
+                } else {
+                    sb.addChar(c)
                 }
                 i = i + 1
             }
-            return w
+            if (sb.getLength() > 0) {
+                nonTabWidth = nonTabWidth + f.calculateStringWidth(sb.toString()).toShort()
+            }
+            return nonTabWidth + (tabCount.toShort() * this.tabWidthPx)
         }
 
         // Subclasses override this when they want to render the line as
@@ -790,20 +824,33 @@ namespace Am.Ui
                 graphics.drawString(line, x, y)
                 return
             }
-            var parts = line.split(0x0009US)
+            // Character-walk for the same reason as
+            // measureLineWidthG — split("\t") drops trailing-tab
+            // segments, so a line like "abc\t" would render as
+            // "abc" without the trailing tab gap, and cursor X
+            // calculations against it would disagree with where
+            // the next character would actually be drawn.
+            var sb = new StringBuilder()
             var curX = x
+            var len = line.length()
             var i = 0
-            var n = parts.length()
-            while (i < n) {
-                var seg = parts[i]
-                if (seg.length() > 0) {
-                    graphics.drawString(seg, curX, y)
-                    curX = curX + graphics.calculateStringWidth(seg).toShort()
-                }
-                if (i < n - 1) {
+            while (i < len) {
+                var c = line.characterAt(i.toUInt())
+                if (c == 0x0009US) {
+                    if (sb.getLength() > 0) {
+                        var seg = sb.toString()
+                        graphics.drawString(seg, curX, y)
+                        curX = curX + graphics.calculateStringWidth(seg).toShort()
+                        sb = new StringBuilder()
+                    }
                     curX = curX + this.tabWidthPx
+                } else {
+                    sb.addChar(c)
                 }
                 i = i + 1
+            }
+            if (sb.getLength() > 0) {
+                graphics.drawString(sb.toString(), curX, y)
             }
         }
 
@@ -838,6 +885,13 @@ namespace Am.Ui
             }
 
             var lineHeight = this.getLineHeight()
+            // fontHeight = the actual glyph row count; lineHeight
+            // includes lineSpacing's blank pixels below the text.
+            // Split them out so we can center text vertically inside
+            // the lineHeight rect and extend the cursor 1px above
+            // and below the text glyphs.
+            var fontHeight = lineHeight - this.lineSpacing
+            var halfSpacing = this.lineSpacing / 2S
             var availableHeight = this.height.toShort()
             // Excludes the scrollbar lane when one is visible — keep
             // the right-of-text fill from painting over the bar.
@@ -864,23 +918,28 @@ namespace Am.Ui
                 var line = this.lines.get(i)
                 var lineBottom = (y + lineHeight) - 1S
 
-                this.drawLine(graphics, line, i, 0S, y)
-
+                // Pre-fill the whole row with bg, then draw glyphs
+                // and cursor on top. Two reasons:
+                //   1) tab segments don't paint pixels (drawString
+                //      just advances curX over the gap), so without
+                //      a pre-fill, anything that was previously
+                //      under the tab area — most commonly a stale
+                //      cursor — stays visible on screen.
+                //   2) lineSpacing inserts blank pixel rows below
+                //      each line; the pre-fill wipes those too so
+                //      they don't bleed garbage from a prior render.
+                // Replaces the old "right-of-text fill" pass — that
+                // strip is now a subset of this pre-fill.
                 if (this.fillBackground) {
-                    // Tabs expand to a fixed pixel width, so the line's
-                    // on-screen extent isn't just calculateStringWidth.
-                    // Go via graphics — our `f` reference can still be
-                    // null on the very first paint after a file opens,
-                    // and a 0-width result here would make the fill
-                    // cover the whole row and erase the text we just
-                    // drew (was leaving the editor blank until the
-                    // first scroll forced a font set elsewhere).
-                    var textWidth = this.measureLineWidthG(graphics, line)
-                    if (textWidth < viewWidth) {
-                        graphics.setForegroundPen(this.backgroundPen)
-                        graphics.fillRect(textWidth, y, viewWidth - 1S, lineBottom)
-                    }
+                    graphics.setForegroundPen(this.backgroundPen)
+                    graphics.fillRect(0S, y, viewWidth - 1S, lineBottom)
                 }
+
+                // Center the text vertically by offsetting it by
+                // half the lineSpacing — splits the gap evenly above
+                // and below.
+                var textY = y + halfSpacing
+                this.drawLine(graphics, line, i, 0S, textY)
 
                 if (i == this.cursorLine) {
                     var cursorX = 0S
@@ -889,7 +948,13 @@ namespace Am.Ui
                         cursorX = this.measureLineWidthG(graphics, before)
                     }
                     graphics.setForegroundPen(this.cursorPen)
-                    graphics.fillRect(cursorX, y, cursorX, lineBottom)
+                    // 2 px wide column, extended 1 px above + below
+                    // the text glyphs. Width gives a clearer "I'm
+                    // here" marker than the previous 1 px line; the
+                    // vertical overhang stays inside the lineHeight
+                    // rect (uses the gap pixels we add via
+                    // lineSpacing).
+                    graphics.fillRect(cursorX, textY - 1S, cursorX + 1S, textY + fontHeight)
                 }
                 i = i + 1
             }
