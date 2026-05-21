@@ -191,6 +191,7 @@ namespace Am.Ui
             if (b1 || b2) {
                 graphics.translate(ix, iy)
                 this.paint(graphics)
+                this.reportPaintedBounds(graphics, viewWidth, viewHeight)
                 graphics.translate(-ix, -iy)
             }
             this.markAsPainted()
@@ -233,14 +234,43 @@ namespace Am.Ui
 
             // Phase 3: scrollbar, on top of everything else, clipped
             // to the scroll view's full rect.
+            //
+            // The lane is always re-painted (the thumb's position is
+            // a function of scrollY which could have shifted between
+            // cycles), so we always report its bounds for the
+            // off-screen → on-screen blit. The lane is a narrow
+            // vertical strip — including it in the dirty union is
+            // cheap relative to the cost of getting it wrong.
             if (this.needsScrollbar()) {
                 viewClipRect = currentClip.createInnerClipRect(this.x, this.y, this.width, this.height)
                 graphics.pushClipRect(viewClipRect)
                 graphics.translate(this.x, this.y)
                 this.paintScrollbar(graphics)
+                this.reportScrollbarBounds(graphics)
                 graphics.translate(-this.x, -this.y)
                 graphics.popClipRect()
             }
+        }
+
+        // Tighter version of reportPaintedBounds for Phase 3 — the
+        // scrollbar only writes pixels into a narrow vertical strip
+        // on the right edge, so reporting the full outer rect would
+        // pull a 600 × 500 sub-rect into the cycle's dirty union for
+        // a thumb that fits in 10 × ~30 px.
+        private fun reportScrollbarBounds(graphics: Graphics) {
+            var vc = this.getViewContext()
+            if (vc == null) {
+                return
+            }
+            var win = vc.getWindow()
+            if (win == null) {
+                return
+            }
+            var sbX = this.scrollbarX()
+            win.expandDirtyBounds(graphics.getTranslateX() + sbX,
+                                  graphics.getTranslateY(),
+                                  ScrollView.SCROLLBAR_W,
+                                  this.viewportHeight())
         }
 
         // Default paint() is a no-op — the scroll view is normally

@@ -27,6 +27,18 @@ namespace Am.Ui
         var trailingPen: UByte = 1UB
         var trailingClickListener: (view: View) => Bool = null
 
+        // Always-visible badge glyph painted at the far right of the
+        // row (further right than `trailingGlyph`, which only paints
+        // on hover). Used by the Git sidebar for the per-row "U"
+        // (untracked) tag that should be readable without a hover.
+        // The hover-only trailingGlyph sits just to the left of the
+        // badge when both are configured.
+        var badgeGlyph: String = null
+        var badgePen: UByte = 1UB
+        // Pixel gap between the badge and the hover-only trailing
+        // glyph (so the two don't visually merge into one blob).
+        private static const BADGE_GAP: Short = 4S
+
         // Optional leading affordance — when set, this string paints
         // at the left edge of the label *always* (no hover gating),
         // pushing the regular `text` to the right by the glyph's
@@ -131,10 +143,22 @@ namespace Am.Ui
 
             graphics.drawString(this.text, textX, textY)
 
+            // Always-visible badge at the far right (e.g. "U" for
+            // untracked rows). Painted before the hover trailing
+            // glyph so trailingGlyphX can compute its slot against
+            // the badge's left edge.
+            if (this.badgeGlyph != null) {
+                var bx = this.badgeGlyphX(graphics)
+                graphics.setForegroundPen(this.badgePen)
+                graphics.drawString(this.badgeGlyph, bx, textY)
+            }
+
             // Trailing affordance — only when the row is hovered.
             // Painted *after* the text so it sits on top of any
             // glyph the title would otherwise have written into the
-            // right edge of the row.
+            // right edge of the row. When a badge is also present,
+            // the trailing glyph sits just to its left with a small
+            // gap (BADGE_GAP).
             if (this.hovered && this.trailingGlyph != null) {
                 var tx = this.trailingGlyphX(graphics)
                 graphics.setForegroundPen(this.trailingPen)
@@ -158,17 +182,52 @@ namespace Am.Ui
             return leftInset + glyphW
         }
 
+        // X coordinate where the badge glyph starts (always painted
+        // when set, sits flush against the row's right inset).
+        // Returns -1 when there's no badge configured.
+        private fun badgeGlyphX(graphics: Graphics): Short {
+            if (this.badgeGlyph == null) {
+                return -1S
+            }
+            var glyphW = graphics.calculateStringWidth(this.badgeGlyph).toShort()
+            var rightInset = this.margin.right + this.borderWidths.right + this.padding.right
+            return (this.width.toShort() - rightInset) - glyphW
+        }
+
+        // Mouse-side version of badgeGlyphX. Mirrors trailing's
+        // window-based helper so onMouseEvent can hit-test without
+        // a Graphics handle.
+        private fun badgeGlyphXFromWindow(): Short {
+            if (this.badgeGlyph == null) {
+                return -1S
+            }
+            var vc = this.getViewContext()
+            if (vc == null) {
+                return -1S
+            }
+            var glyphW = vc.getWindow().calculateStringWidth(this.getUsedFont(), this.badgeGlyph).toShort()
+            var rightInset = this.margin.right + this.borderWidths.right + this.padding.right
+            return (this.width.toShort() - rightInset) - glyphW
+        }
+
         // X coordinate where the trailing glyph starts. Pulled out of
         // paint() so onMouseEvent can hit-test against the same value
-        // without re-deriving it. Returns -1 when there's no glyph
-        // configured.
+        // without re-deriving it. When a badge is also configured,
+        // the trailing slot shifts left of the badge by BADGE_GAP +
+        // badge width — keeps the two glyphs from overlapping.
+        // Returns -1 when there's no glyph configured.
         private fun trailingGlyphX(graphics: Graphics): Short {
             if (this.trailingGlyph == null) {
                 return -1S
             }
             var glyphW = graphics.calculateStringWidth(this.trailingGlyph).toShort()
             var rightInset = this.margin.right + this.borderWidths.right + this.padding.right
-            return (this.width.toShort() - rightInset) - glyphW
+            var rightEdge = this.width.toShort() - rightInset
+            if (this.badgeGlyph != null) {
+                var badgeW = graphics.calculateStringWidth(this.badgeGlyph).toShort()
+                rightEdge = (rightEdge - badgeW) - Label.BADGE_GAP
+            }
+            return rightEdge - glyphW
         }
 
         // Mouse-side version — onMouseEvent doesn't have Graphics in
@@ -182,9 +241,16 @@ namespace Am.Ui
             if (vc == null) {
                 return -1S
             }
-            var glyphW = vc.getWindow().calculateStringWidth(this.getUsedFont(), this.trailingGlyph).toShort()
+            var win = vc.getWindow()
+            var f = this.getUsedFont()
+            var glyphW = win.calculateStringWidth(f, this.trailingGlyph).toShort()
             var rightInset = this.margin.right + this.borderWidths.right + this.padding.right
-            return (this.width.toShort() - rightInset) - glyphW
+            var rightEdge = this.width.toShort() - rightInset
+            if (this.badgeGlyph != null) {
+                var badgeW = win.calculateStringWidth(f, this.badgeGlyph).toShort()
+                rightEdge = (rightEdge - badgeW) - Label.BADGE_GAP
+            }
+            return rightEdge - glyphW
         }
 
         override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
@@ -211,7 +277,19 @@ namespace Am.Ui
             if (type == MouseEventType.up && button == MouseButton.left && this.contains(x, y)) {
                 if (this.hovered && this.trailingGlyph != null) {
                     var tx = this.trailingGlyphXFromWindow()
-                    if (tx >= 0S && x >= tx) {
+                    // Right edge of the trailing click area: if a
+                    // badge is configured, the click area stops at
+                    // the badge's left edge so clicks on the badge
+                    // glyph itself don't fire the trailing action.
+                    // Otherwise the area extends to the row's right.
+                    var tRight = this.width.toShort()
+                    if (this.badgeGlyph != null) {
+                        var bx = this.badgeGlyphXFromWindow()
+                        if (bx >= 0S) {
+                            tRight = bx
+                        }
+                    }
+                    if (tx >= 0S && x >= tx && x < tRight) {
                         var tcb = this.trailingClickListener
                         if (tcb != null) {
                             return tcb(this)

@@ -5,7 +5,17 @@ namespace Am.Ui
         import Am.Lang
 
         private var text: String = ""
-        private var focused: Bool = false
+        // Focus is now sourced from the Window's keyboardFocus
+        // (`window.getKeyboardFocus() == this`), so `isFocused()`
+        // reflects window-wide state — only one focusable in the
+        // window can be focused at a time, and losing focus to a
+        // sibling field automatically swaps our cursor styling
+        // (filled ↔ hollow) on the next paint thanks to Window
+        // requesting a repaint on both old + new focus views.
+        //
+        // Direct callers of the legacy `setFocused()` API still work
+        // — that method now just delegates to
+        // window.setKeyboardFocus / clearKeyboardFocus.
         private var cursorPosition: Int = 0
         private var selectionStart: Int = 0
         private var selectionEnd: Int = 0
@@ -29,7 +39,15 @@ namespace Am.Ui
         var focusedBackgroundPen: UByte = 0UB
         var placeholderPen: UByte = 2UB
         var selectionPen: UByte = 3UB
+        // Cursor fill / outline pen. Default kept at 3UB so unthemed
+        // callers behave as before; themed apps should set this to
+        // their accent (typically a blue) to match the CliView caret.
         var cursorPen: UByte = 3UB
+        // Pen used to redraw a glyph that sits under the filled
+        // cursor when focused, so it stays legible against the
+        // cursor fill. Defaults to white-ish so the inverted glyph
+        // contrasts whatever cursorPen the caller picked.
+        var cursorTextPen: UByte = 2UB
         
         // Outer border: 2UB on left and upper, 1UB on lower and right
         var outerBorderPens: BorderPens = new BorderPens(2UB, 2UB, 1UB, 1UB)
@@ -64,33 +82,43 @@ namespace Am.Ui
             return this.placeholder
         }
 
+        // Legacy entry point — kept so callers that explicitly
+        // grab/release focus on a field still work. Routes through
+        // the Window's keyboard-focus tracker which itself fires
+        // focus-changed listeners and requests repaints on the
+        // previously-focused and newly-focused views.
         fun setFocused(focused: Bool) {
-            if (this.focused != focused) {
-                this.focused = focused
-                this.requestRepaint()
+            var vc = this.getViewContext()
+            if (vc == null) {
+                return
+            }
+            var win = vc.getWindow()
+            if (win == null) {
+                return
+            }
+            if (focused) {
+                win.setKeyboardFocus(this)
+            } else {
+                win.clearKeyboardFocus(this)
             }
         }
 
+        // True when this TextField holds the window's keyboard focus.
+        // Single source of truth — no separate `focused` field on
+        // the TextField to fall out of sync with the Window. paint()
+        // / placeholder-visible / drag-active logic all read here.
         fun isFocused(): Bool {
-            return this.focused
+            var vc = this.getViewContext()
+            if (vc == null) {
+                return false
+            }
+            var win = vc.getWindow()
+            if (win == null) {
+                return false
+            }
+            return win.getKeyboardFocus() == this
         }
 
-        /*
-        override fun layout(x: Short, y: Short, width: UShort, height: UShort) {
-            // Store focus state before layout
-            var wasFocused = this.focused
-            
-            // Call parent layout
-            base.layout(x, y, width, height)
-            
-            // Restore focus state after layout (in case it got lost)
-            if (wasFocused && !this.focused) {
-                ("TextField: Focus lost during layout, restoring").println()
-                this.focused = true
-                this.requestRepaint()
-            }
-        }
-            */
 
         fun setCursorPosition(position: Int) {
             if (position < 0) {
@@ -205,7 +233,7 @@ namespace Am.Ui
         }
 
         private fun isSelecting(): Bool {
-            return this.isDragging && this.focused
+            return this.isDragging && this.isFocused()
         }
 
         fun setSelection(start: Int, end: Int) {
@@ -386,17 +414,27 @@ namespace Am.Ui
 
             // Draw background
             var bgPen: UByte = 0UB
-            if (this.focused) {
+            if (this.isFocused()) {
                 bgPen = this.focusedBackgroundPen
             } else {
                 bgPen = this.backgroundPen
             }
             graphics.setForegroundPen(this.backgroundPen)
             graphics.fillRect(x1, y1, x2, y2)
+            // Pin the rastport's bg pen to the field bg so every
+            // subsequent drawString in this paint pass draws glyph
+            // cells in the same colour as the fillRect above —
+            // without this, the cells inherit whatever pen the
+            // previous paint cycle left set (often a light grey)
+            // and the text looks like it sits on its own opaque
+            // block. The cursor / selection paths flip the bg pen
+            // temporarily and restore to backgroundPen after, which
+            // also reads back as the field bg.
+            graphics.setBackgroundPen(bgPen)
 
             // Draw outer border
             var outerBorderPens: BorderPens
-            if (this.focused) {
+            if (this.isFocused()) {
                 outerBorderPens = this.focusedOuterBorderPens
             } else {
                 outerBorderPens = this.outerBorderPens
@@ -405,7 +443,7 @@ namespace Am.Ui
             
             // Draw inner border (1 pixel inside the outer border)
             var innerBorderPens: BorderPens
-            if (this.focused) {
+            if (this.isFocused()) {
                 innerBorderPens = this.focusedInnerBorderPens
             } else {
                 innerBorderPens = this.innerBorderPens
@@ -460,7 +498,7 @@ namespace Am.Ui
 
             // Draw text or placeholder
             var displayText = this.text
-            if (displayText.length() == 0 && !this.placeholder.length() == 0 && !this.focused) {
+            if (displayText.length() == 0 && !this.placeholder.length() == 0 && !this.isFocused()) {
                 graphics.setForegroundPen(this.placeholderPen)
                 graphics.drawString(this.placeholder, textX, textY)
             } else {
@@ -474,138 +512,129 @@ namespace Am.Ui
                     displayText = stars
                 }
                 
-                // Draw text with cursor if focused
-                if (this.focused && this.cursorPosition <= displayText.length()) {
-                    // Apply scroll offset to text X position
-                    var scrolledTextX = textX - this.scrollOffset
-                    
-                    // Draw selection background first if there's a selection or we're actively selecting
-                    if (this.hasSelection() || this.isSelecting()) {
-                        this.drawSelection(graphics, displayText, scrolledTextX, textY)
+                var scrolledTextX = textX - this.scrollOffset
+                var focused = this.isFocused()
+
+                // A "real" selection only paints if focused AND it
+                // spans at least one character. Anything else
+                // (unfocused, collapsed range, no selection) falls
+                // through to the plain-text-plus-cursor path.
+                var drawSel = false
+                if (focused && (this.hasSelection() || this.isSelecting())) {
+                    var ss = this.selectionStart
+                    var se = this.selectionEnd
+                    if (ss > se) {
+                        var tmp = ss
+                        ss = se
+                        se = tmp
                     }
-                    
-                    // Draw text parts not covered by selection
-                    if (this.hasSelection() || this.isSelecting()) {
-                        var start = this.selectionStart
-                        var end = this.selectionEnd
-                        
-                        // Ensure start <= end
-                        if (start > end) {
-                            var temp = start
-                            start = end
-                            end = temp
-                        }
-                        
-                        // Only draw selection parts if there's actually a selection range
-                        if (start != end) {
-                            // Draw text before selection
-                            if (start > 0) {
-                                var beforeSelection = displayText.substring(0UI, start.toUInt())
-                                graphics.setForegroundPen(this.textPen)
-                                graphics.drawString(beforeSelection, scrolledTextX, textY)
-                            }
-                            
-                            // Draw text after selection
-                            if (end < displayText.length()) {
-                                var afterSelection = displayText.substringToEnd(end.toUInt())
-                                var afterSelectionX = scrolledTextX
-                                if (end > 0) {
-                                    var beforeAfterSelection = displayText.substring(0UI, end.toUInt())
-                                    afterSelectionX = scrolledTextX + graphics.calculateStringWidth(beforeAfterSelection).toShort()
-                                }
-                                graphics.setForegroundPen(this.textPen)
-                                graphics.drawString(afterSelection, afterSelectionX, textY)
-                            }
-                        } else {
-                            // No actual selection range - draw all text normally and show cursor
-                            graphics.setForegroundPen(this.textPen)
-                            graphics.drawString(displayText, scrolledTextX, textY)
-                            
-                            // Draw cursor
-                            var cursorX = scrolledTextX
-                            if (this.cursorPosition > 0) {
-                                var beforeCursor = displayText.substring(0UI, this.cursorPosition.toUInt())
-                                cursorX = cursorX + graphics.calculateStringWidth(beforeCursor).toShort()
-                            }
-                            
-                            if (this.cursorPosition < displayText.length()) {
-                                // Get character at cursor position
-                                var cursorChar = displayText.substring(this.cursorPosition.toUInt(), 1UI)
-                                
-                                // Calculate character width
-                                var charWidth = graphics.calculateStringWidth(cursorChar).toShort()
-                                var fontHeight = graphics.getCurrentFontSize().toShort()
-                                
-                                // Draw character with cursor background and white text                        
-                                // Fill extra lines above and below the text
-                                graphics.setForegroundPen(this.cursorPen)
-                                graphics.fillRect(cursorX, textY - 1S, cursorX + charWidth - 1S, textY - 1S) // Line above
-                                graphics.fillRect(cursorX, textY + fontHeight, cursorX + charWidth - 1S, textY + fontHeight) // Line below
-                                
-                                // Set background pen to cursor color for drawString
-                                graphics.setBackgroundPen(this.cursorPen)
-                                graphics.setForegroundPen(2UB)
-                                graphics.drawString(cursorChar, cursorX, textY)
-                                // Restore background pen
-                                graphics.setBackgroundPen(this.backgroundPen)
-                            } else {
-                                // Cursor is at end of text - draw cursor using width of "X", extended 1px above and below
-                                var fontHeight = graphics.getCurrentFontSize().toShort()
-                                var cursorWidth = graphics.calculateStringWidth("X").toShort()
-                                graphics.setForegroundPen(this.cursorPen)
-                                graphics.fillRect(cursorX, textY - 1S, cursorX + cursorWidth - 1S, textY + fontHeight)
-                            }
-                        }
-                    } else {
-                        // No selection - draw all text normally
-                        graphics.setForegroundPen(this.textPen)
-                        graphics.drawString(displayText, scrolledTextX, textY)
-                        
-                        // Draw cursor
-                        var cursorX = scrolledTextX
-                        if (this.cursorPosition > 0) {
-                            var beforeCursor = displayText.substring(0UI, this.cursorPosition.toUInt())
-                            cursorX = cursorX + graphics.calculateStringWidth(beforeCursor).toShort()
-                        }
-                        
-                        if (this.cursorPosition < displayText.length()) {
-                            // Get character at cursor position
-                            var cursorChar = displayText.substring(this.cursorPosition.toUInt(), 1UI)
-                            
-                            // Calculate character width
-                            var charWidth = graphics.calculateStringWidth(cursorChar).toShort()
-                            var fontHeight = graphics.getCurrentFontSize().toShort()
-                            
-                            // Draw character with cursor background and white text                        
-                            // Fill extra lines above and below the text
-                            graphics.setForegroundPen(this.cursorPen)
-                            graphics.fillRect(cursorX, textY - 1S, cursorX + charWidth - 1S, textY - 1S) // Line above
-                            graphics.fillRect(cursorX, textY + fontHeight, cursorX + charWidth - 1S, textY + fontHeight) // Line below
-                            
-                            // Set background pen to cursor color for drawString
-                            graphics.setBackgroundPen(this.cursorPen)
-                            graphics.setForegroundPen(2UB)
-                            graphics.drawString(cursorChar, cursorX, textY)
-                            // Restore background pen
-                            graphics.setBackgroundPen(this.backgroundPen)
-                        } else {
-                            // Cursor is at end of text - draw cursor using width of "X", extended 1px above and below
-                            var fontHeight = graphics.getCurrentFontSize().toShort()
-                            var cursorWidth = graphics.calculateStringWidth("X").toShort()
-                            graphics.setForegroundPen(this.cursorPen)
-                            graphics.fillRect(cursorX, textY - 1S, cursorX + cursorWidth - 1S, textY + fontHeight)
-                        }
-                    }
-                } else {
-                    // Not focused - draw text normally (with scroll offset applied)
-                    var scrolledTextX = textX - this.scrollOffset
-                    graphics.setForegroundPen(this.textPen)
-                    graphics.drawString(displayText, scrolledTextX, textY)
+                    drawSel = (ss != se)
                 }
 
-                // Draw selection if focused and has selection - already handled above
+                if (drawSel) {
+                    // Selection background + the un-selected text
+                    // slices on either side.
+                    this.drawSelection(graphics, displayText, scrolledTextX, textY)
+
+                    var start = this.selectionStart
+                    var end = this.selectionEnd
+                    if (start > end) {
+                        var temp = start
+                        start = end
+                        end = temp
+                    }
+
+                    if (start > 0) {
+                        var beforeSelection = displayText.substring(0UI, start.toUInt())
+                        graphics.setForegroundPen(this.textPen)
+                        graphics.drawString(beforeSelection, scrolledTextX, textY)
+                    }
+
+                    if (end < displayText.length()) {
+                        var afterSelection = displayText.substringToEnd(end.toUInt())
+                        var afterSelectionX = scrolledTextX
+                        if (end > 0) {
+                            var beforeAfterSelection = displayText.substring(0UI, end.toUInt())
+                            afterSelectionX = scrolledTextX + graphics.calculateStringWidth(beforeAfterSelection).toShort()
+                        }
+                        graphics.setForegroundPen(this.textPen)
+                        graphics.drawString(afterSelection, afterSelectionX, textY)
+                    }
+                } else {
+                    // Plain text. The cursor still paints in both
+                    // focused and unfocused states (filled vs. hollow
+                    // outline) to mirror CliView's caret semantics.
+                    graphics.setForegroundPen(this.textPen)
+                    graphics.drawString(displayText, scrolledTextX, textY)
+
+                    if (this.cursorPosition <= displayText.length()) {
+                        this.drawCursor(graphics, displayText, scrolledTextX, textY, focused)
+                    }
+                }
             }
             graphics.popClipRect()
+        }
+
+        // Paint the caret at `this.cursorPosition`.
+        //
+        // - focused  : filled rect in cursorPen + redraw the glyph
+        //              under the caret inverted (cursorPen bg /
+        //              cursorTextPen fg) so it stays legible.
+        // - unfocused: 4-line hollow outline in cursorPen, no glyph
+        //              repaint — the text underneath is already in
+        //              textPen, so leaving it alone shows the
+        //              character through the outline.
+        //
+        // The outline / fill cover the same y-band (textY-1 to
+        // textY+fontHeight) so the cursor stays visually anchored
+        // when focus moves between fields. Mirrors CliView's caret.
+        private fun drawCursor(graphics: Graphics, displayText: String, scrolledTextX: Short, textY: Short, focused: Bool) {
+            var cursorX = scrolledTextX
+            if (this.cursorPosition > 0) {
+                var beforeCursor = displayText.substring(0UI, this.cursorPosition.toUInt())
+                cursorX = cursorX + graphics.calculateStringWidth(beforeCursor).toShort()
+            }
+            var fontHeight = graphics.getCurrentFontSize().toShort()
+            var onChar = this.cursorPosition < displayText.length()
+            var cursorChar = ""
+            var cursorWidth: Short = 0S
+            if (onChar) {
+                cursorChar = displayText.substring(this.cursorPosition.toUInt(), 1UI)
+                cursorWidth = graphics.calculateStringWidth(cursorChar).toShort()
+            } else {
+                // Caret past the last glyph — use "X" as a stand-in
+                // width so the empty caret stays the same size as
+                // an on-glyph caret.
+                cursorWidth = graphics.calculateStringWidth("X").toShort()
+            }
+            var x1 = cursorX
+            var x2 = cursorX + cursorWidth - 1S
+            var y1 = textY - 1S
+            var y2 = textY + fontHeight
+
+            graphics.setForegroundPen(this.cursorPen)
+            if (focused) {
+                if (onChar) {
+                    // Just the top + bottom bands; the glyph repaint
+                    // below fills the middle row with the inverted
+                    // character.
+                    graphics.fillRect(x1, y1, x2, y1)
+                    graphics.fillRect(x1, y2, x2, y2)
+                    graphics.setBackgroundPen(this.cursorPen)
+                    graphics.setForegroundPen(this.cursorTextPen)
+                    graphics.drawString(cursorChar, cursorX, textY)
+                    graphics.setBackgroundPen(this.backgroundPen)
+                } else {
+                    // Block caret at end of text.
+                    graphics.fillRect(x1, y1, x2, y2)
+                }
+            } else {
+                // Hollow outline — top, right, bottom, left.
+                graphics.drawLine(x1, y1, x2, y1)
+                graphics.drawLine(x2, y1, x2, y2)
+                graphics.drawLine(x2, y2, x1, y2)
+                graphics.drawLine(x1, y2, x1, y1)
+            }
         }
 
         private fun drawSelection(graphics: Graphics, displayText: String, textX: Short, textY: Short) {
@@ -669,7 +698,7 @@ namespace Am.Ui
         override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
             var isInside = this.contains(x, y)
 //            ("TextField Mouse: type=" + type.toString() + " button=" + button.toString() + " x=" + x.toString() + " y=" + y.toString() + " inside=" + isInside.toString()).println()
-//            ("Current isDragging=" + this.isDragging.toString() + " focused=" + this.focused.toString()).println()
+//            ("Current isDragging=" + this.isDragging.toString() + " focused=" + this.isFocused().toString()).println()
             
             if (type == MouseEventType.down && button == MouseButton.left) {
                 if (isInside) {
@@ -693,7 +722,7 @@ namespace Am.Ui
                 }
             } else if (type == MouseEventType.move && this.isDragging) {
                 // Drag selection - handle even when mouse is outside the TextField area
-                if (this.focused) {
+                if (this.isFocused()) {
                     var textX = this.borderWidths.left + this.padding.left
                     var relativeX = x - textX + this.scrollOffset // Account for scroll offset
                     var dragPosition = this.getPositionFromX(relativeX)
@@ -790,7 +819,7 @@ namespace Am.Ui
         }
 
         override fun onKeyboardEvent(type: KeyboardEventType, keyCode: UShort, keyChar: UShort): Bool {           
-            if (!this.focused || this.readOnly) {
+            if (!this.isFocused() || this.readOnly) {
                 return false
             }
 //            "Key code: ${keyCode.toString()}, char: ${keyChar.toString()}".println()

@@ -95,6 +95,10 @@ namespace Am.Ui
             if (b1 || b2) {
                 graphics.translate(ix, iy)
                 this.paint(graphics)
+                // Panel's paint() fills its bg + border across the
+                // full inner box; report it so the cycle's blit
+                // covers the freshly-painted Panel pixels.
+                this.reportPaintedBounds(graphics, viewWidth, viewHeight)
                 graphics.translate(-ix, -iy)
             }
             this.markAsPainted()
