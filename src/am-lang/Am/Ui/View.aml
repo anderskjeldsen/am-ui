@@ -4,11 +4,34 @@ namespace Am.Ui
 
     class View {
         import Am.Lang
+        import Am.Collections
         private var viewContext: ViewContext
         var x: Short
         var y: Short
         var width: UShort
         var height: UShort
+
+        // Pointer to whoever mounted this view. Set by container
+        // implementations (ViewGroup.addChild, Panel.setChild,
+        // ScrollView.setChild, LayeredPane.addLayer) when the view
+        // becomes part of a tree; cleared on detach. null means
+        // "root of the tree" (or never-attached). Used by the
+        // cross-view dirty-rect machinery to climb the chain in
+        // window-coord computation and ancestor enumeration.
+        //
+        // Optional — views that never participate in cross-layer
+        // invalidation work fine without anyone reading this.
+        var parentView: View = null
+
+        // Window-coord rect captured the last time this view
+        // actually painted (via reportPaintedBounds). Used by
+        // View.layout to fire a dirty when the view's bounds
+        // change — the old pixels at the previously-painted
+        // position are still in the offscreen buffer and need
+        // to be overdrawn (either by the parent's bg fill or by
+        // a peer LayeredPane layer underneath). Null until the
+        // first paint pass completes.
+        private var lastPaintedWindowRect: Rectangle = null
         var padding: Insets = new Insets(0S, 0S, 0S, 0S)
         var margin: Insets = new Insets(0S, 0S, 0S, 0S)
         var borderWidths: Insets = new Insets(0S, 0S, 0S, 0S)
@@ -16,6 +39,20 @@ namespace Am.Ui
         var growX: UByte
         var growY: UByte
         private var repaintRequested: Bool = false
+        // Per-view sub-rect dirty list. Optional and lazy — most
+        // callers just flip `repaintRequested` via requestRepaint()
+        // (paint the whole view), and `dirtyRects` stays null.
+        // Refined callers (e.g. TextField marking only the row that
+        // a glyph changed in) call requestRepaint(x, y, w, h) and
+        // each rect lands here in view-local coords.
+        //
+        // Today these rects are recorded but only paintAll's
+        // whole-view rect reaches the Window's flush list — the
+        // per-region paint gating that consumes this field is part
+        // of the later "opt-in fine-grained repaints" step. Wiring
+        // the storage now means refined callers don't have to be
+        // re-edited later.
+        private var dirtyRects: List<Rectangle> = null
         var visible: Bool = true
         var clickListener: (view: View) => Bool = null
 
@@ -181,14 +218,65 @@ namespace Am.Ui
             if (win == null) {
                 return
             }
-            win.expandDirtyBounds(graphics.getTranslateX(), graphics.getTranslateY(), w, h)
+            var tx = graphics.getTranslateX()
+            var ty = graphics.getTranslateY()
+
+            // Step 6 of the multi-layer dirty design — opt-in fine-
+            // grained reporting. When a refined caller has marked
+            // sub-region rects on this view via requestRepaint(x,y,
+            // w,h), only those sub-rects feed the window's flush
+            // list. Outside the sub-rects, the offscreen pixels are
+            // still being overdrawn by paint() (which always runs
+            // against the full view), but the on-screen pixels in
+            // those areas already match — they were drawn during a
+            // previous cycle and nothing visible changed — so we
+            // can skip blitting them.
+            //
+            // The full-repaint path (graphics.shouldRepaintAll())
+            // always reports the full view rect: the whole window
+            // is being refreshed, so partial reporting could leave
+            // gaps in the flush.
+            var useSubRects = false
+            if (!graphics.shouldRepaintAll()) {
+                if (this.dirtyRects != null && this.dirtyRects.getSize() > 0) {
+                    useSubRects = true
+                }
+            }
+
+            if (useSubRects) {
+                var n = this.dirtyRects.getSize()
+                var i = 0
+                while (i < n) {
+                    var r = this.dirtyRects.get(i)
+                    win.expandDirtyBounds(tx + r.x, ty + r.y, r.width.toShort(), r.height.toShort())
+                    i = i + 1
+                }
+            } else {
+                win.expandDirtyBounds(tx, ty, w, h)
+            }
+
+            // Remember this position so View.layout can dirty the
+            // old footprint if the view moves/resizes before its
+            // next paint. Always the full view rect — paint() runs
+            // against the whole view regardless of sub-rect dirty
+            // marking, so the offscreen buffer has the full rect's
+            // pixels, and that's what a future layout shift needs
+            // to invalidate.
+            this.lastPaintedWindowRect = new Rectangle(tx, ty, w.toUShort(), h.toUShort())
         }
 
         fun markAsPainted() {
             this.repaintRequested = false
+            // Drop accumulated sub-rects too — the cycle that
+            // they fed into has finished. The list itself can be
+            // reused next time a caller opts in; clearing instead
+            // of nulling skips the realloc.
+            if (this.dirtyRects != null) {
+                this.dirtyRects.clear()
+            }
         }
 
-        fun requestRepaint() {
+        open fun requestRepaint() {
             var b = this.repaintRequested
             if (!b) {
                 this.repaintRequested = true
@@ -196,6 +284,146 @@ namespace Am.Ui
                     this.viewContext.getWindow().requestRepaint()
                 }
             }
+        }
+
+        // Opt-in sub-region invalidation. Adds a view-local rect
+        // to this.dirtyRects and flips `repaintRequested` so the
+        // next paint cycle visits this view. Today the rect is
+        // recorded but not consumed — paint() still runs against
+        // the whole view's clip, and reportPaintedBounds reports
+        // the full view rect. Refined callers can already use the
+        // API; the paint-side gating arrives in a follow-up step.
+        //
+        // Coords are local to this view's inner content area —
+        // the same frame a paint() implementation draws into
+        // (origin = view's top-left margin/border/padding-inset).
+        fun requestRepaint(x: Short, y: Short, w: Short, h: Short) {
+            if (w <= 0S || h <= 0S) {
+                this.requestRepaint()
+                return
+            }
+            if (this.dirtyRects == null) {
+                this.dirtyRects = new List<Rectangle>()
+            }
+            this.dirtyRects.add(new Rectangle(x, y, w.toUShort(), h.toUShort()))
+            this.requestRepaint()
+            // Cross-view propagation. markDirty is a no-op while
+            // Window.crossLayerDirty is off, so this is a free
+            // call until step 3 of the multi-layer dirty design.
+            // When the gate opens, peers in LayeredPane ancestors
+            // get z-aware invalidation here.
+            if (this.viewContext != null) {
+                var win = this.viewContext.getWindow()
+                if (win != null) {
+                    var mine = this.computeWindowRect()
+                    var winRect = new Rectangle(mine.x + x, mine.y + y, w.toUShort(), h.toUShort())
+                    win.markDirty(winRect, this)
+                }
+            }
+        }
+
+        // Read-only view of the sub-rect dirty list. Returns null
+        // when no rects have been recorded (the common case — most
+        // callers just flip the whole-view flag via requestRepaint()).
+        // Callers that intend to gate paint on this list must
+        // tolerate the null and fall back to the full view bounds.
+        fun getDirtyRects(): List<Rectangle> {
+            return this.dirtyRects
+        }
+
+        // ---- Cross-view dirty-rect hooks --------------------------------
+        //
+        // None of the methods below have any effect today unless
+        // Window.crossLayerDirty has been flipped on (currently off
+        // by default — turned on in step 3 of the multi-layer dirty
+        // design). They exist so refined containers (LayeredPane in
+        // particular) can override the relevant pieces and the
+        // Window's `markDirty` can use them when the gate opens.
+
+        // True when this view fully covers its own bounds with
+        // opaque pixels on every paint. The default is `true` —
+        // most views fillRect() their bg as the first paint step.
+        // Subclasses that only stroke / draw glyphs without a bg
+        // fill should override to return `false` so the cross-view
+        // dirty propagation knows the pixels behind this view can
+        // still show through gaps.
+        open fun isOpaque(): Bool {
+            return true
+        }
+
+        // Compute this view's window-local bounds by climbing the
+        // `parentView` chain and summing translates. Used outside
+        // the paint cycle (where graphics.getTranslateX/Y would
+        // give the same answer for free).
+        //
+        // For a view not yet attached / lacking a parent chain,
+        // returns the bounds in whatever local frame this.x / this.y
+        // are in — caller has to know the bounds are unreliable in
+        // that case.
+        fun computeWindowRect(): Rectangle {
+            var wx = this.x
+            var wy = this.y
+            var p = this.parentView
+            while (p != null) {
+                wx = wx + p.x
+                wy = wy + p.y
+                p = p.parentView
+            }
+            return new Rectangle(wx, wy, this.width, this.height)
+        }
+
+        // Mark the portion of this view that overlaps `winRect`
+        // (window-local coords) as needing a repaint. Default
+        // implementation only flags this single view; container
+        // subclasses (ViewGroup, Panel, ScrollView) override to
+        // also walk their children so descendants with cleared
+        // flags wake up when winRect crosses their bounds.
+        open fun invalidateOverlapping(winRect: Rectangle) {
+            var mine = this.computeWindowRect()
+            var mX2 = mine.x + mine.width.toShort()
+            var mY2 = mine.y + mine.height.toShort()
+            var wX2 = winRect.x + winRect.width.toShort()
+            var wY2 = winRect.y + winRect.height.toShort()
+
+            var oX1 = mine.x
+            if (winRect.x > oX1) { oX1 = winRect.x }
+            var oY1 = mine.y
+            if (winRect.y > oY1) { oY1 = winRect.y }
+            var oX2 = mX2
+            if (wX2 < oX2) { oX2 = wX2 }
+            var oY2 = mY2
+            if (wY2 < oY2) { oY2 = wY2 }
+
+            if (oX2 <= oX1 || oY2 <= oY1) {
+                return
+            }
+
+            this.requestRepaint(oX1 - mine.x, oY1 - mine.y, oX2 - oX1, oY2 - oY1)
+        }
+
+        // Called by Window.markDirty for every ancestor on the
+        // chain from a dirtied view up to the root. The default
+        // is a no-op. LayeredPane overrides to walk its layers and
+        // invalidate overlapping peers with z-order awareness.
+        // Non-LayeredPane ancestors don't have overlapping siblings
+        // (by VStack/HStack convention) so the default suits them.
+        open fun propagateDirty(winRect: Rectangle, source: View, sourceOpaque: Bool) {
+        }
+
+        // The sub-rect of this view that actually receives paint
+        // operations. By default the full view bounds — same area
+        // paint() is given to draw into. Views that paint only a
+        // small region inside a larger logical bounds (popup menus
+        // mounted as a full-pane layer but painting just a small
+        // menu rectangle at an anchor; OverlayHost wrapping a
+        // single edge-positioned AppPanel) override to return the
+        // smaller rect, so cross-view dirty propagation can
+        // invalidate only the pixels that actually need to be
+        // redrawn when this view goes away.
+        //
+        // Coords are view-local — same frame paint() draws into.
+        open fun getPaintedBounds(): Rectangle {
+            return new Rectangle(0S, 0S, this.width, this.height)
         }
 
         // Mark this view dirty. ViewGroup overrides to recurse into
@@ -219,11 +447,66 @@ namespace Am.Ui
         }
 
         open fun layout(x: Short, y: Short, width: UShort, height: UShort) {
+            // Step 4 of the multi-layer dirty design: when a
+            // view's bounds change, the offscreen buffer still
+            // holds this view's pixels at the OLD window position.
+            // Without intervention those stale pixels never get
+            // overdrawn — the view's next paint lands at the new
+            // position, leaving a ghost behind. Snapshot the old
+            // painted footprint, do the assignment, then dirty
+            // both this view (so it repaints at the new spot)
+            // and the parent's overlap with the old rect (so the
+            // parent's bg fills over the ghost).
+            //
+            // Gated on Window.crossLayerDirty so apps that haven't
+            // opted in keep the original "layout just assigns
+            // fields" behaviour — they typically follow layout
+            // with window.requestFullRepaint() anyway.
+            var moved = this.x != x || this.y != y
+            var resized = this.width != width || this.height != height
+            var oldRect: Rectangle = null
+            if ((moved || resized) && this.lastPaintedWindowRect != null) {
+                oldRect = this.lastPaintedWindowRect
+            }
             this.x = x
             this.y = y
             this.width = width
             this.height = height
+            if (moved || resized) {
+                this.dirtyOldFootprint(oldRect)
+            }
 //            ("Layout xyz" + x.toString() + "," + y.toString() + "," + width.toString() + "," + height.toString()).println()
+        }
+
+        // Helper for the layout-time dirty propagation. Extracted
+        // so View.layout's body stays short and so the if/else
+        // tower doesn't trip the amlc renderer crash on
+        // null-assignments-inside-if-inside-flow.
+        private fun dirtyOldFootprint(oldRect: Rectangle) {
+            if (this.viewContext == null) {
+                return
+            }
+            var win = this.viewContext.getWindow()
+            if (win == null) {
+                return
+            }
+            if (!win.crossLayerDirty) {
+                return
+            }
+            this.requestRepaint()
+            if (oldRect == null) {
+                return
+            }
+            // Propagate through markDirty so any LayeredPane
+            // ancestor's peer layers get a chance to redraw
+            // their overlap with the old footprint.
+            win.markDirty(oldRect, this)
+            // Immediate parent's bg fill is what overdraws the
+            // ghost pixels — invalidate its overlap so its flag
+            // gets set on the next paint cycle.
+            if (this.parentView != null) {
+                this.parentView.invalidateOverlapping(oldRect)
+            }
         }
 
         fun paintBorder(graphics: Graphics, borderPens: BorderPens) {

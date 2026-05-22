@@ -15,6 +15,7 @@ namespace Am.Ui
 
         fun addChild(view: View) {
             this.children.add(view)
+            view.parentView = this
             if (this.getViewContext() != null) {
                 view.onAttach(this.getViewContext())
             }
@@ -22,15 +23,27 @@ namespace Am.Ui
 
         fun removeChild(view: View) {
             this.children.remove(view)
+            view.parentView = null
             view.onDetach()
         }
 
         fun removeChildren() {
             each(this.children, c) {
+                c.parentView = null
                 c.onDetach()
             }
             var newList = List<View>.newList<View>()
             this.children = newList
+        }
+
+        // Recurse into children so descendants whose own flags are
+        // unset wake up when their bounds overlap winRect. Default
+        // View.invalidateOverlapping handles the per-view flag.
+        override fun invalidateOverlapping(winRect: Rectangle) {
+            base.invalidateOverlapping(winRect)
+            each(this.children, c) {
+                c.invalidateOverlapping(winRect)
+            }
         }
 
         override fun onAttach(viewContext: ViewContext) {

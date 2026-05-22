@@ -41,19 +41,38 @@ namespace Am.Ui
         private var offscreen: RenderableBitmap = null
         private var offscreenGraphics: Graphics = null
 
-        // Dirty bounds for the current paint cycle, in window-local
+        // Dirty regions for the current paint cycle, in window-local
         // (post-border, pre-translate) coords. Views call
         // expandDirtyBounds() from paintAll() right after they paint;
-        // at the end of the cycle the union is blitted from offscreen
-        // back to the visible window. `dirtyValid` is the "we've
-        // got something" flag — guards against amlc's reluctance to
-        // parse `-32768S` as a literal (unary negate on a value that
-        // exceeds Short.MAX_VALUE).
-        private var dirtyValid: Bool = false
-        private var dirtyMinX: Short = 0S
-        private var dirtyMinY: Short = 0S
-        private var dirtyMaxX: Short = 0S
-        private var dirtyMaxY: Short = 0S
+        // at the end of the cycle each region is blitted from
+        // offscreen back to the visible window.
+        //
+        // List instead of a single bounding rect so a small change
+        // in the top-left + an unrelated small change in the
+        // bottom-right don't force a full-diagonal blit. The list
+        // is kept small via coalescing: overlapping / touching rects
+        // merge when the bbox-of-the-pair isn't much larger than
+        // the sum of their areas. See expandDirtyBounds() for the
+        // heuristic.
+        //
+        // Cap at DIRTY_CAP rects; above that we fall back to a
+        // single bounding rect (matches the pre-list behaviour as
+        // a safety net for pathological cases).
+        private var dirtyRegions: List<Rectangle> = new List<Rectangle>()
+        private static const DIRTY_CAP: Int = 16
+
+        // Cross-layer dirty-rect propagation. When false (default),
+        // markDirty() is a no-op — the only thing that adds rects
+        // to dirtyRegions is the usual reportPaintedBounds call
+        // from View.paintAll, identical to the pre-design behaviour.
+        // When true, markDirty also walks every LayeredPane ancestor
+        // of the source view and dirties overlapping peer layers
+        // per the z-order rules in LayeredPane.propagateDirty (and
+        // climbs translucent ancestors so a translucent source's
+        // gaps see fresh parent-bg pixels). Flipped on in step 3
+        // of the multi-layer dirty design once we have a real
+        // cross-layer scenario to exercise.
+        var crossLayerDirty: Bool = false
 
         var font: Font
 
@@ -102,81 +121,18 @@ namespace Am.Ui
                 return
             }
             if(this.rootView != null) {
+                this.rootView.parentView = null
                 this.rootView.onDetach()
             }
             this.rootView = view
             if (view != null) {
+                // Root has no parent — used as the stop condition
+                // for parentView-chain walks in cross-view dirty
+                // propagation.
+                view.parentView = null
 //                "onAttach...".println()
                 view.onAttach(this.viewContext)
             }
-        }
-
-        // Overlay surface — a LayeredPane that floats over the
-        // rootView and gets first crack at mouse + keyboard events.
-        // Holds at most one "dock" view (set via setOverlayView, at
-        // z=0 in the pane) plus any number of stacked popups (at
-        // z=POPUP_Z and above, opened via openPopup). Constructed
-        // lazily in openWindow(): inline `new LayeredPane()` here
-        // crashed at startup, presumably because native-class
-        // instance fields don't run constructor initializers
-        // before the C side of `new Window()` returns.
-        private var overlayPane: LayeredPane = null
-
-        // The single "dock" slot — Settings / NewProject sit here.
-        // Tracked separately from the pane so setOverlayView can
-        // swap in a new view without disturbing any popups stacked
-        // above it.
-        private var dockLayer: View = null
-
-        // Z-index used for popups. Higher than the dock slot so
-        // popups always paint on top and absorb clicks first.
-        static const POPUP_Z: Int = 100
-
-        fun setOverlayView(view: View) {
-            if (this.dockLayer == view) {
-                return
-            }
-            if (this.dockLayer != null) {
-                this.overlayPane.removeLayer(this.dockLayer)
-            }
-            this.dockLayer = view
-            if (view != null) {
-                this.overlayPane.addLayer(view, 0)
-            }
-            this.requestFullRepaint()
-        }
-
-        fun getOverlayView(): View {
-            return this.dockLayer
-        }
-
-        // Mount `view` on the overlay at POPUP_Z. Multiple calls
-        // stack — the latest-added popup sits on top of any earlier
-        // popups (LayeredPane breaks same-z ties in insertion
-        // order). Pair with closePopup() to remove.
-        //
-        // The freshly-attached layer has width=height=0 (View's
-        // default) until something calls layout() on it. Without
-        // this explicit layout, paint's clip rect collapses to
-        // zero pixels and the popup is invisible — even though
-        // it's in the pane's children list and onMouseEvent reaches
-        // it. We give it the pane's current bounds; LayeredPane
-        // would do the same on the next layout pass.
-        fun openPopup(view: View) {
-            this.overlayPane.addLayer(view, Window.POPUP_Z)
-            // innerWidth() / innerHeight() instead of the raw .width
-            // / .height fields — LayeredPane already documents that
-            // direct field access trips the AmLang binder on this
-            // subclass; the method-call form binds cleanly.
-            var pw = this.overlayPane.innerWidth().toUShort()
-            var ph = this.overlayPane.innerHeight().toUShort()
-            view.layout(0S, 0S, pw, ph)
-            this.requestFullRepaint()
-        }
-
-        fun closePopup(view: View) {
-            this.overlayPane.removeLayer(view)
-            this.requestFullRepaint()
         }
 
         // Window-level mouse-event observers. Every mouse event the
@@ -253,27 +209,6 @@ namespace Am.Ui
             w.open(x, y, width, height, screen, windowManager, properties)
             var graphics = LayerGraphics.fromWindow(w)
             w.graphics = graphics
-            // Construct the overlay pane after the native window is
-            // open and viewContext is set. Attach it to vc so any
-            // layer added via setOverlayView / openPopup gets its
-            // onAttach call (LayeredPane.addLayer is conditional on
-            // the pane itself being attached).
-            //
-            // Diagnostic prints: if the "View already attached"
-            // exception fires below, one of the printlns will be
-            // the last visible line — narrows the failure to the
-            // pane allocation vs. the attach.
-            "[Window] before new LayeredPane".println()
-            w.overlayPane = new LayeredPane()
-            "[Window] new LayeredPane returned".println()
-            var paneVcBefore = w.overlayPane.getViewContext()
-            if (paneVcBefore != null) {
-                "[Window] pane already has a viewContext after new!".println()
-            } else {
-                "[Window] pane viewContext is null (expected)".println()
-            }
-            w.overlayPane.onAttach(vc)
-            "[Window] overlayPane.onAttach returned".println()
             return w
         }
 
@@ -313,32 +248,183 @@ namespace Am.Ui
         // Negative widths/heights are no-ops so a caller computing
         // bounds from a view that hasn't been laid out yet doesn't
         // poison the union.
+        // Add a painted rect to this cycle's dirty list. Three
+        // optimisations keep the list small:
+        //
+        //   1. Containment: if the new rect is already fully
+        //      inside an existing entry, drop it.
+        //   2. Coalescing: walk the existing entries; any that
+        //      touch or overlap the new rect get absorbed into a
+        //      growing bbox WHEN the bbox area isn't much bigger
+        //      than the sum of the two areas (the rule of thumb
+        //      is bbox <= 1.5 × (areaA + areaB), so we waste at
+        //      most ~50% extra pixels per merge — much cheaper
+        //      than a separate blit's per-call overhead). Rects
+        //      that touch/overlap but fail the area test stay
+        //      separate (good for two screen-corner edits).
+        //   3. Cap: above DIRTY_CAP entries we collapse the
+        //      entire list into one bounding rect — matches the
+        //      pre-list behaviour and bounds worst-case flush cost.
+        //
+        // Coords are window-local (the same frame Window.paint
+        // sets up before walking rootView). Negative widths /
+        // heights are no-ops so a caller computing bounds from a
+        // not-yet-laid-out view doesn't poison the list.
         fun expandDirtyBounds(x: Short, y: Short, w: Short, h: Short) {
             if (w <= 0S || h <= 0S) {
                 return
             }
             var x2 = x + w
             var y2 = y + h
-            if (!this.dirtyValid) {
-                this.dirtyMinX = x
-                this.dirtyMinY = y
-                this.dirtyMaxX = x2
-                this.dirtyMaxY = y2
-                this.dirtyValid = true
-            } else {
-                if (x < this.dirtyMinX)   { this.dirtyMinX = x }
-                if (y < this.dirtyMinY)   { this.dirtyMinY = y }
-                if (x2 > this.dirtyMaxX)  { this.dirtyMaxX = x2 }
-                if (y2 > this.dirtyMaxY)  { this.dirtyMaxY = y2 }
+
+            // 1) Containment — drop redundant.
+            var n = this.dirtyRegions.getSize()
+            var i = 0
+            while (i < n) {
+                var r = this.dirtyRegions.get(i)
+                var rx2 = r.x + r.width.toShort()
+                var ry2 = r.y + r.height.toShort()
+                if (x >= r.x && y >= r.y && x2 <= rx2 && y2 <= ry2) {
+                    return
+                }
+                i = i + 1
             }
+
+            // 2) Coalesce — absorb any touch/overlap entries when
+            //    the merge cost is acceptable.
+            var curX1 = x
+            var curY1 = y
+            var curX2 = x2
+            var curY2 = y2
+            i = 0
+            while (i < this.dirtyRegions.getSize()) {
+                var r = this.dirtyRegions.get(i)
+                var rx1 = r.x
+                var ry1 = r.y
+                var rx2 = rx1 + r.width.toShort()
+                var ry2 = ry1 + r.height.toShort()
+
+                // Touch / overlap test: rects DON'T touch when one
+                // is strictly outside the other on either axis.
+                var disjoint = (rx2 < curX1) || (curX2 < rx1) || (ry2 < curY1) || (curY2 < ry1)
+                if (!disjoint) {
+                    var bX1 = curX1
+                    if (rx1 < bX1) { bX1 = rx1 }
+                    var bY1 = curY1
+                    if (ry1 < bY1) { bY1 = ry1 }
+                    var bX2 = curX2
+                    if (rx2 > bX2) { bX2 = rx2 }
+                    var bY2 = curY2
+                    if (ry2 > bY2) { bY2 = ry2 }
+
+                    // Areas are computed as Int to avoid Short
+                    // overflow on a near-full-window rect.
+                    var bboxArea = (bX2 - bX1).toInt() * (bY2 - bY1).toInt()
+                    var curArea  = (curX2 - curX1).toInt() * (curY2 - curY1).toInt()
+                    var rArea    = (rx2 - rx1).toInt() * (ry2 - ry1).toInt()
+                    var sumArea  = curArea + rArea
+                    // Merge when bbox <= 1.5 × sum, i.e.
+                    // 2 × bbox <= 3 × sum (integer-friendly).
+                    if (bboxArea * 2 <= sumArea * 3) {
+                        curX1 = bX1
+                        curY1 = bY1
+                        curX2 = bX2
+                        curY2 = bY2
+                        this.dirtyRegions.removeAt(i)
+                        // Don't increment — the list shifted left.
+                        continue
+                    }
+                }
+                i = i + 1
+            }
+
+            // 3) Cap fallback — collapse to a single bounding rect.
+            if (this.dirtyRegions.getSize() >= Window.DIRTY_CAP - 1) {
+                var j = 0
+                var jn = this.dirtyRegions.getSize()
+                while (j < jn) {
+                    var rr = this.dirtyRegions.get(j)
+                    var rrx2 = rr.x + rr.width.toShort()
+                    var rry2 = rr.y + rr.height.toShort()
+                    if (rr.x < curX1)  { curX1 = rr.x }
+                    if (rr.y < curY1)  { curY1 = rr.y }
+                    if (rrx2 > curX2)  { curX2 = rrx2 }
+                    if (rry2 > curY2)  { curY2 = rry2 }
+                    j = j + 1
+                }
+                this.dirtyRegions.clear()
+            }
+
+            this.dirtyRegions.add(new Rectangle(curX1, curY1, (curX2 - curX1).toUShort(), (curY2 - curY1).toUShort()))
         }
 
         private fun resetDirtyBounds() {
-            this.dirtyValid = false
+            this.dirtyRegions.clear()
         }
 
         private fun hasDirtyBounds(): Bool {
-            return this.dirtyValid
+            return this.dirtyRegions.getSize() > 0
+        }
+
+        // Entry point for cross-view dirty-rect propagation: a
+        // view that just dirtied `winRect` (window-local coords)
+        // calls here; we add the rect to the flush list AND walk
+        // the source's ancestor chain so every LayeredPane on the
+        // way to root gets a chance to invalidate overlapping
+        // peer layers. Translucent sources also dirty their
+        // immediate ancestor chain (recursively, while ancestors
+        // are also translucent) so parent-bg pixels visible
+        // through the source's gaps get redrawn.
+        //
+        // Wrapped in the `crossLayerDirty` flag so the whole
+        // method is a no-op until the gate flips. Today only the
+        // existing reportPaintedBounds-from-paintAll path reaches
+        // expandDirtyBounds, exactly as before this design.
+        fun markDirty(winRect: Rectangle, source: View) {
+            if (!this.crossLayerDirty) {
+                return
+            }
+            this.expandDirtyBounds(winRect.x, winRect.y, winRect.width.toShort(), winRect.height.toShort())
+
+            var sourceOpaque = true
+            if (source != null) {
+                sourceOpaque = source.isOpaque()
+            }
+
+            // Walk ancestors. propagateDirty on a non-LayeredPane
+            // is a no-op (View default). LayeredPane override does
+            // the z-aware peer invalidation.
+            if (source != null) {
+                var p = source.parentView
+                while (p != null) {
+                    p.propagateDirty(winRect, source, sourceOpaque)
+                    p = p.parentView
+                }
+            }
+
+            // Translucent climb: the immediate parent's bg shows
+            // through the source's gaps, so it needs to repaint
+            // its overlap. Recurse upward while parents are also
+            // translucent. Stops at the first opaque ancestor.
+            if (source != null && !sourceOpaque) {
+                this.translucentClimb(source.parentView, winRect)
+            }
+        }
+
+        // Recursive helper for markDirty's translucent climb. The
+        // straight-line while-loop form (`if (opaque) { pp = null }
+        // else { pp = pp.parentView }`) trips amlc's renderer on
+        // the if-assigns-null-inside-a-while shape; recursion side-
+        // steps it cleanly.
+        private fun translucentClimb(view: View, winRect: Rectangle) {
+            if (view == null) {
+                return
+            }
+            view.invalidateOverlapping(winRect)
+            if (view.isOpaque()) {
+                return
+            }
+            this.translucentClimb(view.parentView, winRect)
         }
 
         private fun paint() {
@@ -381,22 +467,11 @@ namespace Am.Ui
                 // while the translate stack does not, and child paints land at
                 // window-frame coords while their clips are at content coords.
                 off.translate(innerX, innerY)
+                // Window holds exactly one rootView and paints it.
+                // Apps that want layered behaviour (popups, docked
+                // overlays, drag ghosts) mount a LayeredPane as
+                // their rootView and stack views via addLayer.
                 this.rootView.paintAll(off)
-                // Overlay layer (if any) renders AFTER the rootView so
-                // its pixels land on top. The whole subtree is marked
-                // dirty before paintAll so it ALWAYS renders — without
-                // that, paintAll skips views with a clean flag, and
-                // any partial repaint inside the rootView (cursor
-                // blink, hover) would leave stale pixels in the
-                // overlay's area.
-                //
-                // With offscreen buffering this re-stamp is now cheap
-                // — paint operations land in the buffer, not the
-                // visible surface, so the user only sees the final
-                // composited result. Dirty-bounds tracking ensures
-                // we only blit the rect that actually changed.
-                this.overlayPane.requestRepaintTree()
-                this.overlayPane.paintAll(off)
                 off.translate(0S - innerX, 0S - innerY)
 
                 off.popClipRect()
@@ -423,9 +498,6 @@ namespace Am.Ui
             if (this.rootView != null) {
                 this.rootView.layout(0S, 0S, innerW, innerH)
             }
-            // Overlay pane fills the same area as rootView; each
-            // layer inside picks its own positioning.
-            this.overlayPane.layout(0S, 0S, innerW, innerH)
         }
 
         fun onCloseButtonClick() {
@@ -516,27 +588,17 @@ namespace Am.Ui
                     return
                 }
             }
-            // Overlay pane gets first crack after the focused view —
-            // a popover drawer should swallow keys aimed at the
-            // chrome behind it.
-            if (this.overlayPane.onKeyboardEvent(type, keyCode, keyChar)) {
-                return
-            }
             this.rootView?.onKeyboardEvent(type, keyCode, keyChar)
         }
 
         // Mouse-wheel dispatch. Routed by cursor position (the
-        // overlay view + rootView each hit-test x/y), NOT by
-        // keyboard focus — wheeling over the editor scrolls the
-        // editor even when the terminal has key focus, and vice
-        // versa. Called from the native event loop when an
-        // IDCMP_EXTENDEDMOUSE wheel event arrives.
+        // rootView hit-tests x/y), NOT by keyboard focus — wheeling
+        // over the editor scrolls the editor even when the terminal
+        // has key focus, and vice versa. Called from the native
+        // event loop when an IDCMP_EXTENDEDMOUSE wheel event arrives.
         fun onMouseWheel(deltaY: Short, x: Short, y: Short) {
             var lx = x - this.border.left
             var ly = y - this.border.top
-            if (this.overlayPane.onMouseWheel(deltaY, lx, ly)) {
-                return
-            }
             this.rootView?.onMouseWheel(deltaY, lx, ly)
         }
 
@@ -577,16 +639,6 @@ namespace Am.Ui
             // cleanly when inlined here — see that method's comment.
             this.dispatchToMouseListeners(new MouseEvent(type, button, x, y))
 
-            // Overlay pane sees mouse events before the rootView; if
-            // any layer consumes (typically because the click
-            // landed on its panel / popup), the rootView is
-            // bypassed. Otherwise the click falls through to
-            // whatever the rootView would normally handle — that's
-            // how clicks in the "see-through" area around an
-            // overlay still hit the IDE chrome.
-            if (this.overlayPane.onMouseEvent(type, button, lx, ly)) {
-                return
-            }
             this.rootView?.onMouseEvent(type, button, lx, ly)
         }
 
@@ -694,35 +746,40 @@ namespace Am.Ui
             g.blitBitmapRect(off.getBitmap(), x, y, w, h, x - tx, y - ty)
         }
 
-        // End-of-paint blit: takes the union of every expandDirtyBounds
-        // call accumulated this cycle, clamps it to the inner area, and
-        // calls flushOffscreenRect for that sub-rect.
+        // End-of-paint blit: walks every rect accumulated this
+        // cycle (post-coalescing), clamps each to the inner area,
+        // and fires a flushOffscreenRect per surviving region. A
+        // freshly-allocated `new List` per cycle is avoided — the
+        // coalescing in expandDirtyBounds keeps the list short
+        // (most paint cycles end with 1-3 entries).
         //
-        // No dirty content (clean paint pass — `repaintRequested` was
-        // set but no view actually painted) → no blit. This is the
-        // common case for redundant requestRepaint cascades that don't
-        // change any visible pixels.
+        // No dirty content (clean paint pass — `repaintRequested`
+        // was set but no view actually painted) → no blits. This
+        // is the common case for redundant requestRepaint cascades
+        // that don't change any visible pixels.
         private fun flushDirtyBounds(innerX: Short, innerY: Short, innerW: UShort, innerH: UShort) {
-            if (!this.hasDirtyBounds()) {
+            var n = this.dirtyRegions.getSize()
+            if (n == 0) {
                 return
             }
-            // Clamp the union to the window's inner content area so we
-            // don't try to blit pixels outside the visible surface
-            // (e.g. a view that drew slightly outside its bounds).
-            var x1 = this.dirtyMinX
-            var y1 = this.dirtyMinY
-            var x2 = this.dirtyMaxX
-            var y2 = this.dirtyMaxY
-            if (x1 < innerX) { x1 = innerX }
-            if (y1 < innerY) { y1 = innerY }
             var maxX = innerX + innerW.toShort()
             var maxY = innerY + innerH.toShort()
-            if (x2 > maxX) { x2 = maxX }
-            if (y2 > maxY) { y2 = maxY }
-            if (x2 <= x1 || y2 <= y1) {
-                return
+            var i = 0
+            while (i < n) {
+                var r = this.dirtyRegions.get(i)
+                var x1 = r.x
+                var y1 = r.y
+                var x2 = x1 + r.width.toShort()
+                var y2 = y1 + r.height.toShort()
+                if (x1 < innerX) { x1 = innerX }
+                if (y1 < innerY) { y1 = innerY }
+                if (x2 > maxX) { x2 = maxX }
+                if (y2 > maxY) { y2 = maxY }
+                if (x2 > x1 && y2 > y1) {
+                    this.flushOffscreenRect(x1, y1, (x2 - x1).toUShort(), (y2 - y1).toUShort())
+                }
+                i = i + 1
             }
-            this.flushOffscreenRect(x1, y1, (x2 - x1).toUShort(), (y2 - y1).toUShort())
         }
 
         native fun handleInput()

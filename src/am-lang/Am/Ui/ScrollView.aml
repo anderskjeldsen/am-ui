@@ -342,7 +342,20 @@ namespace Am.Ui
         }
 
         fun setChild(child: View) {
+            if (this.child != null && this.child != child) {
+                this.child.parentView = null
+            }
             this.child = child
+            if (child != null) {
+                child.parentView = this
+            }
+        }
+
+        override fun invalidateOverlapping(winRect: Rectangle) {
+            base.invalidateOverlapping(winRect)
+            if (this.child != null) {
+                this.child.invalidateOverlapping(winRect)
+            }
         }
 
         fun getChild(): View {
