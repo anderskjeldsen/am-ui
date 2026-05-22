@@ -32,11 +32,26 @@ namespace Am.Ui
             var idx = this.findInsertIndex(z)
             this.getChildren().insertAt(idx, view)
             this.zs.insertAt(idx, z)
+            view.parentView = this
             // Match ViewGroup.addChild's lazy-attach: only fire
             // onAttach when this pane is already attached itself.
             if (this.getViewContext() != null) {
                 view.onAttach(this.getViewContext())
             }
+            // Tell the freshly-added layer (and its subtree) that
+            // it needs to paint on the next cycle. For brand-new
+            // layers, View.layout's old-footprint logic would
+            // already flag a repaint when bounds transition from
+            // 0,0,0,0 to the pane's size — but for *re-mounts* of
+            // a singleton overlay (toggled off then back on with
+            // unchanged bounds), the layout pass sees no change
+            // and skips the dirty fire. Meanwhile the previous
+            // remove invalidated peer layers, which overdrew this
+            // layer's pixels in the offscreen buffer. Without an
+            // explicit repaint here the layer would never paint
+            // back in. Tree-wide so the subtree (panel + content)
+            // wakes up as well.
+            view.requestRepaintTree()
         }
 
         fun removeLayer(view: View) {
@@ -44,9 +59,35 @@ namespace Am.Ui
             var i = 0
             while (i < n) {
                 if (this.getChildren().get(i) == view) {
+                    // Capture the layer's actual painted rect in
+                    // window coords BEFORE detaching, so we can tell
+                    // surviving layers what region under them just
+                    // became visible. PopupMenu / OverlayHost override
+                    // getPaintedBounds to return a precise rect;
+                    // default falls back to the full layer area.
+                    var paneRect = this.computeWindowRect()
+                    var local = view.getPaintedBounds()
+                    var winRect = new Rectangle(
+                        (paneRect.x + view.x) + local.x,
+                        (paneRect.y + view.y) + local.y,
+                        local.width,
+                        local.height)
                     this.getChildren().removeAt(i)
                     this.zs.removeAt(i)
+                    view.parentView = null
                     view.onDetach()
+                    // Invalidate every surviving layer's overlap with
+                    // the area the removed layer used to cover —
+                    // their pixels there are still in the offscreen
+                    // buffer but no longer correct (they reflect what
+                    // showed UNDER the popup back when it was painted
+                    // over them, not the cleared state we want now).
+                    var m = this.getChildren().getSize()
+                    var j = 0
+                    while (j < m) {
+                        this.getChildren().get(j).invalidateOverlapping(winRect)
+                        j = j + 1
+                    }
                     return
                 }
                 i = i + 1
@@ -111,6 +152,90 @@ namespace Am.Ui
 
         override fun minHeight(): Short {
             return 0S
+        }
+
+        // Cross-layer dirty propagation. Called by Window.markDirty
+        // for every LayeredPane on the chain from the source view
+        // up to the root. We figure out which of OUR layers contains
+        // the source (if any), then invalidate every other layer
+        // subject to z-order rules:
+        //
+        //   - Layers strictly above sourceZ always repaint — their
+        //     pixels sit on top of the source and must overdraw to
+        //     preserve the stack.
+        //   - Layers at-or-below sourceZ repaint only when source
+        //     is translucent (sourceOpaque == false). An opaque
+        //     source fully covers them in `winRect`, so their
+        //     pixels there aren't visible.
+        //
+        // When source isn't a descendant of any layer in this pane
+        // (sourceLayer stays null), treat every layer as "above" —
+        // we don't know the source's z, so the conservative move
+        // is to repaint every overlapping layer.
+        override fun propagateDirty(winRect: Rectangle, source: View, sourceOpaque: Bool) {
+            // Find the direct layer (one of OUR children) on the
+            // path from source upward. May be null if the source
+            // isn't a descendant of any layer here (e.g. the
+            // source is the pane itself). Recursive helper to
+            // dodge amlc's if-assigns-null-inside-while renderer
+            // crash.
+            var sourceLayer = this.findLayerOnPathFrom(source)
+
+            var sourceZ: Int = 0
+            var sourceZKnown: Bool = false
+            if (sourceLayer != null) {
+                sourceZ = this.findLayerZ(sourceLayer)
+                sourceZKnown = true
+            }
+
+            var n = this.getChildren().getSize()
+            var i = 0
+            while (i < n) {
+                var layer = this.getChildren().get(i)
+                if (layer != sourceLayer) {
+                    var z = this.zs.get(i)
+                    var higher = true
+                    if (sourceZKnown) {
+                        higher = z > sourceZ
+                    }
+                    if (higher || !sourceOpaque) {
+                        layer.invalidateOverlapping(winRect)
+                    }
+                }
+                i = i + 1
+            }
+        }
+
+        // Walk `view`'s parentView chain until we hit a direct
+        // child of THIS pane (i.e. `node.parentView == this`).
+        // Returns null when the chain runs out without crossing
+        // this pane — meaning `view` isn't a descendant of any
+        // of our layers. Recursion side-steps the renderer
+        // crash we hit on `if (...) { node = null }` inside a
+        // while-loop body.
+        private fun findLayerOnPathFrom(view: View): View {
+            if (view == null) {
+                return null
+            }
+            if (view.parentView == this) {
+                return view
+            }
+            return this.findLayerOnPathFrom(view.parentView)
+        }
+
+        // Linear lookup of a layer's z-index. Returns 0 if not
+        // found, but callers should have confirmed membership
+        // first (see findLayerOnPathFrom).
+        private fun findLayerZ(layer: View): Int {
+            var n = this.getChildren().getSize()
+            var i = 0
+            while (i < n) {
+                if (this.getChildren().get(i) == layer) {
+                    return this.zs.get(i)
+                }
+                i = i + 1
+            }
+            return 0
         }
 
         // Mouse routing: move broadcasts (same as ViewGroup so each

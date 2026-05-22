@@ -146,13 +146,27 @@ namespace Am.Ui
         }
 
         fun setChild(child: View) {
+            // Drop the previous child's parent pointer first so a
+            // detached child doesn't keep a stale ref into a panel
+            // it no longer belongs to.
+            if (this.child != null && this.child != child) {
+                this.child.parentView = null
+            }
             this.child = child
             if (child != null) {
+                child.parentView = this
                 if (this.getViewContext() != null) {
                     child.onAttach(this.getViewContext())
                 }
             } else {
                 child.onDetach()
+            }
+        }
+
+        override fun invalidateOverlapping(winRect: Rectangle) {
+            base.invalidateOverlapping(winRect)
+            if (this.child != null) {
+                this.child.invalidateOverlapping(winRect)
             }
         }
 

@@ -490,10 +490,20 @@ namespace Am.Ui
             var textWidth = innerW - this.padding.left - this.padding.right
             var textHeight = innerH - this.padding.top - this.padding.bottom
 
-            // Set clipping area for text
+            // Set clipping area for text. The clip is extended by 1
+            // pixel above and below textY+fontHeight so the caret's
+            // top/bottom strips (filled cursor) or the hollow cursor's
+            // top/bottom lines aren't cropped — drawCursor uses
+            // y1 = textY - 1 and y2 = textY + fontHeight, which would
+            // otherwise sit just outside a clip rect aligned to the
+            // text rows. The 1-px gap is safe as long as padding.top
+            // and padding.bottom are >= 1 (TextField's default is 2
+            // and the IDE-themed fields use 8), so the extension
+            // stays inside the inner content area and never bleeds
+            // onto the field border.
             var currentClip = graphics.getCurrentClipRect()
-            var textClipRect = currentClip.createInnerClipRect(textX, textY, textWidth.toUShort(), textHeight.toUShort())
-                       
+            var textClipRect = currentClip.createInnerClipRect(textX, textY - 1S, textWidth.toUShort(), (textHeight + 2S).toUShort())
+
             graphics.pushClipRect(textClipRect)
 
             // Draw text or placeholder

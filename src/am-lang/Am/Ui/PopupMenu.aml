@@ -64,6 +64,18 @@ namespace Am.Ui
         // to removeLayer() on the LayeredPane.
         var closeListener: () => Bool = null
 
+        // The LayeredPane this popup is mounted on. Set by the
+        // caller before addLayer — submenus inherit it so a
+        // cascading menu mounts each child on the same surface
+        // without needing to call back into the Window.
+        // null until the popup is mounted somewhere.
+        var layerHost: LayeredPane = null
+        // Z-index used when adding submenus of this popup. Caller
+        // typically sets this to the same z it used when mounting
+        // this popup; LayeredPane's same-z-ties-go-on-top rule
+        // then stacks submenus correctly above their parent.
+        var layerZ: Int = 100
+
         fun addItem(item: PopupMenuItem): PopupMenu {
             this.items.add(item)
             return this
@@ -134,6 +146,32 @@ namespace Am.Ui
             var n = this.items.getSize()
             // Borders top + bottom + vertical padding + N row heights.
             return ((this.rowHeight() * n.toShort()) + (PopupMenu.PADDING_Y * 2S)) + 2S
+        }
+
+        // The actual painted rect inside this view's logical
+        // bounds. A PopupMenu is mounted as a full-pane layer so
+        // it can outside-click-dismiss across the whole layer, but
+        // it only paints a small menu rectangle at (anchorX,
+        // anchorY). Cross-layer dirty propagation needs to know
+        // *that* rect so removing this popup invalidates only the
+        // pixels under the menu — not the entire pane.
+        override fun getPaintedBounds(): Rectangle {
+            return new Rectangle(this.anchorX, this.anchorY, this.menuWidth().toUShort(), this.menuHeight().toUShort())
+        }
+
+        // Constrain dirty marking to the actual menu rect. Without
+        // this override, every requestRepaint() flagged the whole
+        // layer (= the whole window for a root-mounted popup),
+        // forcing the full screen through the flush list. Re-
+        // routing through requestRepaint(x, y, w, h) populates
+        // dirtyRects and reportPaintedBounds reports only the menu
+        // area — same correctness, dramatically smaller blit.
+        override fun requestRepaint() {
+            if (this.getRepaintRequested()) {
+                return
+            }
+            var r = this.getPaintedBounds()
+            base.requestRepaint(r.x, r.y, r.width.toShort(), r.height.toShort())
         }
 
         // True when (lx, ly) sits inside the rendered menu rect.
@@ -246,11 +284,14 @@ namespace Am.Ui
                 return
             }
             this.closeActiveSubmenu()
-            var vc = this.getViewContext()
-            if (vc == null) {
+            // A popup has to know which LayeredPane it lives on
+            // before it can mount a child popup; the caller set
+            // `layerHost` when mounting this popup, and we
+            // propagate the same host (and z) into the submenu.
+            var host = this.layerHost
+            if (host == null) {
                 return
             }
-            var win = vc.getWindow()
             sub.anchorX = (this.anchorX + this.menuWidth()) - 1S
             sub.anchorY = ((this.anchorY + 1S) + PopupMenu.PADDING_Y) + (idx.toShort() * this.rowHeight())
             sub.backgroundPen = this.backgroundPen
@@ -258,22 +299,32 @@ namespace Am.Ui
             sub.hoverBgPen    = this.hoverBgPen
             sub.hoverTextPen  = this.hoverTextPen
             sub.borderPen     = this.borderPen
-            var capturedWin    = win
+            sub.layerHost     = host
+            sub.layerZ        = this.layerZ
+            var capturedHost   = host
             var capturedSub    = sub
             var capturedParent = this
             sub.closeListener = () => {
-                capturedWin.closePopup(capturedSub)
+                capturedHost.removeLayer(capturedSub)
                 capturedParent.activeSubmenu = null
                 capturedParent.activeSubmenuIdx = -1
                 // Cascade the dismissal upward — picking an item
                 // in a submenu (or outside-clicking it) should
                 // close the entire menu chain, not just the
                 // submenu. fireClose hits the parent's listener
-                // which the IDE wires to closePopup the parent.
+                // which the caller wires to removeLayer the parent.
                 capturedParent.fireClose()
                 return true
             }
-            win.openPopup(sub)
+            // Same-z stacks on top per LayeredPane tie-break, so
+            // adding here lands the submenu above its parent.
+            host.addLayer(sub, this.layerZ)
+            // The freshly-attached layer would have width=height=0
+            // until the next window.layout() pass. Give it the
+            // host's bounds now so paint's clip doesn't collapse.
+            var pw = host.innerWidth().toUShort()
+            var ph = host.innerHeight().toUShort()
+            sub.layout(0S, 0S, pw, ph)
             this.activeSubmenu = sub
             this.activeSubmenuIdx = idx
         }
@@ -286,18 +337,17 @@ namespace Am.Ui
             if (this.activeSubmenu == null) {
                 return
             }
-            var vc = this.getViewContext()
-            if (vc == null) {
+            var host = this.layerHost
+            if (host == null) {
                 return
             }
-            var win = vc.getWindow()
             var sub = this.activeSubmenu
             // Wipe the chained closeListener so the upcoming
-            // closePopup doesn't fire its body — that body would
+            // removeLayer doesn't fire its body — that body would
             // cascade-close the parent (which is the OPPOSITE of
             // what soft-close means).
             sub.closeListener = null
-            win.closePopup(sub)
+            host.removeLayer(sub)
             this.activeSubmenu = null
             this.activeSubmenuIdx = -1
         }
