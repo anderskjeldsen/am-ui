@@ -214,13 +214,20 @@ namespace Am.Ui
         // crash we hit on `if (...) { node = null }` inside a
         // while-loop body.
         private fun findLayerOnPathFrom(view: View): View {
-            if (view == null) {
-                return null
+            // Iterative walk with a hard depth cap so a stray
+            // parentView cycle bails out instead of hanging the
+            // whole window. Real UI trees never get close to 256
+            // levels deep.
+            var v = view
+            var safety = 256
+            while (v != null && safety > 0) {
+                if (v.parentView == this) {
+                    return v
+                }
+                v = v.parentView
+                safety = safety - 1
             }
-            if (view.parentView == this) {
-                return view
-            }
-            return this.findLayerOnPathFrom(view.parentView)
+            return null
         }
 
         // Linear lookup of a layer's z-index. Returns 0 if not
