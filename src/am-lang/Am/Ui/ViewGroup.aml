@@ -39,7 +39,23 @@ namespace Am.Ui
         // Recurse into children so descendants whose own flags are
         // unset wake up when their bounds overlap winRect. Default
         // View.invalidateOverlapping handles the per-view flag.
+        //
+        // Short-circuit when the group itself doesn't intersect
+        // winRect: every child's bounds sit inside the group's
+        // bounds (by the no-overflow-paint convention), so a
+        // disjoint group implies disjoint children — skipping the
+        // walk avoids O(N) work per moved sibling in stacks with
+        // many rows (folder trees, chat histories, etc.).
         override fun invalidateOverlapping(winRect: Rectangle) {
+            var mine = this.computeWindowRect()
+            var mX2 = mine.x + mine.width.toShort()
+            var mY2 = mine.y + mine.height.toShort()
+            var wX2 = winRect.x + winRect.width.toShort()
+            var wY2 = winRect.y + winRect.height.toShort()
+            var disjoint = (mX2 <= winRect.x) || (wX2 <= mine.x) || (mY2 <= winRect.y) || (wY2 <= mine.y)
+            if (disjoint) {
+                return
+            }
             base.invalidateOverlapping(winRect)
             each(this.children, c) {
                 c.invalidateOverlapping(winRect)

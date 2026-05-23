@@ -284,6 +284,22 @@ namespace Am.Ui
                     this.viewContext.getWindow().requestRepaint()
                 }
             }
+            // Cross-layer dirty propagation. Without this, a
+            // lower-z view that calls requestRepaint() (e.g. a
+            // FolderCard's hover toggle, a Label's hover bg) re-
+            // paints into the offscreen buffer at its bounds —
+            // overwriting the pixels of any higher-z layer (popup,
+            // overlay sidebar) that was sitting on top — and the
+            // subsequent flush shows the lower-z view drawn over
+            // the higher-z one. markDirty walks the LayeredPane
+            // ancestors and invalidates higher-z peers so they
+            // re-stamp on top. No-op when crossLayerDirty is off.
+            if (this.viewContext != null) {
+                var win = this.viewContext.getWindow()
+                if (win != null) {
+                    win.markDirty(this.computeWindowRect(), this)
+                }
+            }
         }
 
         // Opt-in sub-region invalidation. Adds a view-local rect
@@ -299,14 +315,35 @@ namespace Am.Ui
         // (origin = view's top-left margin/border/padding-inset).
         fun requestRepaint(x: Short, y: Short, w: Short, h: Short) {
             if (w <= 0S || h <= 0S) {
-                this.requestRepaint()
+                // No useful sub-rect — set the flag inline (NOT via
+                // this.requestRepaint(), which dispatches to the
+                // open subclass override and would loop back here
+                // for subclasses like PopupMenu that override the
+                // no-args form to route through this overload).
+                if (!this.repaintRequested) {
+                    this.repaintRequested = true
+                    if (this.viewContext != null) {
+                        this.viewContext.getWindow().requestRepaint()
+                    }
+                }
                 return
             }
             if (this.dirtyRects == null) {
                 this.dirtyRects = new List<Rectangle>()
             }
             this.dirtyRects.add(new Rectangle(x, y, w.toUShort(), h.toUShort()))
-            this.requestRepaint()
+            // Same recursion trap as above — set the flag inline.
+            // PopupMenu.requestRepaint() (no-args) calls base.
+            // requestRepaint(menuRect), which lands here; calling
+            // this.requestRepaint() would re-enter the override
+            // with the flag still unset (since we haven't toggled
+            // it yet), looping until the stack overflows.
+            if (!this.repaintRequested) {
+                this.repaintRequested = true
+                if (this.viewContext != null) {
+                    this.viewContext.getWindow().requestRepaint()
+                }
+            }
             // Cross-view propagation. markDirty is a no-op while
             // Window.crossLayerDirty is off, so this is a free
             // call until step 3 of the multi-layer dirty design.
@@ -364,10 +401,16 @@ namespace Am.Ui
             var wx = this.x
             var wy = this.y
             var p = this.parentView
-            while (p != null) {
+            // Hard cap on the walk depth. Real UI trees never get
+            // anywhere near 256 levels deep; if we exceed it, the
+            // parentView chain has a cycle and we bail out with
+            // whatever we have so far instead of hanging the IDE.
+            var safety = 256
+            while (p != null && safety > 0) {
                 wx = wx + p.x
                 wy = wy + p.y
                 p = p.parentView
+                safety = safety - 1
             }
             return new Rectangle(wx, wy, this.width, this.height)
         }

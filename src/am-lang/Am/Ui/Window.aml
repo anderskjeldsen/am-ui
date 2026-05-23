@@ -307,6 +307,7 @@ namespace Am.Ui
                 // Touch / overlap test: rects DON'T touch when one
                 // is strictly outside the other on either axis.
                 var disjoint = (rx2 < curX1) || (curX2 < rx1) || (ry2 < curY1) || (curY2 < ry1)
+                var coalesced = false
                 if (!disjoint) {
                     var bX1 = curX1
                     if (rx1 < bX1) { bX1 = rx1 }
@@ -331,11 +332,14 @@ namespace Am.Ui
                         curX2 = bX2
                         curY2 = bY2
                         this.dirtyRegions.removeAt(i)
-                        // Don't increment — the list shifted left.
-                        continue
+                        // List shifted left — re-check the same
+                        // index next iteration; skip the i++.
+                        coalesced = true
                     }
                 }
-                i = i + 1
+                if (!coalesced) {
+                    i = i + 1
+                }
             }
 
             // 3) Cap fallback — collapse to a single bounding rect.
@@ -393,12 +397,15 @@ namespace Am.Ui
 
             // Walk ancestors. propagateDirty on a non-LayeredPane
             // is a no-op (View default). LayeredPane override does
-            // the z-aware peer invalidation.
+            // the z-aware peer invalidation. Hard depth cap on the
+            // walk so a stray parentView cycle can't hang the IDE.
             if (source != null) {
                 var p = source.parentView
-                while (p != null) {
+                var safety = 256
+                while (p != null && safety > 0) {
                     p.propagateDirty(winRect, source, sourceOpaque)
                     p = p.parentView
+                    safety = safety - 1
                 }
             }
 
