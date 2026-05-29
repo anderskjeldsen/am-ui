@@ -61,6 +61,42 @@ namespace Am.Ui
         private var dirtyRegions: List<Rectangle> = new List<Rectangle>()
         private static const DIRTY_CAP: Int = 16
 
+        // Tasks queued by worker threads to run on the main UI
+        // thread before the next paint. Background work (Aminet
+        // HTTP fetches, ChatGPT requests) does the slow I/O off-
+        // thread, then posts the result-applying step here so
+        // view-tree mutation lands on the main thread and not
+        // mid-paint on a worker. AmLang has no mutex primitive;
+        // the list is touched by both threads but the contention
+        // window is tiny and the worst case is a task running on
+        // the next pump tick instead of this one — never lost.
+        private var pendingTasks: List<Runnable> = new List<Runnable>()
+
+        // Queue `task` to run on the main thread. Safe to call
+        // from a worker thread. Also wakes the main loop via
+        // requestRepaint so any handleInput wait breaks promptly.
+        fun postToMainThread(task: Runnable) {
+            if (task == null) {
+                return
+            }
+            this.pendingTasks.add(task)
+            this.requestRepaint()
+        }
+
+        // Drain the pending-tasks queue. Called from the main
+        // loop after handleInput returns. Tasks added by a worker
+        // *during* this drain land on the list and run on this
+        // same pump (the loop re-checks size each iteration).
+        fun pumpMainThreadTasks() {
+            while (this.pendingTasks.getSize() > 0) {
+                var task = this.pendingTasks.get(0)
+                this.pendingTasks.removeAt(0)
+                if (task != null) {
+                    task.run()
+                }
+            }
+        }
+
         // Cross-layer dirty-rect propagation. When false (default),
         // markDirty() is a no-op — the only thing that adds rects
         // to dirtyRegions is the usual reportPaintedBounds call
@@ -443,6 +479,15 @@ namespace Am.Ui
             // visible flicker when anything triggers a repaint.
             var off = this.getOffscreenGraphics()
             var full = this.fullRepaintRequested
+            // Reset the repaint flags BEFORE running the paint chain
+            // so that a view which calls `requestRepaint()` from
+            // inside its own paint (e.g. an animation that wants the
+            // next frame) actually re-queues a refresh — otherwise
+            // requestRepaint's `if (!b)` guard sees the flag still
+            // set from this cycle, no IDCMP_REFRESHWINDOW gets
+            // posted, and the animation freezes after one frame.
+            this.repaintRequested = false
+            this.fullRepaintRequested = false
             if (full) {
                 // Tell every view in the tree to repaint, even if their
                 // own flag is unset. Partial repaints leave this off, so
@@ -486,8 +531,6 @@ namespace Am.Ui
                 this.flushDirtyBounds(innerX, innerY, innerWidth, innerHeight)
             }
             off.finalizeRepaintCycle()
-            this.repaintRequested = false
-            this.fullRepaintRequested = false
         }
 
         private fun onResize(x: Short, y: Short, width: UShort, height: UShort) {

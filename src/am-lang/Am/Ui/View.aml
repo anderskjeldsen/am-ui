@@ -152,6 +152,18 @@ namespace Am.Ui
         }
 
         fun getWindow(): Window {
+            // viewContext is null until the view is attached to a
+            // mounted tree — every caller that uses getWindow() to
+            // gate "do work that needs the window" against a fresh
+            // (not-yet-attached) view relies on this returning null
+            // in that case. Without the guard, configuring a view
+            // in a constructor (e.g. TextField.setText →
+            // updateScrollOffset → getWindow) throws "Null
+            // reference: viewContext" and the whole containing
+            // init { } block aborts.
+            if (this.viewContext == null) {
+                return null
+            }
             return this.viewContext.getWindow()
         }
 
@@ -189,6 +201,7 @@ namespace Am.Ui
                 graphics.pushClipRect(viewClipRect)
 
                 graphics.translate(ix, iy)
+                this.beginPaintCycle()
                 this.paint(graphics)
                 this.reportPaintedBounds(graphics, viewWidth, viewHeight)
                 this.markAsPainted()
@@ -266,14 +279,37 @@ namespace Am.Ui
         }
 
         fun markAsPainted() {
-            this.repaintRequested = false
-            // Drop accumulated sub-rects too — the cycle that
-            // they fed into has finished. The list itself can be
-            // reused next time a caller opts in; clearing instead
-            // of nulling skips the realloc.
+            // The flag is cleared by beginPaintCycle() at the START
+            // of paintAll, not here — so a requestRepaint() the view
+            // made from inside its own paint() survives into the next
+            // cycle instead of getting wiped at the end. This used to
+            // wipe the flag too, which broke animations that
+            // re-queue themselves.
+            //
+            // Drop accumulated sub-rects: the cycle that they fed
+            // into has finished. The list itself can be reused next
+            // time a caller opts in; clearing instead of nulling
+            // skips the realloc.
             if (this.dirtyRects != null) {
                 this.dirtyRects.clear()
             }
+        }
+
+        // Reset the whole-view repaint flag at the START of a
+        // paint cycle, before paint() runs. Mirrors the Window-
+        // level fix in Window.paint: a view's own paint() may call
+        // requestRepaint() to queue the next frame (the spinner
+        // self-drives that way). If the flag is still set from
+        // this cycle when requestRepaint() runs, the
+        // `if (!b)` guard swallows the call and the next frame
+        // never gets scheduled.
+        //
+        // Only the flag is reset — `dirtyRects` stays untouched so
+        // any sub-rects the view had queued for this cycle still
+        // feed reportPaintedBounds. markAsPainted() at the end of
+        // paintAll clears dirtyRects.
+        fun beginPaintCycle() {
+            this.repaintRequested = false
         }
 
         open fun requestRepaint() {

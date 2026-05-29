@@ -245,20 +245,36 @@ namespace Am.Ui
             return 0
         }
 
-        // Mouse routing: move broadcasts (same as ViewGroup so each
-        // layer can clear hover state); other events walk topmost
-        // first and stop at the first consumer.
+        // Mouse routing: front-to-back, first matching layer wins.
+        // For move events the match is geometric (the topmost layer
+        // whose painted bounds contain the cursor); for down / up /
+        // wheel we just walk topmost-first and stop at the first
+        // consumer (OverlayHost gates its own consumption on
+        // panel.contains, so a click in the see-through area still
+        // falls through to the chrome).
+        //
+        // Lower layers never see a move once a higher layer claims
+        // the cursor. Any hover state they need to clear across
+        // layer changes can subscribe to Window.addMouseEventListener
+        // — that fires for every move with window-absolute coords,
+        // regardless of which layer claimed the dispatch.
         override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
             if (type == MouseEventType.move) {
-                var anyConsumed = false
-                each(this.getChildren(), c) {
-                    var lx = x - c.x
-                    var ly = y - c.y
-                    if (c.onMouseEvent(type, button, lx, ly)) {
-                        anyConsumed = true
+                var n = this.getChildren().getSize()
+                var i = n - 1
+                while (i >= 0) {
+                    var c = this.getChildren().get(i)
+                    var pb = c.getPaintedBounds()
+                    var pbX1 = c.x + pb.x
+                    var pbY1 = c.y + pb.y
+                    var pbX2 = pbX1 + pb.width.toShort()
+                    var pbY2 = pbY1 + pb.height.toShort()
+                    if (x >= pbX1 && x < pbX2 && y >= pbY1 && y < pbY2) {
+                        return c.onMouseEvent(type, button, x - c.x, y - c.y)
                     }
+                    i = i - 1
                 }
-                return anyConsumed
+                return false
             }
 
             // down / up / wheel: topmost first.

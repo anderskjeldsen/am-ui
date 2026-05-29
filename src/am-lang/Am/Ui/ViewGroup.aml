@@ -113,6 +113,7 @@ namespace Am.Ui
 
             if (b1 || b2) {
                 graphics.translate(ix, iy)
+                this.beginPaintCycle()
                 this.paint(graphics)
                 // Report the inner box as dirty (the area paint() may
                 // have touched). Children report their own bounds when
