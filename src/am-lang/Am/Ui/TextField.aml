@@ -26,6 +26,21 @@ namespace Am.Ui
         var placeholder: String = ""
         var readOnly: Bool = false
         var passwordMode: Bool = false
+        // When true, the cursor is replaced by a vertically-pulsing
+        // bar that shrinks to zero height and grows back to the
+        // full caret height, looping forever. Used as a poor-man's
+        // spinner while the owning view is waiting for an async
+        // operation. Caller is expected to flip readOnly too so the
+        // user can't type into a "loading" field.
+        //
+        // Animation is time-driven (Date.now().getValue() mod cycle
+        // ms) so no external ticker is required — paint() simply
+        // re-requests a repaint at the end of every frame while
+        // spinnerMode is on.
+        var spinnerMode: Bool = false
+        // Full cycle length for the spinner pulse, in ms. Triangular
+        // wave: 0 → full → 0 once per cycle.
+        private static const SPINNER_CYCLE_MS: Long = 600L
 
         // Fires on Tab or Enter while focused. Receives the current
         // text. Used by callers (e.g. FolderTreeView's inline
@@ -56,6 +71,79 @@ namespace Am.Ui
         // Inner border: 1UB on upper and left, 2UB on lower and right
         var innerBorderPens: BorderPens = new BorderPens(1UB, 1UB, 2UB, 2UB)
         var focusedInnerBorderPens: BorderPens = new BorderPens(1UB, 1UB, 2UB, 2UB)
+
+        init {
+            // setDefaultPadding / setDefaultBorder aren't invoked
+            // anywhere in the View hierarchy — nothing calls them on
+            // construction. Without these, padding stays (0,0,0,0)
+            // and borderWidths stays (0,0,0,0), so minHeight()
+            // collapses to just fontHeight and the field renders as
+            // a one-glyph-tall strip with descenders clipped against
+            // the background. Calling them here lands the same 4×2
+            // padding + 2px border that the override declarations
+            // already advertise as the widget's default look.
+            this.setDefaultPadding()
+            this.setDefaultBorder()
+        }
+
+        // Window-level mouse listener that clears our focus on any
+        // mouseDown that lands outside our bounds — including clicks
+        // routed to a different LayeredPane layer that never reach
+        // our regular onMouseEvent. Held so onDetach can deregister.
+        private var windowMouseListener: MouseEventListener = null
+
+        override fun onAttach(viewContext: ViewContext) {
+            base.onAttach(viewContext)
+            var win = viewContext.getWindow()
+            if (win == null) {
+                return
+            }
+            var self = this
+            var l = new MouseEventListener()
+            l.listener = (me) => {
+                if (me.type != MouseEventType.down) {
+                    return false
+                }
+                var vc = self.getViewContext()
+                if (vc == null) {
+                    return false
+                }
+                var w = vc.getWindow()
+                if (w == null) {
+                    return false
+                }
+                // Only act when we're actually the focused view —
+                // saves a rect compute on every cross-window click.
+                if (w.getKeyboardFocus() != self) {
+                    return false
+                }
+                var rect = self.computeWindowRect()
+                var mx = w.getLastMouseX()
+                var my = w.getLastMouseY()
+                var x2 = rect.x + rect.width.toShort()
+                var y2 = rect.y + rect.height.toShort()
+                if (mx < rect.x || mx >= x2 || my < rect.y || my >= y2) {
+                    w.clearKeyboardFocus(self)
+                }
+                return false
+            }
+            this.windowMouseListener = l
+            win.addMouseEventListener(l)
+        }
+
+        override fun onDetach() {
+            if (this.windowMouseListener != null) {
+                var vc = this.getViewContext()
+                if (vc != null) {
+                    var win = vc.getWindow()
+                    if (win != null) {
+                        win.removeMouseEventListener(this.windowMouseListener)
+                    }
+                }
+                this.windowMouseListener = null
+            }
+            base.onDetach()
+        }
 
         fun getText(): String {
             return this.text
@@ -583,6 +671,42 @@ namespace Am.Ui
                 }
             }
             graphics.popClipRect()
+
+            // Self-drive the spinner animation by re-queuing a paint
+            // at the end of each frame. requestRepaint() is gated by
+            // a `repaintRequested` flag so back-to-back calls inside
+            // a single cycle are cheap; the next IDCMP refresh tick
+            // brings us back here for the next frame.
+            if (this.spinnerMode) {
+                this.requestRepaint()
+            }
+        }
+
+        // Spinner half-height in pixels for the current frame. Maps
+        // the system clock through a triangular wave so the cursor
+        // pulses from full height to zero and back over
+        // SPINNER_CYCLE_MS ms. `fullSpan` is the full cursor height
+        // in pixels (y2 - y1); the result is clamped into [0,
+        // fullSpan/2] so the centred bar never exceeds the original
+        // cursor's vertical footprint.
+        private static fun spinnerHalfHeight(fullSpan: Short): Short {
+            var fullHalf = (fullSpan / 2S).toLong()
+            if (fullHalf <= 0L) {
+                return 0S
+            }
+            var nowMs = Date.now().getValue().toLong()
+            var t = nowMs % TextField.SPINNER_CYCLE_MS
+            var half = TextField.SPINNER_CYCLE_MS / 2L
+            // Triangle 0..half..0 across one full cycle. `tri` is
+            // seeded to the falling-edge value so the renderer emits
+            // the declaration — bare `var tri: Long` without an
+            // initializer is silently dropped on amlc today.
+            var tri: Long = TextField.SPINNER_CYCLE_MS - t
+            if (t < half) {
+                tri = t
+            }
+            // Map 0..half → 0..fullHalf
+            return ((tri * fullHalf) / half).toShort()
         }
 
         // Paint the caret at `this.cursorPosition`.
@@ -624,7 +748,17 @@ namespace Am.Ui
 
             graphics.setForegroundPen(this.cursorPen)
             if (focused) {
-                if (onChar) {
+                if (this.spinnerMode) {
+                    // Time-driven triangular wave around the cursor's
+                    // vertical midpoint. Reads as the cursor "folding
+                    // edge-on" and back — a cheap loading indicator
+                    // that doesn't need a real timer thread.
+                    var halfH = TextField.spinnerHalfHeight(y2 - y1)
+                    var midY = (y1 + y2) / 2S
+                    var sy1 = midY - halfH
+                    var sy2 = midY + halfH
+                    graphics.fillRect(x1, sy1, x2, sy2)
+                } else if (onChar) {
                     // Just the top + bottom bands; the glyph repaint
                     // below fills the middle row with the inverted
                     // character.

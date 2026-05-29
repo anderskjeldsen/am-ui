@@ -941,7 +941,7 @@ namespace Am.Ui
                 var textY = y + halfSpacing
                 this.drawLine(graphics, line, i, 0S, textY)
 
-                if (i == this.cursorLine) {
+                if (i == this.cursorLine && TextEditor.isCursorVisibleNow()) {
                     var cursorX = 0S
                     if (this.cursorCol > 0) {
                         var before = line.substring(0UI, this.cursorCol.toUInt())
@@ -1066,7 +1066,59 @@ namespace Am.Ui
             this.dirtyLineTo = -1
             this.pendingScrollLineFrom = -1
             this.pendingScrollDy = 0S
+
+            // Self-drive the cursor blink while we hold focus. Without
+            // this, the cursor would render whatever phase the last
+            // paint happened to catch and stay frozen until something
+            // else (typing, scroll) triggered a refresh. Same self-
+            // driving pattern as TextField's spinnerMode — Window.paint
+            // resets repaintRequested at the start of each cycle, so
+            // requesting from inside paint correctly queues the next
+            // frame instead of being swallowed by an already-set flag.
+            if (this.isEditorFocused()) {
+                this.markCursorLineDirty()
+                this.requestRepaint()
+            }
         }
+
+        // Triangular blink: cursor visible for the first half of every
+        // CURSOR_BLINK_CYCLE_MS millis, hidden for the second half.
+        // Time-driven so it stays in sync across the rendering of
+        // multiple lines in the same paint cycle and across partial
+        // re-renders that only touch a subset of lines.
+        private static fun isCursorVisibleNow(): Bool {
+            var nowMs = Date.now().getValue().toLong()
+            var t = nowMs % TextEditor.CURSOR_BLINK_CYCLE_MS
+            return t < (TextEditor.CURSOR_BLINK_CYCLE_MS / 2L)
+        }
+
+        // Mark only the cursor's line dirty for the next paint so the
+        // blink doesn't force a full editor repaint every ~500 ms.
+        // renderLineRange will re-pre-fill that line's strip, then
+        // either draw the caret (visible half) or not (hidden half).
+        private fun markCursorLineDirty() {
+            this.markDirtyLine(this.cursorLine)
+        }
+
+        // True when this editor currently holds the window's keyboard
+        // focus — used to gate the blink ticker so a background tab
+        // doesn't keep requesting frames.
+        private fun isEditorFocused(): Bool {
+            var vc = this.getViewContext()
+            if (vc == null) {
+                return false
+            }
+            var w = vc.getWindow()
+            if (w == null) {
+                return false
+            }
+            return w.getKeyboardFocus() == this
+        }
+
+        // Full on/off cycle in milliseconds. 1000ms ≈ matches the
+        // OS standard caret cadence (~500ms half). Tweak in one
+        // place if you want a faster / slower blink.
+        private static const CURSOR_BLINK_CYCLE_MS: Long = 1000L
 
         // -------- mouse positioning --------
 
@@ -1307,6 +1359,20 @@ namespace Am.Ui
                 this.backspace()
                 return true
             }
+            // Ctrl+C — copy the current line. Falls back to a
+            // line-level copy until a real selection model lands;
+            // most users still get the "copy this snippet" reflex.
+            if (keyChar == 3US) {
+                this.copyCurrentLine()
+                return true
+            }
+            // Ctrl+V — paste at the cursor. Multi-line clipboard
+            // content splits on \n and inserts a newline between
+            // each segment; \r is dropped (handles CRLF input).
+            if (keyChar == 22US) {
+                this.pasteAtCursor()
+                return true
+            }
             if (keyChar == 13US || keyChar == 10US) {
                 this.insertNewLine()
                 return true
@@ -1321,6 +1387,56 @@ namespace Am.Ui
                 return true
             }
             return false
+        }
+
+        // Copy the line the cursor is on to the system clipboard.
+        // No-op if the view is detached. Stand-in for selection-
+        // based copy — picks up the "copy this snippet" muscle
+        // memory most users have without needing the selection
+        // model.
+        private fun copyCurrentLine() {
+            var vc = this.getViewContext()
+            if (vc == null) {
+                return
+            }
+            var w = vc.getWindow()
+            if (w == null) {
+                return
+            }
+            w.copyToClipboard(this.currentLine())
+        }
+
+        // Paste the system clipboard's contents at the cursor.
+        // Iterates the string char-by-char; on LF the buffer
+        // breaks the current line into a new one (insertNewLine),
+        // on CR we skip (CRLF normalisation), everything else
+        // routes through insertChar so the existing dirty / cursor
+        // / scroll plumbing fires per char.
+        private fun pasteAtCursor() {
+            var vc = this.getViewContext()
+            if (vc == null) {
+                return
+            }
+            var w = vc.getWindow()
+            if (w == null) {
+                return
+            }
+            var text = w.pasteFromClipboard()
+            if (text == null || text.length() == 0) {
+                return
+            }
+            var i = 0
+            while (i < text.length()) {
+                var ch = text.substring(i.toUInt(), 1UI).toBytes("UTF-8")[0UI].toUShort()
+                if (ch == 10US) {
+                    this.insertNewLine()
+                } else if (ch == 13US) {
+                    // skip — CRLF normalises to just the LF above
+                } else {
+                    this.insertChar(ch)
+                }
+                i = i + 1
+            }
         }
     }
 }

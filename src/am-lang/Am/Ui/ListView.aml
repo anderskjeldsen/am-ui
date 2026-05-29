@@ -76,6 +76,7 @@ namespace Am.Ui
 
             if (b1 || b2) {
                 graphics.translate(ix, iy)
+                this.beginPaintCycle()
                 this.paint(graphics)
                 graphics.translate(-ix, -iy)
             }

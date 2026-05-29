@@ -21,6 +21,17 @@ namespace Am.Ui
         // this to their accent colour.
         var scrollbarThumbHoverPen: UByte = 1UB
 
+        // Fill pen for the viewport background. Used to wipe the
+        // off-screen buffer below the child before re-painting on
+        // every cycle. Without this, scrolling drags rows leave
+        // ghost pixels behind in the gaps between rows (anything
+        // the child does NOT draw over). `fillBackground` gates the
+        // fill so the legacy "paint() is a no-op" behaviour stays
+        // the default — callers opt in by flipping the flag and
+        // setting `backgroundPen`.
+        var backgroundPen: UByte = 0UB
+        var fillBackground: Bool = false
+
         private static const SCROLLBAR_W: Short  = 10S
         private static const MIN_THUMB_H: Short  = 16S
         private static const THUMB_INSET: Short  = 1S
@@ -39,6 +50,15 @@ namespace Am.Ui
         // conventions for scrollbar feedback).
         private var thumbHovered: Bool        = false
 
+        // Window-level mouse listener. Subscribed in onAttach so
+        // the scrollbar's drag and hover state stay correct even
+        // when LayeredPane routes moves to a *different* layer
+        // (e.g. an overlay sits over us): the global listener
+        // fires for every move + button event regardless of
+        // routing, and the dispatch path keeps handling in-bounds
+        // clicks and clean wheel events.
+        private var mouseListener: MouseEventListener = null
+
         override fun setDefaultPadding() {
             this.setPadding(0S)
         }
@@ -50,11 +70,136 @@ namespace Am.Ui
         override fun onAttach(viewContext: ViewContext) {
             base.onAttach(viewContext)
             this.child?.onAttach(viewContext)
+
+            // Hook the window's global mouse stream. We want move
+            // events even when the cursor sits in another layer
+            // (LayeredPane stopped routing those to us), so a
+            // thumb drag started inside this view keeps tracking
+            // and hover state clears when the user lifts the
+            // button without sliding back onto the bar.
+            var win = viewContext.getWindow()
+            if (win == null) {
+                return
+            }
+            var self = this
+            var ml = new MouseEventListener()
+            ml.listener = (me) => {
+                self.onWindowMouse(me)
+                return false
+            }
+            this.mouseListener = ml
+            win.addMouseEventListener(ml)
         }
 
         override fun onDetach() {
+            if (this.mouseListener != null) {
+                var vc = this.getViewContext()
+                if (vc != null) {
+                    var win = vc.getWindow()
+                    if (win != null) {
+                        win.removeMouseEventListener(this.mouseListener)
+                    }
+                }
+                this.mouseListener = null
+            }
             base.onDetach()
             this.child?.onDetach()
+        }
+
+        // Window-level mouse event handler. NOT private — the
+        // listener lambda is compiled into a separate inner class
+        // that can't reach private members of ScrollView (silent
+        // runtime no-op per [[feedback-amlang-lambda-gotchas]]
+        // §Bonus rule).
+        //
+        // Three things we care about:
+        //   * move while dragging: update scrollY from absolute
+        //     coords. The dispatch path also fires when the
+        //     cursor is still in-bounds, so we only do work here
+        //     when the dispatch path can't reach us — but it's
+        //     cheap, so just doing it unconditionally is fine.
+        //   * up while dragging: end the drag. Mirrors the
+        //     existing onMouseEvent up handler; this one runs
+        //     even if the cursor lifted in a sibling layer.
+        //   * move without drag: clear hover state when the
+        //     cursor leaves the bar lane. Without this, the hover
+        //     highlight stays lit after the cursor enters an
+        //     overlay above us.
+        fun onWindowMouse(me: MouseEvent) {
+            if (me.type == MouseEventType.move) {
+                if (this.draggingThumb) {
+                    this.updateDragFromWindow(me.x, me.y)
+                }
+                // Always update hover, even during a drag. The visual
+                // override (`thumbHovered || draggingThumb`) keeps the
+                // highlight lit while dragging regardless, so this is
+                // cosmetic-only — but if the drag flag got stuck
+                // somehow, at least the hover state reflects reality.
+                this.updateHoverFromWindow(me.x, me.y)
+            } else if (me.type == MouseEventType.down) {
+                // Defensive clear: an unfinished previous drag (e.g.
+                // user released the button outside the window so we
+                // never saw the up event) would otherwise keep
+                // draggingThumb set forever. A fresh mousedown is the
+                // earliest reliable signal that the previous gesture
+                // is over.
+                if (this.draggingThumb) {
+                    this.draggingThumb = false
+                }
+                this.updateHoverFromWindow(me.x, me.y)
+            } else if (me.type == MouseEventType.up) {
+                if (this.draggingThumb) {
+                    this.draggingThumb = false
+                }
+                if (!this.cursorIsOverThumbWindow(me.x, me.y)) {
+                    this.setThumbHovered(false)
+                }
+            }
+        }
+
+        // Translate window-absolute coords into the scroll view's
+        // local frame and feed them through the drag math used by
+        // onMouseEvent's move path. Same delta-from-drag-start
+        // formula so the thumb tracks the cursor 1:1.
+        fun updateDragFromWindow(wx: Short, wy: Short) {
+            var r = this.computeWindowRect()
+            var ly = wy - r.y
+            var dy = (ly - this.dragMouseStartY).toInt()
+            var travel = (this.viewportHeight() - this.thumbHeight()).toInt()
+            if (travel <= 0) {
+                return
+            }
+            var max = this.maxScrollY().toInt()
+            var newScroll = this.dragScrollStartY.toInt() + (dy * max) / travel
+            this.scrollY = newScroll.toShort()
+            this.clampScrollY()
+            this.forceRepaintNow()
+        }
+
+        // Re-evaluate the thumb-hover highlight using window-
+        // absolute coords. Used by the window mouse listener so
+        // the highlight clears even when the cursor enters an
+        // overlay above us (LayeredPane stops dispatching moves
+        // to our layer in that case).
+        fun updateHoverFromWindow(wx: Short, wy: Short) {
+            this.setThumbHovered(this.cursorIsOverThumbWindow(wx, wy))
+        }
+
+        // Window-absolute hit test against the thumb's pane-space
+        // rect. Returns false when there's no scrollbar at all.
+        private fun cursorIsOverThumbWindow(wx: Short, wy: Short): Bool {
+            if (!this.needsScrollbar()) {
+                return false
+            }
+            var r = this.computeWindowRect()
+            var sbX = r.x + this.scrollbarX()
+            var sbX2 = sbX + ScrollView.SCROLLBAR_W
+            if (wx < sbX || wx >= sbX2) {
+                return false
+            }
+            var ty = r.y + this.thumbY()
+            var ty2 = ty + this.thumbHeight()
+            return wy >= ty && wy < ty2
         }
 
         override fun minHeight(): Short {
@@ -159,15 +304,36 @@ namespace Am.Ui
             if (this.child == null) {
                 return
             }
-            // Lay the child out at its natural height but force its
-            // width to the viewport (minus the scrollbar lane when one
-            // is needed). The scroll position is what shifts the child
-            // visually — its layout coords stay anchored at (0, 0).
+            var fullWidth = this.width.toShort()
+            var availH = this.height.toShort()
+            // Probe pass — lay the child out at full width so its
+            // wrap state (and therefore minHeight) reflects the
+            // "no scrollbar yet" case. Without this, the child's
+            // minHeight may still be the small cached value from a
+            // previous narrower layout, the probe says
+            // "scrollbar needed = false", the child gets the full
+            // width, but then a new bubble (added between layouts)
+            // pushes minHeight past the viewport — and the scrollbar
+            // paints on top of the content's right edge.
+            this.child.layout(0S, 0S, fullWidth.toUShort(), availH.toUShort())
+            var vw = fullWidth
+            if (this.child.minHeight() > availH) {
+                vw = fullWidth - ScrollView.SCROLLBAR_W
+            }
+            // Narrowing forces a re-wrap on WrappedTextView-bearing
+            // children, which can grow minHeight further. Lay out
+            // again at the actual viewport width so the row count is
+            // re-counted before the final height pass below.
+            if (vw != fullWidth) {
+                this.child.layout(0S, 0S, vw.toUShort(), availH.toUShort())
+            }
+            // Final pass — give the child whichever is taller of its
+            // natural content height or the viewport itself, so the
+            // scroll-y math has room to walk.
             var ch = this.child.minHeight()
-            var vw = this.viewportWidth()
             var laidH = ch
-            if (laidH < this.height.toShort()) {
-                laidH = this.height.toShort()
+            if (laidH < availH) {
+                laidH = availH
             }
             this.child.layout(0S, 0S, vw.toUShort(), laidH.toUShort())
             this.clampScrollY()
@@ -190,6 +356,7 @@ namespace Am.Ui
 
             if (b1 || b2) {
                 graphics.translate(ix, iy)
+                this.beginPaintCycle()
                 this.paint(graphics)
                 this.reportPaintedBounds(graphics, viewWidth, viewHeight)
                 graphics.translate(-ix, -iy)
@@ -273,10 +440,29 @@ namespace Am.Ui
                                   this.viewportHeight())
         }
 
-        // Default paint() is a no-op — the scroll view is normally
-        // overlaid on the parent's background. Override or wrap in a
-        // Panel if you need a fill.
+        // Phase-1 viewport fill — needed when scrolling, otherwise
+        // the offscreen buffer keeps the previous frame's pixels in
+        // any area the children don't repaint (between rows, below
+        // a short list, etc). Partial scroll cycles don't trigger
+        // the slot's bg fill, so without this the gaps show stale
+        // card / row content.
+        //
+        // Opt-in via `fillBackground` so legacy callers that wrap
+        // the ScrollView in a Panel keep working. Pen is the
+        // caller-set `backgroundPen` — restyleScrollbar in
+        // AminetView / ChatGptView keeps it in sync with their
+        // sidebar-bg.
         override fun paint(graphics: Graphics) {
+            if (!this.fillBackground) {
+                return
+            }
+            var w = this.viewportWidth()
+            var h = this.viewportHeight()
+            if (w <= 0S || h <= 0S) {
+                return
+            }
+            graphics.setForegroundPen(this.backgroundPen)
+            graphics.fillRect(0S, 0S, w - 1S, h - 1S)
         }
 
         private fun paintScrollbar(graphics: Graphics) {

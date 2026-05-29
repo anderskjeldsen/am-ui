@@ -45,10 +45,15 @@ function_result Am_Ui_NativeLibraryManager__native_release_0(aobject * const thi
     function_result __result = { .has_return_value = false };
     bool __returning = false;
 
-    if (CyberGfxBase != NULL) {
-        CloseLibrary(CyberGfxBase);
-        CyberGfxBase = NULL;
-    }
+    // CyberGfxBase was opened via __ensure_library, so it lives in
+    // the __first_lib_node list managed by amiga.c. The destructor
+    // on __release_libraries owns the CloseLibrary now — calling
+    // it here too would double-close the handle (singleton release
+    // fires during GC sweep, then __release_libraries fires from
+    // the C-runtime atexit chain). Just null the proto reference so
+    // anything that re-reads it during teardown gets NULL instead
+    // of a stale pointer.
+    CyberGfxBase = NULL;
 
 __exit: ;
     return __result;

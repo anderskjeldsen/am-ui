@@ -94,6 +94,7 @@ namespace Am.Ui
 
             if (b1 || b2) {
                 graphics.translate(ix, iy)
+                this.beginPaintCycle()
                 this.paint(graphics)
                 // Panel's paint() fills its bg + border across the
                 // full inner box; report it so the cycle's blit
