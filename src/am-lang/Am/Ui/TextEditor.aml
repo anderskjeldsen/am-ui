@@ -107,6 +107,27 @@ namespace Am.Ui
         // move off-screen.
         private var scrollLine: Int = 0
 
+        // Horizontal scroll offset in PIXELS (not columns — column
+        // arithmetic breaks once tabs and proportional glyph widths
+        // enter the picture). Each visible line is rendered at
+        // x = (0 - scrollPixelX), so columns whose pixel position is
+        // less than scrollPixelX fall off the left edge and the
+        // viewport effectively shows a sliding window of each line.
+        // Auto-advanced by the horizontal branch of
+        // ensureCursorVisible() so the cursor never disappears off
+        // either edge after a right-arrow / End / typing.
+        //
+        // Keeps a small margin of context past the cursor instead of
+        // glueing it to the edge — see HSCROLL_MARGIN_PX below.
+        private var scrollPixelX: Short = 0S
+
+        // Number of pixels of breathing room kept between the cursor
+        // and whichever edge it just bumped into. Without it, the
+        // cursor sits right at the viewport edge after a scroll,
+        // which reads as broken because the next character you type
+        // appears with no visual lead-in.
+        private static const HSCROLL_MARGIN_PX: Short = 16S
+
         // Fired after every user-initiated edit (insertChar /
         // insertNewLine / backspace). Does NOT fire on setText —
         // setText is the load-from-disk pathway and should not mark a
@@ -327,13 +348,17 @@ namespace Am.Ui
             graphics.fillRect((sbX + TextEditor.THUMB_INSET), ty, ((sbX + sbW) - TextEditor.THUMB_INSET) - 1S, (ty + th) - 1S)
         }
 
-        // Adjust scrollLine so the cursor sits inside the viewport.
-        // Called after every cursor move (arrows, click, insert,
-        // backspace, page nav). Returns true if scrollLine actually
-        // changed — caller can then force a full repaint to redraw the
-        // newly-visible band of lines.
+        // Adjust scrollLine / scrollPixelX so the cursor sits inside
+        // the viewport. Called after every cursor move (arrows,
+        // click, insert, backspace, page nav). Returns true if
+        // either scroll axis actually changed — caller can then
+        // force a full repaint to redraw the newly-visible band of
+        // lines / columns.
         private fun ensureCursorVisible(): Bool {
-            var oldScroll = this.scrollLine
+            var oldScrollLine = this.scrollLine
+            var oldScrollX = this.scrollPixelX
+
+            // ---- vertical (existing behaviour) -------------------
             if (this.cursorLine < this.scrollLine) {
                 this.scrollLine = this.cursorLine
             } else {
@@ -346,7 +371,54 @@ namespace Am.Ui
             if (this.scrollLine < 0) {
                 this.scrollLine = 0
             }
-            return this.scrollLine != oldScroll
+
+            // ---- horizontal --------------------------------------
+            // Compute the cursor's pixel X within its line. Uses the
+            // font's calculateStringWidth (via measureLineWidthF) so
+            // tabs and proportional widths are correctly accounted
+            // for — same path the painter uses for drawing the
+            // cursor itself, so the two never disagree.
+            //
+            // No font? Skip. The horizontal scroll only ever matters
+            // when there's a font to measure against, and the paint
+            // path also skips when font is null.
+            var f = this.getUsedFont()
+            if (f != null && this.cursorLine < this.lines.getSize()) {
+                var line = this.lines.get(this.cursorLine)
+                var cursorPixelX: Short = 0S
+                if (this.cursorCol > 0 && line.length() > 0) {
+                    var clampedCol = this.cursorCol
+                    if (clampedCol > line.length()) {
+                        clampedCol = line.length()
+                    }
+                    var prefix = line.substring(0UI, clampedCol.toUInt())
+                    cursorPixelX = this.measureLineWidthF(f, prefix)
+                }
+
+                var viewW = this.viewportWidth()
+                var margin = TextEditor.HSCROLL_MARGIN_PX
+                // Don't try to keep a margin we can't afford — in a
+                // tiny viewport just track the cursor 1:1.
+                if (margin * 2S >= viewW) {
+                    margin = 0S
+                }
+
+                // Cursor fell off the left edge (or close to it).
+                if (cursorPixelX < this.scrollPixelX + margin) {
+                    this.scrollPixelX = cursorPixelX - margin
+                }
+                // Cursor fell off the right edge.
+                var rightLimit = (this.scrollPixelX + viewW) - margin
+                if (cursorPixelX > rightLimit) {
+                    this.scrollPixelX = (cursorPixelX + margin) - viewW
+                }
+                if (this.scrollPixelX < 0S) {
+                    this.scrollPixelX = 0S
+                }
+            }
+
+            return this.scrollLine != oldScrollLine
+                || this.scrollPixelX != oldScrollX
         }
 
         // -------- public API --------
@@ -368,6 +440,7 @@ namespace Am.Ui
             this.cursorLine = 0
             this.cursorCol = 0
             this.scrollLine = 0
+            this.scrollPixelX = 0S
             this.forceFullRepaint()
             this.requestRepaint()
             this.fireCursorChanged()
@@ -939,13 +1012,19 @@ namespace Am.Ui
                 // half the lineSpacing — splits the gap evenly above
                 // and below.
                 var textY = y + halfSpacing
-                this.drawLine(graphics, line, i, 0S, textY)
+                // Shift the entire line left by scrollPixelX so the
+                // viewport shows a sliding window of each line.
+                // Glyphs that fall past the left edge draw at
+                // negative X and the graphics clip keeps them off
+                // the surrounding chrome.
+                var lineStartX = 0S - this.scrollPixelX
+                this.drawLine(graphics, line, i, lineStartX, textY)
 
                 if (i == this.cursorLine && TextEditor.isCursorVisibleNow()) {
-                    var cursorX = 0S
+                    var cursorX = lineStartX
                     if (this.cursorCol > 0) {
                         var before = line.substring(0UI, this.cursorCol.toUInt())
-                        cursorX = this.measureLineWidthG(graphics, before)
+                        cursorX = lineStartX + this.measureLineWidthG(graphics, before)
                     }
                     graphics.setForegroundPen(this.cursorPen)
                     // 2 px wide column, extended 1 px above + below
@@ -1255,7 +1334,10 @@ namespace Am.Ui
                 if (newLine < 0) { newLine = 0 }
                 if (newLine > lastLine) { newLine = lastLine }
                 var lineText = this.lines.get(newLine)
-                var newCol = this.colForPixelX(lineText, x)
+                // x is viewport-relative; add scrollPixelX back to
+                // recover the click position in the line's own
+                // pixel space, which is what colForPixelX expects.
+                var newCol = this.colForPixelX(lineText, x + this.scrollPixelX)
                 this.cursorLine = newLine
                 this.cursorCol = newCol
                 this.markCursorMoveDirty(oldLine)
