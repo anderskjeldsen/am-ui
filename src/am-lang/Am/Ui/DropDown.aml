@@ -1,0 +1,380 @@
+namespace Am.Ui
+{
+    // Simple button-like view that shows the current selection and
+    // opens a PopupMenu of options on click. Mirrors what a desktop
+    // <select> would do — minimal API, no search, no scrolling, no
+    // grouping. The popup is mounted on the caller-supplied
+    // LayeredPane so the dropdown doesn't need to know about the
+    // root window.
+    //
+    // Typical wiring:
+    //
+    //     var dd = new DropDown()
+    //     dd.addItem("gpt-4o-mini")
+    //     dd.addItem("gpt-4o")
+    //     dd.layerHost = rootLayerPane   // IDE-side mount surface
+    //     dd.layerZ    = Program.Z_POPUP // sits above sidebars
+    //     dd.changeListener = (idx) => {
+    //         self.client.model = dd.getSelectedLabel()
+    //         return true
+    //     }
+    //
+    // The dropdown's own paint is a flat rectangle with a 1px border,
+    // the current selection's label, and a trailing "▼" cue. Clicking
+    // anywhere inside opens the popup anchored at the dropdown's
+    // bottom-left corner.
+    class DropDown() : View {
+        import Am.Lang
+        import Am.Collections
+
+        private var items: List<String> = new List<String>()
+        private var selectedIndex: Int = 0
+
+        // Theme. Defaults match TextField's dark scheme.
+        var textPen: UByte       = 1UB
+        var backgroundPen: UByte = 0UB
+        var borderPen: UByte     = 1UB
+        var hoverBgPen: UByte    = 2UB
+
+        // Popup theme — forwarded to the PopupMenu we mount on click.
+        // If you don't set these the popup uses its own defaults.
+        var popupBgPen: UByte         = 0UB
+        var popupTextPen: UByte       = 1UB
+        var popupHoverBgPen: UByte    = 2UB
+        var popupHoverTextPen: UByte  = 1UB
+        var popupBorderPen: UByte     = 1UB
+
+        // Set by the caller — the LayeredPane the popup is mounted on
+        // and the z-index to use. Without these, clicks open nothing.
+        var layerHost: LayeredPane = null
+        var layerZ: Int = 100
+
+        // Fires with the new index whenever the user picks an item.
+        // Selecting the already-selected item still fires (cheap and
+        // lets the embedder treat the dropdown as "click confirm").
+        var changeListener: (index: Int) => Bool = null
+
+        private var hovered: Bool = false
+        // Open popup we still own a reference to. We close it on a
+        // second click rather than open a duplicate.
+        private var openMenu: PopupMenu = null
+        // Window-level mouse listener — registered while a popup is
+        // open so we can dismiss on any click that misses BOTH the
+        // dropdown rect AND the popup rect. PopupMenu's own onMouseEvent
+        // catches outside clicks that reach it via the layered-pane
+        // dispatch, but a click routed to a non-popup layer can sneak
+        // past it. Belt-and-braces.
+        private var windowMouseListener: MouseEventListener = null
+
+        fun addItem(label: String): DropDown {
+            this.items.add(label)
+            return this
+        }
+
+        fun getItemCount(): Int {
+            return this.items.getSize()
+        }
+
+        fun getItem(i: Int): String {
+            return this.items.get(i)
+        }
+
+        fun getSelectedIndex(): Int {
+            return this.selectedIndex
+        }
+
+        fun getSelectedLabel(): String {
+            if (this.items.getSize() == 0) {
+                return ""
+            }
+            if (this.selectedIndex < 0 || this.selectedIndex >= this.items.getSize()) {
+                return ""
+            }
+            return this.items.get(this.selectedIndex)
+        }
+
+        fun setSelectedIndex(i: Int) {
+            if (i < 0 || i >= this.items.getSize()) {
+                return
+            }
+            if (this.selectedIndex == i) {
+                return
+            }
+            this.selectedIndex = i
+            this.requestRepaint()
+        }
+
+        // Pick the item whose label equals `label`. No-op when no
+        // match — saves the caller a manual loop in the common
+        // "remember last choice" case.
+        fun setSelectedLabel(label: String) {
+            if (label == null) {
+                return
+            }
+            var i = 0
+            while (i < this.items.getSize()) {
+                if (this.items.get(i).equals(label)) {
+                    this.setSelectedIndex(i)
+                    return
+                }
+                i = i + 1
+            }
+        }
+
+        override fun minWidth(): Short {
+            // No font measurement here — leave width control to the
+            // embedder via padding / growX. A floor of 60 px keeps a
+            // freshly-allocated dropdown clickable before pens land.
+            return 60S + base.minWidth()
+        }
+
+        override fun minHeight(): Short {
+            var vc = this.getViewContext()
+            var fontHeight: Short = 12S
+            if (vc != null) {
+                fontHeight = vc.getWindow().getCurrentFontSize().toShort()
+            }
+            // Same +4S breathing room TextField bakes in so the
+            // glyph row isn't clipped against the border.
+            return fontHeight + 4S + base.minHeight()
+        }
+
+        override fun paint(graphics: Graphics) {
+            var w = this.width.toShort()
+            var h = this.height.toShort()
+            if (w <= 0S || h <= 0S) {
+                return
+            }
+            var bg = this.backgroundPen
+            if (this.hovered) {
+                bg = this.hoverBgPen
+            }
+            graphics.setForegroundPen(bg)
+            graphics.fillRect(0S, 0S, w - 1S, h - 1S)
+
+            // Single-pen border (flat).
+            graphics.setForegroundPen(this.borderPen)
+            graphics.drawLine(0S, 0S, w - 1S, 0S)
+            graphics.drawLine(0S, h - 1S, w - 1S, h - 1S)
+            graphics.drawLine(0S, 0S, 0S, h - 1S)
+            graphics.drawLine(w - 1S, 0S, w - 1S, h - 1S)
+
+            // Label + arrow. The text is left-aligned with a small
+            // inset; the down-arrow sits at the right edge.
+            graphics.setForegroundPen(this.textPen)
+            graphics.setBackgroundPen(bg)
+            var label = this.getSelectedLabel()
+            if (label == null) {
+                label = ""
+            }
+            var pad: Short = 4S
+            var textY = (h - graphics.getCurrentFontSize().toShort()) / 2S
+            if (textY < 0S) {
+                textY = 0S
+            }
+            // Reserve room on the right for the "▼" glyph and a small
+            // gap, so a long label doesn't render under the arrow.
+            var arrowGlyph = "v"
+            var arrowW = graphics.calculateStringWidth(arrowGlyph).toShort()
+            var labelMaxW = w - (pad * 2S) - arrowW - 4S
+            if (labelMaxW < 0S) {
+                labelMaxW = 0S
+            }
+            graphics.drawString(label, pad, textY)
+            // Arrow at right edge.
+            var arrowX = w - pad - arrowW
+            graphics.drawString(arrowGlyph, arrowX, textY)
+        }
+
+        override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
+            if (!this.contains(x, y)) {
+                if (this.hovered) {
+                    this.hovered = false
+                    this.requestRepaint()
+                }
+                return false
+            }
+            if (type == MouseEventType.move) {
+                if (!this.hovered) {
+                    this.hovered = true
+                    this.requestRepaint()
+                }
+                return false
+            }
+            if (type == MouseEventType.up && button == MouseButton.left) {
+                this.togglePopup()
+                return true
+            }
+            return false
+        }
+
+        // Open the popup if closed; close it if open. Either way
+        // returns control immediately — the popup runs on the layer
+        // until the user picks or clicks outside.
+        private fun togglePopup() {
+            if (this.openMenu != null) {
+                this.closePopup()
+                return
+            }
+            if (this.layerHost == null) {
+                return
+            }
+            if (this.items.getSize() == 0) {
+                return
+            }
+            var menu = new PopupMenu()
+            menu.backgroundPen   = this.popupBgPen
+            menu.textPen         = this.popupTextPen
+            menu.hoverBgPen      = this.popupHoverBgPen
+            menu.hoverTextPen    = this.popupHoverTextPen
+            menu.borderPen       = this.popupBorderPen
+            // Anchor at the dropdown's bottom-left corner so the popup
+            // unrolls downward like a desktop combobox.
+            var rect = this.computeWindowRect()
+            menu.anchorX = rect.x
+            menu.anchorY = rect.y + rect.height.toShort()
+
+            var self = this
+            var i = 0
+            while (i < this.items.getSize()) {
+                var label = this.items.get(i)
+                var capturedIdx = i
+                var item = new PopupMenuItem(label)
+                item.action = () => {
+                    self.handleMenuPick(capturedIdx)
+                    return true
+                }
+                menu.addItem(item)
+                i = i + 1
+            }
+
+            // Wire the popup's own close hook so an outside-click also
+            // clears our `openMenu` reference. Without this, a
+            // subsequent dropdown click would think the popup is still
+            // open and just toggle it the wrong way.
+            menu.closeListener = () => {
+                self.handleMenuClose()
+                return true
+            }
+
+            this.openMenu = menu
+            menu.layerHost = this.layerHost
+            menu.layerZ    = this.layerZ
+            this.layerHost.addLayer(menu, this.layerZ)
+            // Give the freshly-attached layer the pane's bounds so
+            // the popup's paint clip rect doesn't collapse before
+            // the next window.layout() pass.
+            var pw = this.layerHost.innerWidth().toUShort()
+            var ph = this.layerHost.innerHeight().toUShort()
+            menu.layout(0S, 0S, pw, ph)
+            this.registerWindowListener()
+        }
+
+        // Forward path for popup-item clicks. NOT private so the
+        // popup's lambda can reach it — same gotcha as the checkbox
+        // callback pattern. Updates the selection and fires our
+        // listener before tearing the popup down.
+        fun handleMenuPick(idx: Int) {
+            this.setSelectedIndex(idx)
+            this.closePopup()
+            var cb = this.changeListener
+            if (cb != null) {
+                cb(idx)
+            }
+        }
+
+        // Invoked from PopupMenu.fireClose when the user clicks
+        // outside the menu rect. Until 2026-05-30 this only cleared
+        // the `openMenu` reference and forgot to call removeLayer,
+        // so the popup stayed visible on the layered pane. Routes
+        // through closePopup now so the layer goes away too.
+        fun handleMenuClose() {
+            this.closePopup()
+        }
+
+        private fun closePopup() {
+            if (this.openMenu == null) {
+                return
+            }
+            if (this.layerHost != null) {
+                this.layerHost.removeLayer(this.openMenu)
+            }
+            this.openMenu = null
+            this.unregisterWindowListener()
+        }
+
+        // Window-level fallback dismiss: any mouseDown anywhere in
+        // the window that's NOT inside the dropdown rect AND not
+        // inside the popup rect → close. PopupMenu's own outside-
+        // click logic still handles the common case; this guards
+        // against click routes that bypass the popup layer (cross-
+        // layer pass-through, focus-grabbing modal entry, etc).
+        private fun registerWindowListener() {
+            if (this.windowMouseListener != null) {
+                return
+            }
+            var vc = this.getViewContext()
+            if (vc == null) {
+                return
+            }
+            var w = vc.getWindow()
+            if (w == null) {
+                return
+            }
+            var self = this
+            var l = new MouseEventListener()
+            l.listener = (me) => {
+                if (me.type != MouseEventType.down) {
+                    return false
+                }
+                if (self.openMenu == null) {
+                    return false
+                }
+                var vc2 = self.getViewContext()
+                if (vc2 == null) {
+                    return false
+                }
+                var w2 = vc2.getWindow()
+                if (w2 == null) {
+                    return false
+                }
+                var mx = w2.getLastMouseX()
+                var my = w2.getLastMouseY()
+                var ddRect = self.computeWindowRect()
+                if (mx >= ddRect.x && mx < ddRect.x + ddRect.width.toShort() &&
+                    my >= ddRect.y && my < ddRect.y + ddRect.height.toShort()) {
+                    return false
+                }
+                var popupRect = self.openMenu.getPaintedBounds()
+                if (mx >= popupRect.x && mx < popupRect.x + popupRect.width.toShort() &&
+                    my >= popupRect.y && my < popupRect.y + popupRect.height.toShort()) {
+                    return false
+                }
+                self.closePopup()
+                return false
+            }
+            this.windowMouseListener = l
+            w.addMouseEventListener(l)
+        }
+
+        private fun unregisterWindowListener() {
+            if (this.windowMouseListener == null) {
+                return
+            }
+            var vc = this.getViewContext()
+            if (vc != null) {
+                var w = vc.getWindow()
+                if (w != null) {
+                    w.removeMouseEventListener(this.windowMouseListener)
+                }
+            }
+            this.windowMouseListener = null
+        }
+
+        override fun onDetach() {
+            this.unregisterWindowListener()
+            this.closePopup()
+            base.onDetach()
+        }
+    }
+}
