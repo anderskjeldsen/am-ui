@@ -245,24 +245,33 @@ namespace Am.Ui
             return 0
         }
 
-        // Mouse routing: front-to-back, first matching layer wins.
-        // For move events the match is geometric (the topmost layer
-        // whose painted bounds contain the cursor); for down / up /
-        // wheel we just walk topmost-first and stop at the first
-        // consumer (OverlayHost gates its own consumption on
-        // panel.contains, so a click in the see-through area still
-        // falls through to the chrome).
+        // Mouse routing.
         //
-        // Lower layers never see a move once a higher layer claims
-        // the cursor. Any hover state they need to clear across
-        // layer changes can subscribe to Window.addMouseEventListener
-        // — that fires for every move with window-absolute coords,
-        // regardless of which layer claimed the dispatch.
+        // MOVE: find the topmost layer whose painted bounds contain
+        // the cursor (the "owner") and dispatch the move to it with
+        // real coords. Every OTHER layer ALSO receives the move, but
+        // with out-of-bounds coords (-1, -1), so its hover-tracking
+        // descendants (Label, Button, FolderTreeNode, etc.) see
+        // `inside == false` from their contains() check and clear
+        // their `hovered` flag. Without this, hover state on the
+        // non-owner layers stays latched when the cursor crosses
+        // layer boundaries: an open overlay panel's close/minimize
+        // glyphs never light up because the overlay layer hadn't
+        // received any moves yet (its `hovered=false` never flipped
+        // to true), and conversely a folder card stays "lit" forever
+        // once an overlay is opened over it.
+        //
+        // DOWN / UP / WHEEL: walk topmost-first and stop at the
+        // first consumer. OverlayHost gates its own consumption on
+        // panel.contains, so a click in the see-through area still
+        // falls through to the chrome below.
         override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
             if (type == MouseEventType.move) {
                 var n = this.getChildren().getSize()
+                // Phase 1: locate the topmost owner (if any).
+                var ownerIdx: Int = -1
                 var i = n - 1
-                while (i >= 0) {
+                while (i >= 0 && ownerIdx < 0) {
                     var c = this.getChildren().get(i)
                     var pb = c.getPaintedBounds()
                     var pbX1 = c.x + pb.x
@@ -270,11 +279,27 @@ namespace Am.Ui
                     var pbX2 = pbX1 + pb.width.toShort()
                     var pbY2 = pbY1 + pb.height.toShort()
                     if (x >= pbX1 && x < pbX2 && y >= pbY1 && y < pbY2) {
-                        return c.onMouseEvent(type, button, x - c.x, y - c.y)
+                        ownerIdx = i
                     }
                     i = i - 1
                 }
-                return false
+                // Phase 2: dispatch to every layer. Owner gets real
+                // coords; non-owners get (-1, -1) so their hover
+                // descendants clear.
+                var anyConsumed = false
+                var j = 0
+                while (j < n) {
+                    var c = this.getChildren().get(j)
+                    if (j == ownerIdx) {
+                        if (c.onMouseEvent(type, button, x - c.x, y - c.y)) {
+                            anyConsumed = true
+                        }
+                    } else {
+                        c.onMouseEvent(type, button, -1S, -1S)
+                    }
+                    j = j + 1
+                }
+                return anyConsumed
             }
 
             // down / up / wheel: topmost first.

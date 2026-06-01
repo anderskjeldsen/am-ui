@@ -622,11 +622,25 @@ namespace Am.Ui
                 // has to reach the child so any *hover* state it's
                 // holding (a Label's [...] glyph, etc.) can clear
                 // when the cursor slides off into a sibling view.
+                //
+                // Forward the event for cleanup, but DO NOT claim it:
+                // when scrolled content is taller than the viewport,
+                // the clipped-out portion still occupies translated
+                // coords that overlap sibling views beyond this
+                // ScrollView. A label inside a clipped chat bubble,
+                // for instance, would otherwise `contains()` an
+                // up-click that visually landed on a sibling agent-
+                // mode checkbox / dropdown / button below the scroll,
+                // returning true and stopping the parent's walk
+                // before the real target sees the click. Forcing
+                // false here keeps the cleanup side-effect while
+                // letting the parent ViewGroup continue dispatching
+                // to its later children.
                 if (this.child != null) {
                     if (type == MouseEventType.up || type == MouseEventType.move) {
                         var ux = x - this.child.x
                         var uy = (y - this.child.y) + this.scrollY
-                        return this.child.onMouseEvent(type, button, ux, uy)
+                        this.child.onMouseEvent(type, button, ux, uy)
                     }
                 }
                 return false
