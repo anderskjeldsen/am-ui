@@ -15,8 +15,33 @@
 
 #include <proto/exec.h>
 #include <proto/graphics.h>
+#include <proto/diskfont.h>
+#include <proto/dos.h>
 
 #include <libc/core_inline_functions.h>
+
+/* diskfont.library isn't auto-opened by m68k-amigaos-gcc's C
+ * startup (only exec / dos / intuition / graphics get that). We
+ * route through __ensure_library so the open is tracked in the
+ * shared lib_node list and CloseLibrary'd by the existing
+ * __release_libraries destructor at process exit. proto/diskfont.h
+ * declares DiskfontBase as extern; one definition lives here. */
+struct Library *DiskfontBase = NULL;
+
+static void am_font_ensure_diskfont(void) {
+    if (DiskfontBase != NULL) {
+        return;
+    }
+    DiskfontBase = (struct Library *)__ensure_library((unsigned char *)"diskfont.library", 36L);
+    if (DiskfontBase == NULL) {
+        printf("[font.native] __ensure_library(diskfont.library, 36) failed\n");
+        fflush(stdout);
+    } else {
+        printf("[font.native] opened diskfont.library v%u\n",
+            (unsigned)DiskfontBase->lib_Version);
+        fflush(stdout);
+    }
+}
 
 function_result Am_Ui_Font__native_init_0(aobject * const this)
 {
@@ -34,13 +59,30 @@ function_result Am_Ui_Font__native_init_0(aobject * const this)
 
     struct TextAttr textAttr = { sh->string_value, size, 0, 0 };
 
-    struct TextFont *font = OpenFont(&textAttr);
+    am_font_ensure_diskfont();
+    if (DiskfontBase == NULL) {
+        __throw_simple_exception("diskfont.library not available", "in Am_Ui_Font__native_init_0", &__result);
+        goto __exit;
+    }
+
+    printf("[font.native] OpenDiskFont(name=%s, size=%u)\n", sh->string_value, (unsigned)size); fflush(stdout);
+
+    /* diskfont.library's OpenDiskFont is a superset of graphics's
+     * OpenFont: it checks the in-memory font list first (so ROM
+     * fonts like topaz/8 + anything previously loaded come back
+     * instantly), then falls back to parsing the .font descriptor
+     * under FONTS:<name>/ and loading the matching bitmap from
+     * disk. Using it unconditionally means a disk-resident font
+     * like helvetica.font opens the same way topaz does. */
+    struct TextFont *font = OpenDiskFont(&textAttr);
 
     if (font == NULL) {
+        printf("[font.native] OpenDiskFont failed (IoErr=%ld)\n", IoErr()); fflush(stdout);
         __throw_simple_exception("Failed to open font", "in Am_Ui_Font__native_init_0", &__result);
 		goto __exit;
     }
 
+    printf("[font.native] opened font %s/%u OK\n", sh->string_value, (unsigned)size); fflush(stdout);
     this->object_properties.class_object_properties.object_data.value.custom_value = font;
 
 __exit: ;
