@@ -554,12 +554,29 @@ function_result Am_Ui_ViewContextGraphics_drawBitmap_0(aobject * const this,
 		unsigned short srcH = bitmap->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_height].nullable_value.value.ushort_value;
 
 		if (destWidth == (short)srcW && destHeight == (short)srcH) {
-			/* 1:1 blit — no scaling needed */
-			BltBitMapRastPort(bitmapData->bitmap, 0, 0,
-			                  rp, tx, ty,
-			                  srcW, srcH, 0xC0);
+			/* 1:1 blit — no scaling needed.
+			 * Mask-aware: when the source carries a 1-bit transparency
+			 * mask (built by createFromImageWithMask),
+			 * BltMaskBitMapRastPort with minterm 0xE0 means
+			 * D = (S AND M) OR (D AND NOT M) — destination pixels under
+			 * cleared mask bits survive. Falls back to vanilla 0xC0
+			 * when no mask is configured. */
+			if (bitmapData->mask != NULL) {
+				BltMaskBitMapRastPort(bitmapData->bitmap, 0, 0,
+				                      rp, tx, ty,
+				                      srcW, srcH, 0xE0,
+				                      (APTR)bitmapData->mask->Planes[0]);
+			} else {
+				BltBitMapRastPort(bitmapData->bitmap, 0, 0,
+				                  rp, tx, ty,
+				                  srcW, srcH, 0xC0);
+			}
 		} else {
-			/* Scale into a temporary bitmap, then blit to screen */
+			/* Scale into a temporary bitmap, then blit to screen.
+			 * Mask is NOT propagated through the scale path — scaled
+			 * masked bitmaps render fully opaque. The current consumer
+			 * (16x16 icon strip) never scales, so this is acceptable
+			 * for now. */
 			ULONG depth = GetBitMapAttr(bitmapData->bitmap, BMA_DEPTH);
 			struct BitMap *scaledBitmap =
 				AllocBitMap(destWidth, destHeight, depth,

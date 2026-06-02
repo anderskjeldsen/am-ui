@@ -404,8 +404,15 @@ function_result Am_Ui_LayerGraphics_blitBitmapRect_0(aobject * const this, aobje
         short tx = lg_translated_x(this, dstX);
         short ty = lg_translated_y(this, dstY);
 
-        // 0xC0 = plain copy (minterm A, no transparency).
-        BltBitMapRastPort(bitmapData->bitmap, srcX, srcY, rp, tx, ty, srcW, srcH, 0xC0);
+        /* Mask-aware: BltMaskBitMapRastPort + minterm 0xE0 when a
+         * transparency mask is present, vanilla 0xC0 otherwise. */
+        if (bitmapData->mask != NULL) {
+            BltMaskBitMapRastPort(bitmapData->bitmap, srcX, srcY,
+                                  rp, tx, ty, srcW, srcH, 0xE0,
+                                  (APTR)bitmapData->mask->Planes[0]);
+        } else {
+            BltBitMapRastPort(bitmapData->bitmap, srcX, srcY, rp, tx, ty, srcW, srcH, 0xC0);
+        }
     }
 __exit: ;
     if (bitmap != NULL) {
@@ -437,7 +444,13 @@ function_result Am_Ui_LayerGraphics_drawBitmap_0(aobject * const this, aobject *
         short ty = lg_translated_y(this, y);
 
         if (destWidth == (short)srcW && destHeight == (short)srcH) {
-            BltBitMapRastPort(bitmapData->bitmap, 0, 0, rp, tx, ty, srcW, srcH, 0xC0);
+            if (bitmapData->mask != NULL) {
+                BltMaskBitMapRastPort(bitmapData->bitmap, 0, 0,
+                                      rp, tx, ty, srcW, srcH, 0xE0,
+                                      (APTR)bitmapData->mask->Planes[0]);
+            } else {
+                BltBitMapRastPort(bitmapData->bitmap, 0, 0, rp, tx, ty, srcW, srcH, 0xC0);
+            }
         } else {
             ULONG depth = GetBitMapAttr(bitmapData->bitmap, BMA_DEPTH);
             struct BitMap *scaled = AllocBitMap(destWidth, destHeight, depth,
