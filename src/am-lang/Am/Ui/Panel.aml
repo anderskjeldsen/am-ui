@@ -184,13 +184,23 @@ namespace Am.Ui
             // thumb hover highlight, button hover) can clear when
             // the cursor slides off the panel into a sibling.
             if (this.contains(x, y) || type == MouseEventType.up || type == MouseEventType.move) {
+                // A Panel with no setChild() still legitimately exists
+                // — callers use bare `new Panel()` as a typed spacer
+                // (e.g. chat-history turn-gap rows). Without this
+                // guard, an up/move event reaching such a Panel
+                // dereferences a null `child` and the entire mouse
+                // dispatch unwinds — silently dropping clicks on the
+                // surrounding tree (the "ChatGPT panel controls dead
+                // after first message" symptom).
                 var c = this.child
-                var lx = x - c.x
-                var ly = y - c.y
+                if (c != null) {
+                    var lx = x - c.x
+                    var ly = y - c.y
 
-                var consumed = c.onMouseEvent(type, button, lx, ly)
-                if (consumed) {
-                    return consumed
+                    var consumed = c.onMouseEvent(type, button, lx, ly)
+                    if (consumed) {
+                        return consumed
+                    }
                 }
             }
             return false

@@ -60,6 +60,10 @@ function_result Am_Ui_Bitmap__native_release_0(aobject * const this)
             FreeBitMap(data->bitmap);
             data->bitmap = NULL;
         }
+        if (data->mask != NULL) {
+            FreeBitMap(data->mask);
+            data->mask = NULL;
+        }
         FreeVec(data);
         this->object_properties.class_object_properties.object_data.value.custom_value = NULL;
     }
@@ -299,5 +303,140 @@ __exit: ;
     }
     printf("[Bitmap.createFromImage] step 23: return\n");
     fflush(stdout);
+    return __result;
+}
+
+// ---------------------------------------------------------------------------
+// createFromImageWithMask(image, window)
+//
+// Same colour-data path as createFromImage_0 plus a 1-bit BitMap whose
+// plane 0 acts as the bltMask for BltMaskBitMapRastPort. A source
+// pixel with alpha >= 128 sets the corresponding mask bit to 1 (this
+// pixel is opaque, copy through); alpha < 128 leaves the bit 0 (let
+// the destination show through). Indexed-source images don't carry an
+// alpha channel — for those we just leave the mask out (caller still
+// gets an opaque blit, matching the no-mask path).
+// ---------------------------------------------------------------------------
+
+function_result Am_Ui_Bitmap_createFromImageWithMask_0(aobject * const this,
+                                                       aobject *image,
+                                                       aobject *window)
+{
+    function_result __result = { .has_return_value = false };
+    bool __returning = false;
+    if (this != NULL) {
+        __increase_reference_count(this);
+    }
+    if (image != NULL) {
+        __increase_reference_count(image);
+    }
+
+    Am_Ui_Bitmap_data *data =
+        (Am_Ui_Bitmap_data *)this->object_properties.class_object_properties.object_data.value.custom_value;
+    if (data == NULL) goto __exit;
+    if (image == NULL) {
+        __throw_simple_exception("image is NULL in createFromImageWithMask",
+                                 "in Am_Ui_Bitmap_f_createFromImageWithMask_0", &__result);
+        goto __exit;
+    }
+    if (data->bitmap != NULL) {
+        __throw_simple_exception("Bitmap already has a native BitMap; replacement not allowed",
+                                 "in Am_Ui_Bitmap_f_createFromImageWithMask_0", &__result);
+        goto __exit;
+    }
+
+    {
+        UWORD width  = image->object_properties.class_object_properties.properties[Am_Imaging_Image_P_width].nullable_value.value.ushort_value;
+        UWORD height = image->object_properties.class_object_properties.properties[Am_Imaging_Image_P_height].nullable_value.value.ushort_value;
+        WORD  pixFmt = image->object_properties.class_object_properties.properties[Am_Imaging_Image_P_pixelFormat].nullable_value.value.int_value;
+
+        data->bitmap = alloc_truecolor_bitmap(width, height, get_friend_bitmap(window));
+        if (data->bitmap == NULL) {
+            __throw_simple_exception("AllocBitMap failed in createFromImageWithMask",
+                                     "in Am_Ui_Bitmap_f_createFromImageWithMask_0", &__result);
+            goto __exit;
+        }
+
+        struct RastPort rp;
+        InitRastPort(&rp);
+        rp.BitMap = data->bitmap;
+
+        if (pixFmt == 2) { /* ARGB */
+            aobject *pixelColorsObj =
+                image->object_properties.class_object_properties.properties[Am_Imaging_Image_P_pixelColors].nullable_value.value.object_value;
+            if (pixelColorsObj != NULL) {
+                array_holder *ah = (array_holder *)&pixelColorsObj[1];
+                unsigned int *pixels = (unsigned int *)(void *)&ah[1];
+
+                /* Colour path: write ARGB pixels to the screen-format
+                 * bitmap exactly like createFromImage. Alpha bits are
+                 * dropped by the WritePixelArray format conversion —
+                 * they're encoded into the separate mask below. */
+                WritePixelArray(pixels, 0, 0, width * 4, &rp, 0, 0,
+                                width, height, RECTFMT_ARGB);
+
+                /* Allocate the 1-bit mask BitMap. Plane 0 is what
+                 * BltMaskBitMapRastPort wants as `bltMask`. BMF_CLEAR
+                 * starts every bit at 0; we'll flip bits on for opaque
+                 * source pixels.
+                 *
+                 * No friend bitmap on purpose — the mask is just raw
+                 * bits, no need for a screen-format match, and the
+                 * blitter handles either chip or fast memory. */
+                data->mask = AllocBitMap(width, height, 1, BMF_CLEAR, NULL);
+                if (data->mask == NULL) {
+                    /* Mask alloc is best-effort: if it fails we end up
+                     * with a fully-opaque bitmap (the same behaviour
+                     * as the no-mask factory). No exception — better
+                     * to render the icon as an opaque square than to
+                     * lose the whole panel. */
+                    printf("[Bitmap.createFromImageWithMask] mask AllocBitMap failed; opaque fallback\n");
+                    fflush(stdout);
+                } else {
+                    UBYTE *maskPlane = (UBYTE *)data->mask->Planes[0];
+                    UWORD bytesPerRow = data->mask->BytesPerRow;
+                    UWORD y, x;
+                    /* Threshold: alpha > MASK_ALPHA_THRESHOLD -> opaque.
+                     * 64 (~25%) keeps anti-aliased edges of box-filtered
+                     * pixel art visible. A higher value (128 = 50%) made
+                     * a 16->8 downsampled "+" disappear because the
+                     * arms landed at alpha 127. Anything dimmer than
+                     * 25% is still cut as transparent so isolated
+                     * stray pixels don't show up as faint dots. */
+                    for (y = 0; y < height; y++) {
+                        UBYTE *row = maskPlane + (ULONG)y * bytesPerRow;
+                        unsigned int *srcRow = pixels + (ULONG)y * width;
+                        for (x = 0; x < width; x++) {
+                            unsigned int argb = srcRow[x];
+                            UBYTE alpha = (UBYTE)((argb >> 24) & 0xFF);
+                            if (alpha > 64) {
+                                /* MSB-first within each byte — bit 7
+                                 * of byte 0 covers pixel 0 of the row,
+                                 * matching the AmigaOS blitter's bit
+                                 * order on a bitplane. */
+                                row[x >> 3] |= (UBYTE)(0x80 >> (x & 7));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        /* Indexed images: leave mask NULL; drawBitmap falls back to
+         * the vanilla copy and the bitmap is fully opaque. Adding
+         * alpha-aware decoding for indexed PNGs would mean reading
+         * the tRNS chunk through to here — out of scope for now. */
+
+        this->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_width].nullable_value.value.ushort_value   = width;
+        this->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_height].nullable_value.value.ushort_value  = height;
+        this->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_pixelFormat].nullable_value.value.int_value = 1; /* ZRGB */
+    }
+
+__exit: ;
+    if (image != NULL) {
+        __decrease_reference_count(image);
+    }
+    if (this != NULL) {
+        __decrease_reference_count(this);
+    }
     return __result;
 }

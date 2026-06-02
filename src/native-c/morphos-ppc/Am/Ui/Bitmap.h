@@ -11,6 +11,7 @@
 typedef struct _Am_Ui_Bitmap_data Am_Ui_Bitmap_data;
 struct _Am_Ui_Bitmap_data {
     struct BitMap *bitmap;
+    struct BitMap *mask;
 };
 
 #endif

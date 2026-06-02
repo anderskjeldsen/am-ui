@@ -27,6 +27,28 @@ namespace Am.Ui
         var trailingPen: UByte = 1UB
         var trailingClickListener: (view: View) => Bool = null
 
+        // Optional: when set, paint THIS bitmap at the trailing slot
+        // instead of `trailingGlyph` (still gated on hover; same hit
+        // zone). Used by the IDE's icon-strip affordances — Git
+        // sidebar's "+" comes from assets/icons.png so the row reads
+        // as a clickable icon rather than an ASCII glyph. Width is
+        // taken from the bitmap; height from the label's text height
+        // so the icon is squashed/stretched as needed to align with
+        // the baseline. Null → fall back to trailingGlyph.
+        var trailingBitmap: Bitmap = null
+
+        // Optional SECOND hover-only affordance, painted just to the
+        // left of `trailingGlyph` with the same BADGE_GAP separator.
+        // Lets a row carry two distinct hover actions — Git sidebar
+        // uses this for "+" (stage) + "I" (ignore) on untracked rows.
+        // Same hover gating + click semantics as trailingGlyph; its
+        // hit zone runs from the secondary glyph's left edge up to
+        // the primary trailing glyph's left edge, so a click on the
+        // primary still fires that one and not this one.
+        var secondaryTrailingGlyph: String = null
+        var secondaryTrailingPen: UByte = 1UB
+        var secondaryTrailingClickListener: (view: View) => Bool = null
+
         // Always-visible badge glyph painted at the far right of the
         // row (further right than `trailingGlyph`, which only paints
         // on hover). Used by the Git sidebar for the per-row "U"
@@ -52,6 +74,16 @@ namespace Am.Ui
         // Pixels of gap between the leading glyph and the regular text.
         var leadingGap: Short = 4S
 
+        // Optional bitmap variant of the leading affordance. When set,
+        // paints at the row's left edge BEFORE `leadingGlyph` so the
+        // visual order is: leadingBitmap (icon), leadingGlyph (text
+        // affordance), text. Same always-visible / click-independent
+        // semantics as leadingGlyph; pen-tinted glyphs and a bitmap
+        // can coexist when both are set (e.g. folder-tree row: chevron
+        // bitmap + git-repo "G" glyph + folder name).
+        var leadingBitmap: Bitmap = null
+        var leadingBitmapClickListener: (view: View) => Bool = null
+
         fun getUsedFont(): Font {
             if (this.font != null) {
                 return this.font
@@ -75,6 +107,23 @@ namespace Am.Ui
                     textH = win.getCurrentFontSize().toShort()
                 }
             }
+            // Reserve room for a trailing bitmap if one is set, even
+            // when it's hover-only painted — without this the row
+            // collapses to text height and the bitmap clips against
+            // the row below.
+            if (this.trailingBitmap != null) {
+                var bh = this.trailingBitmap.height.toShort()
+                if (bh > textH) {
+                    textH = bh
+                }
+            }
+            // Same story for the always-visible leading bitmap.
+            if (this.leadingBitmap != null) {
+                var lbh = this.leadingBitmap.height.toShort()
+                if (lbh > textH) {
+                    textH = lbh
+                }
+            }
             return textH + this.padding.top + this.padding.bottom + this.margin.top + this.margin.bottom + this.borderWidths.top + this.borderWidths.bottom
         }
 
@@ -83,8 +132,11 @@ namespace Am.Ui
             var win = this.getViewContext().getWindow()
             var textW = win.calculateStringWidth(font, this.text).toShort()
             var leadW = 0S
+            if (this.leadingBitmap != null) {
+                leadW = leadW + this.leadingBitmap.width.toShort() + this.leadingGap
+            }
             if (this.leadingGlyph != null) {
-                leadW = win.calculateStringWidth(font, this.leadingGlyph).toShort() + this.leadingGap
+                leadW = leadW + win.calculateStringWidth(font, this.leadingGlyph).toShort() + this.leadingGap
             }
             // Match minHeight: report the full bounding box so HStack
             // layout actually reserves room for horizontal padding /
@@ -131,6 +183,19 @@ namespace Am.Ui
             var textX = this.margin.left + this.borderWidths.left + this.padding.left
             var textY = this.margin.top + this.borderWidths.top + this.padding.top
 
+            // Leading bitmap (always visible, sits at the very left
+            // edge before any text glyph). When both bitmap and glyph
+            // are set the bitmap paints first and the glyph paints
+            // immediately after, then the text. Folder-tree rows use
+            // this slot for the expand/collapse chevron with the git-
+            // repo "G" coexisting in `leadingGlyph`.
+            if (this.leadingBitmap != null) {
+                var lbw = this.leadingBitmap.width.toShort()
+                var lbh = this.leadingBitmap.height.toShort()
+                graphics.drawBitmap(this.leadingBitmap, textX, textY, lbw, lbh)
+                textX = textX + lbw + this.leadingGap
+            }
+
             // Leading glyph (always visible). Painted first; text
             // shifts right by the glyph width + gap.
             if (this.leadingGlyph != null) {
@@ -159,11 +224,77 @@ namespace Am.Ui
             // right edge of the row. When a badge is also present,
             // the trailing glyph sits just to its left with a small
             // gap (BADGE_GAP).
-            if (this.hovered && this.trailingGlyph != null) {
+            // Bitmap variant takes precedence over the text glyph. Same
+            // hit-zone math, same hover gating; consumers either set
+            // the bitmap OR the glyph for any given Label.
+            if (this.hovered && this.trailingBitmap != null) {
+                var btx = this.trailingGlyphX(graphics)
+                var bw = this.trailingBitmap.width.toShort()
+                var bh = this.trailingBitmap.height.toShort()
+                graphics.drawBitmap(this.trailingBitmap, btx, textY, bw, bh)
+            } else if (this.hovered && this.trailingGlyph != null) {
                 var tx = this.trailingGlyphX(graphics)
                 graphics.setForegroundPen(this.trailingPen)
                 graphics.drawString(this.trailingGlyph, tx, textY)
             }
+            if (this.hovered && this.secondaryTrailingGlyph != null) {
+                var sx = this.secondaryTrailingGlyphX(graphics)
+                graphics.setForegroundPen(this.secondaryTrailingPen)
+                graphics.drawString(this.secondaryTrailingGlyph, sx, textY)
+            }
+        }
+
+        // X coordinate where the secondary trailing glyph starts.
+        // Sits just to the LEFT of the primary trailing slot with a
+        // BADGE_GAP between the two so they don't blur into one blob.
+        // Returns -1 when there's no secondary glyph configured.
+        private fun secondaryTrailingGlyphX(graphics: Graphics): Short {
+            if (this.secondaryTrailingGlyph == null) {
+                return -1S
+            }
+            var primaryX = this.trailingGlyphX(graphics)
+            if (primaryX < 0S) {
+                // No primary trailing — secondary takes its slot.
+                var glyphW = graphics.calculateStringWidth(this.secondaryTrailingGlyph).toShort()
+                var rightInset = this.margin.right + this.borderWidths.right + this.padding.right
+                var rightEdge = this.width.toShort() - rightInset
+                if (this.badgeGlyph != null) {
+                    var badgeW = graphics.calculateStringWidth(this.badgeGlyph).toShort()
+                    rightEdge = (rightEdge - badgeW) - Label.BADGE_GAP
+                }
+                return rightEdge - glyphW
+            }
+            var glyphW2 = graphics.calculateStringWidth(this.secondaryTrailingGlyph).toShort()
+            return (primaryX - Label.BADGE_GAP) - glyphW2
+        }
+
+        // Mouse-side mirror of secondaryTrailingGlyphX. Routes through
+        // Window.calculateStringWidth like the other …FromWindow
+        // helpers so onMouseEvent can hit-test without a Graphics in
+        // hand.
+        private fun secondaryTrailingGlyphXFromWindow(): Short {
+            if (this.secondaryTrailingGlyph == null) {
+                return -1S
+            }
+            var vc = this.getViewContext()
+            if (vc == null) {
+                return -1S
+            }
+            var win = vc.getWindow()
+            var f = this.getUsedFont()
+            var primaryX = this.trailingGlyphXFromWindow()
+            if (primaryX < 0S) {
+                var glyphW = win.calculateStringWidth(f, this.secondaryTrailingGlyph).toShort()
+                var rightInset = this.margin.right + this.borderWidths.right + this.padding.right
+                var rightEdge = this.width.toShort() - rightInset
+                if (this.badgeGlyph != null) {
+                    var badgeW = win.calculateStringWidth(f, this.badgeGlyph).toShort()
+                    rightEdge = (rightEdge - badgeW) - Label.BADGE_GAP
+                }
+                return rightEdge - glyphW
+            }
+            var glyphW2 = win.calculateStringWidth(f, this.secondaryTrailingGlyph).toShort()
+            return (primaryX - Label.BADGE_GAP) - glyphW2
         }
 
         // X coordinate where the leading glyph ENDS (the click zone
@@ -178,8 +309,23 @@ namespace Am.Ui
                 return -1S
             }
             var leftInset = this.margin.left + this.borderWidths.left + this.padding.left
+            // Glyph starts after the bitmap (and bitmap-to-glyph gap)
+            // when a bitmap is also configured. Match paint().
+            if (this.leadingBitmap != null) {
+                leftInset = leftInset + this.leadingBitmap.width.toShort() + this.leadingGap
+            }
             var glyphW = vc.getWindow().calculateStringWidth(this.getUsedFont(), this.leadingGlyph).toShort()
             return leftInset + glyphW
+        }
+
+        // Right edge of the leading bitmap's hit zone. -1 when no
+        // bitmap is configured. Hit zone is [leftInset, this value].
+        private fun leadingBitmapRightX(): Short {
+            if (this.leadingBitmap == null) {
+                return -1S
+            }
+            var leftInset = this.margin.left + this.borderWidths.left + this.padding.left
+            return leftInset + this.leadingBitmap.width.toShort()
         }
 
         // X coordinate where the badge glyph starts (always painted
@@ -217,10 +363,15 @@ namespace Am.Ui
         // badge width — keeps the two glyphs from overlapping.
         // Returns -1 when there's no glyph configured.
         private fun trailingGlyphX(graphics: Graphics): Short {
-            if (this.trailingGlyph == null) {
+            if (this.trailingGlyph == null && this.trailingBitmap == null) {
                 return -1S
             }
-            var glyphW = graphics.calculateStringWidth(this.trailingGlyph).toShort()
+            var glyphW: Short = 0S
+            if (this.trailingBitmap != null) {
+                glyphW = this.trailingBitmap.width.toShort()
+            } else {
+                glyphW = graphics.calculateStringWidth(this.trailingGlyph).toShort()
+            }
             var rightInset = this.margin.right + this.borderWidths.right + this.padding.right
             var rightEdge = this.width.toShort() - rightInset
             if (this.badgeGlyph != null) {
@@ -234,7 +385,7 @@ namespace Am.Ui
         // hand, so it goes via Window.calculateStringWidth (uses the
         // same font drawString picks up at paint time).
         private fun trailingGlyphXFromWindow(): Short {
-            if (this.trailingGlyph == null) {
+            if (this.trailingGlyph == null && this.trailingBitmap == null) {
                 return -1S
             }
             var vc = this.getViewContext()
@@ -243,7 +394,12 @@ namespace Am.Ui
             }
             var win = vc.getWindow()
             var f = this.getUsedFont()
-            var glyphW = win.calculateStringWidth(f, this.trailingGlyph).toShort()
+            var glyphW: Short = 0S
+            if (this.trailingBitmap != null) {
+                glyphW = this.trailingBitmap.width.toShort()
+            } else {
+                glyphW = win.calculateStringWidth(f, this.trailingGlyph).toShort()
+            }
             var rightInset = this.margin.right + this.borderWidths.right + this.padding.right
             var rightEdge = this.width.toShort() - rightInset
             if (this.badgeGlyph != null) {
@@ -275,7 +431,7 @@ namespace Am.Ui
             // misses the visible glyph shouldn't get the trailing
             // behaviour).
             if (type == MouseEventType.up && button == MouseButton.left && this.contains(x, y)) {
-                if (this.hovered && this.trailingGlyph != null) {
+                if (this.hovered && (this.trailingGlyph != null || this.trailingBitmap != null)) {
                     var tx = this.trailingGlyphXFromWindow()
                     // Right edge of the trailing click area: if a
                     // badge is configured, the click area stops at
@@ -297,10 +453,54 @@ namespace Am.Ui
                         return true
                     }
                 }
+                // Secondary trailing — same gating as the primary,
+                // hit zone is from this glyph's x up to the primary
+                // trailing glyph's x (so a click on the primary still
+                // routes to the primary).
+                if (this.hovered && this.secondaryTrailingGlyph != null) {
+                    var sx = this.secondaryTrailingGlyphXFromWindow()
+                    var sRight = this.trailingGlyphXFromWindow()
+                    if (sRight < 0S) {
+                        sRight = this.width.toShort()
+                        if (this.badgeGlyph != null) {
+                            var bx2 = this.badgeGlyphXFromWindow()
+                            if (bx2 >= 0S) {
+                                sRight = bx2
+                            }
+                        }
+                    }
+                    if (sx >= 0S && x >= sx && x < sRight) {
+                        var scb = this.secondaryTrailingClickListener
+                        if (scb != null) {
+                            return scb(this)
+                        }
+                        return true
+                    }
+                }
+                // Leading-bitmap click — independent of hover state.
+                // Checked first so it can win when the icon sits at
+                // the very left edge of the row; leading-glyph hit
+                // zone starts past the bitmap (leadingGlyphRightX
+                // honours the bitmap offset).
+                if (this.leadingBitmap != null) {
+                    var lbx2 = this.leadingBitmapRightX()
+                    var lbLeft = this.margin.left + this.borderWidths.left + this.padding.left
+                    if (lbx2 >= 0S && x >= lbLeft && x <= lbx2) {
+                        var lbcb = this.leadingBitmapClickListener
+                        if (lbcb != null) {
+                            return lbcb(this)
+                        }
+                        /* No listener — fall through so the regular
+                         * row clickListener still fires. */
+                    }
+                }
                 // Leading glyph click — independent of hover state.
                 if (this.leadingGlyph != null) {
                     var lx2 = this.leadingGlyphRightX()
                     var leftInset = this.margin.left + this.borderWidths.left + this.padding.left
+                    if (this.leadingBitmap != null) {
+                        leftInset = leftInset + this.leadingBitmap.width.toShort() + this.leadingGap
+                    }
                     if (lx2 >= 0S && x >= leftInset && x <= lx2) {
                         var lcb = this.leadingClickListener
                         if (lcb != null) {

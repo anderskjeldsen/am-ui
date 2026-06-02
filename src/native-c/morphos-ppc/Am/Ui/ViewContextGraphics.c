@@ -14,15 +14,19 @@
 #include <libc/Am/Lang/String.h>
 
 #include <exec/types.h>
+#include <exec/memory.h>
 #include <intuition/intuition.h>
 #include <libraries/gadtools.h>
 #include <graphics/gfx.h>
+#include <graphics/scale.h>
 
 #include <proto/exec.h>
 #include <proto/intuition.h>
 #include <proto/gadtools.h>
 #include <proto/graphics.h>
 #include <proto/layers.h>
+
+#include <string.h>
 
 
 #include <libc/core_inline_functions.h>
@@ -380,7 +384,17 @@ __exit: ;
 };
 
 
-// drawBitmap: MorphOS stub (Bitmap true-colour support is AmigaOS-only for now)
+// drawBitmap on MorphOS — same shape as the AmigaOS path. 1:1 blit
+// when source size matches destination, otherwise allocate a scaled
+// temporary BitMap, BitMapScale into it, then blit. Mask-aware: when
+// the Bitmap was built via createFromImageWithMask, route the blit
+// through BltMaskBitMapRastPort with minterm 0xE0 so transparent
+// pixels leave the destination intact.
+//
+// Previously a stub: every drawBitmap call into the ViewContext path
+// was a no-op, so icons painted via Label.paint() showed nothing on
+// MorphOS. The LayerGraphics path already did the right thing; this
+// pulls the ViewContext path up to parity.
 function_result Am_Ui_ViewContextGraphics_drawBitmap_0(aobject * const this,
                                                          aobject * bitmap,
                                                          short x, short y,
@@ -388,7 +402,99 @@ function_result Am_Ui_ViewContextGraphics_drawBitmap_0(aobject * const this,
 {
 	function_result __result = { .has_return_value = false };
 	bool __returning = false;
+	if (this != NULL) {
+		__increase_reference_count(this);
+	}
+	if (bitmap != NULL) {
+		__increase_reference_count(bitmap);
+	}
+
+	if (bitmap == NULL) goto __exit;
+	if (destWidth <= 0 || destHeight <= 0) goto __exit;
+
+	{
+		Am_Ui_Bitmap_data * const bitmapData =
+			(Am_Ui_Bitmap_data *)bitmap->object_properties.class_object_properties.object_data.value.custom_value;
+		if (bitmapData == NULL || bitmapData->bitmap == NULL) goto __exit;
+
+		aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
+		if (window == NULL) goto __exit;
+		Am_Ui_Window_data * const window_data =
+			(Am_Ui_Window_data * const)window->object_properties.class_object_properties.object_data.value.custom_value;
+		if (window_data == NULL || window_data->window == NULL) {
+			if (window != NULL) {
+				__decrease_reference_count(window);
+			}
+			goto __exit;
+		}
+		struct RastPort * const rp = window_data->window->RPort;
+
+		short tx = translated_x(this, x);
+		short ty = translated_y(this, y);
+
+		unsigned short srcW = bitmap->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_width].nullable_value.value.ushort_value;
+		unsigned short srcH = bitmap->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_height].nullable_value.value.ushort_value;
+
+		if (destWidth == (short)srcW && destHeight == (short)srcH) {
+			/* 1:1 blit. Mask-aware branch matches the AmigaOS
+			 * ViewContextGraphics path. */
+			if (bitmapData->mask != NULL) {
+				BltMaskBitMapRastPort(bitmapData->bitmap, 0, 0,
+				                      rp, tx, ty,
+				                      srcW, srcH, 0xE0,
+				                      (APTR)bitmapData->mask->Planes[0]);
+			} else {
+				BltBitMapRastPort(bitmapData->bitmap, 0, 0,
+				                  rp, tx, ty,
+				                  srcW, srcH, 0xC0);
+			}
+		} else {
+			/* Scale into a temporary bitmap, then blit. Mask is NOT
+			 * propagated through the scaled path — scaled masked
+			 * bitmaps render fully opaque. Current consumers (16x16
+			 * tile-strip icons) never scale, so this is acceptable. */
+			ULONG depth = GetBitMapAttr(bitmapData->bitmap, BMA_DEPTH);
+			struct BitMap *scaledBitmap =
+				AllocBitMap(destWidth, destHeight, depth,
+				            BMF_CLEAR | BMF_MINPLANES, bitmapData->bitmap);
+			if (scaledBitmap != NULL) {
+				struct BitScaleArgs bsa;
+				memset(&bsa, 0, sizeof(bsa));
+				bsa.bsa_SrcBitMap    = bitmapData->bitmap;
+				bsa.bsa_DestBitMap   = scaledBitmap;
+				bsa.bsa_SrcWidth     = srcW;
+				bsa.bsa_SrcHeight    = srcH;
+				bsa.bsa_XSrcFactor   = srcW;
+				bsa.bsa_YSrcFactor   = srcH;
+				bsa.bsa_DestWidth    = destWidth;
+				bsa.bsa_DestHeight   = destHeight;
+				bsa.bsa_XDestFactor  = destWidth;
+				bsa.bsa_YDestFactor  = destHeight;
+				BitMapScale(&bsa);
+				BltBitMapRastPort(scaledBitmap, 0, 0,
+				                  rp, tx, ty,
+				                  destWidth, destHeight, 0xC0);
+				FreeBitMap(scaledBitmap);
+			} else {
+				/* OOM fallback: blit unscaled. */
+				BltBitMapRastPort(bitmapData->bitmap, 0, 0,
+				                  rp, tx, ty,
+				                  srcW, srcH, 0xC0);
+			}
+		}
+
+		if (window != NULL) {
+			__decrease_reference_count(window);
+		}
+	}
+
 __exit: ;
+	if (bitmap != NULL) {
+		__decrease_reference_count(bitmap);
+	}
+	if (this != NULL) {
+		__decrease_reference_count(this);
+	}
 	return __result;
 };
 

@@ -19,6 +19,16 @@ namespace Am.Ui
         // window is used to obtain a friend bitmap matching the screen's pixel format.
         private native fun createFromImage(image: Am.Imaging.Image, window: Window)
 
+        // Like createFromImage but ALSO builds a 1-bit mask from the
+        // source image's alpha channel — pixels with alpha < 128 read
+        // as "transparent" and are skipped by drawBitmap (uses
+        // BltMaskBitMapRastPort with the mask plane). Gives chroma-
+        // key style transparency: hard edges, no anti-aliasing, but
+        // works on every Amiga display target (classic chunky AND
+        // RTG). Indexed-source images get an all-opaque mask — no
+        // alpha to read.
+        private native fun createFromImageWithMask(image: Am.Imaging.Image, window: Window)
+
         fun getWidth(): UShort {
             return this.width
         }
@@ -42,6 +52,18 @@ namespace Am.Ui
         static fun fromImage(image: Image, window: Window): Bitmap {
             var bmp = new Bitmap()
             bmp.createFromImage(image, window)
+            return bmp
+        }
+
+        // Factory: same as fromImage but with a 1-bit transparency
+        // mask derived from the source image's alpha channel. Use
+        // this for icons / glyphs that need to composite over an
+        // arbitrary background — drawBitmap detects the mask and
+        // routes through BltMaskBitMapRastPort so the destination
+        // pixels under "transparent" source pixels survive.
+        static fun fromImageWithMask(image: Image, window: Window): Bitmap {
+            var bmp = new Bitmap()
+            bmp.createFromImageWithMask(image, window)
             return bmp
         }
     }

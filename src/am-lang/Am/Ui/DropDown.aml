@@ -71,6 +71,17 @@ namespace Am.Ui
             return this
         }
 
+        // Drop every item and reset the selection. Used by callers
+        // that rebuild the list at runtime (e.g. ChatGptView fetches
+        // the live model catalog after the API key is set and
+        // replaces its hardcoded fallback).
+        fun clearItems(): DropDown {
+            this.items = new List<String>()
+            this.selectedIndex = 0
+            this.requestRepaint()
+            return this
+        }
+
         fun getItemCount(): Int {
             return this.items.getSize()
         }
