@@ -685,22 +685,15 @@ __exit: ;
 	return __result;
 }
 
-function_result Am_Ui_Window_nativeAddMenuItem_0(aobject * const this, int menuIndex, aobject * const item, aobject * const label, aobject * const commKey) {
-	function_result __result = { .has_return_value = false };
-	if (this != NULL) __increase_reference_count(this);
-	if (item != NULL) __increase_reference_count(item);
-	if (label != NULL) __increase_reference_count(label);
-	if (commKey != NULL) __increase_reference_count(commKey);
-	Am_Ui_Window_data * data = (Am_Ui_Window_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
-	if (data == NULL || data->menu_builder == NULL) {
-		goto __exit;
-	}
-	Am_Ui_Window_menu_builder * b = data->menu_builder;
+// Push one entry (NM_ITEM if level==0, NM_SUB if level==1) into
+// the menu builder. Same helper as the amigaos backend.
+static void push_builder_entry(Am_Ui_Window_menu_builder * b, int menuIndex, int level, aobject * const item, aobject * const label, aobject * const commKey) {
 	if (b->num_items >= AM_UI_WINDOW_MENU_MAX_ITEMS) {
 		printf("Window menu builder: too many items (max %d)\n", AM_UI_WINDOW_MENU_MAX_ITEMS);
-		goto __exit;
+		return;
 	}
 	b->item_menu_indices[b->num_items] = menuIndex;
+	b->item_levels[b->num_items] = level;
 	b->item_labels[b->num_items] = extract_string_dup(label);
 	if (commKey != NULL) {
 		char * dup = extract_string_dup(commKey);
@@ -717,6 +710,38 @@ function_result Am_Ui_Window_nativeAddMenuItem_0(aobject * const this, int menuI
 	}
 	b->item_aobjects[b->num_items] = item;
 	b->num_items++;
+}
+
+function_result Am_Ui_Window_nativeAddMenuItem_0(aobject * const this, int menuIndex, aobject * const item, aobject * const label, aobject * const commKey) {
+	function_result __result = { .has_return_value = false };
+	if (this != NULL) __increase_reference_count(this);
+	if (item != NULL) __increase_reference_count(item);
+	if (label != NULL) __increase_reference_count(label);
+	if (commKey != NULL) __increase_reference_count(commKey);
+	Am_Ui_Window_data * data = (Am_Ui_Window_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+	if (data == NULL || data->menu_builder == NULL) {
+		goto __exit;
+	}
+	push_builder_entry(data->menu_builder, menuIndex, 0, item, label, commKey);
+__exit: ;
+	if (this != NULL) __decrease_reference_count(this);
+	if (item != NULL) __decrease_reference_count(item);
+	if (label != NULL) __decrease_reference_count(label);
+	if (commKey != NULL) __decrease_reference_count(commKey);
+	return __result;
+}
+
+function_result Am_Ui_Window_nativeAddMenuSubItem_0(aobject * const this, int menuIndex, aobject * const item, aobject * const label, aobject * const commKey) {
+	function_result __result = { .has_return_value = false };
+	if (this != NULL) __increase_reference_count(this);
+	if (item != NULL) __increase_reference_count(item);
+	if (label != NULL) __increase_reference_count(label);
+	if (commKey != NULL) __increase_reference_count(commKey);
+	Am_Ui_Window_data * data = (Am_Ui_Window_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+	if (data == NULL || data->menu_builder == NULL) {
+		goto __exit;
+	}
+	push_builder_entry(data->menu_builder, menuIndex, 1, item, label, commKey);
 __exit: ;
 	if (this != NULL) __decrease_reference_count(this);
 	if (item != NULL) __decrease_reference_count(item);
@@ -746,11 +771,13 @@ function_result Am_Ui_Window_nativeFinalizeMenuStrip_0(aobject * const this) {
 		nm[n].nm_UserData = NULL;
 		n++;
 		b->menu_titles[m] = NULL;
+		// Items are walked in insertion order so each NM_SUB
+		// follows its parent NM_ITEM in the NewMenu array.
 		for (int i = 0; i < b->num_items; i++) {
 			if (b->item_menu_indices[i] != m) {
 				continue;
 			}
-			nm[n].nm_Type = NM_ITEM;
+			nm[n].nm_Type = (b->item_levels[i] == 1) ? NM_SUB : NM_ITEM;
 			nm[n].nm_Label = b->item_labels[i];
 			nm[n].nm_CommKey = b->item_comm_keys[i];
 			nm[n].nm_Flags = 0;

@@ -17,6 +17,9 @@ struct _Am_Ui_Window_menu_builder {
     int num_items;
     char * menu_titles[AM_UI_WINDOW_MENU_MAX_MENUS];
     int item_menu_indices[AM_UI_WINDOW_MENU_MAX_ITEMS];
+    // 0 = NM_ITEM, 1 = NM_SUB. Sub-items attach to the most
+    // recent item_levels[i]==0 entry with the same menu index.
+    int item_levels[AM_UI_WINDOW_MENU_MAX_ITEMS];
     char * item_labels[AM_UI_WINDOW_MENU_MAX_ITEMS];
     char * item_comm_keys[AM_UI_WINDOW_MENU_MAX_ITEMS];
     aobject * item_aobjects[AM_UI_WINDOW_MENU_MAX_ITEMS];

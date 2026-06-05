@@ -678,6 +678,41 @@ __exit: ;
 	return __result;
 };
 
+// Return the task pointer of the task whose Wait() is blocked on the
+// window's UserPort signal bit. RunningProcess uses this to Signal()
+// directly when bebbossh writes output, bypassing the AmLang polling
+// cycle entirely so streams (ping, tail -f, shell prompts) appear in
+// the panel as soon as bytes hit the ring buffer.
+function_result Am_Ui_Window_getUserPortTaskPtr_0(aobject * const this)
+{
+	function_result __result = { .has_return_value = true };
+	if (this != NULL) __increase_reference_count(this);
+	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const)
+		this->object_properties.class_object_properties.object_data.value.custom_value;
+	LONG ptr = 0;
+	if (data != NULL && data->window != NULL && data->window->UserPort != NULL) {
+		ptr = (LONG) data->window->UserPort->mp_SigTask;
+	}
+	__result.return_value.value.long_value = ptr;
+	if (this != NULL) __decrease_reference_count(this);
+	return __result;
+}
+
+function_result Am_Ui_Window_getUserPortSigBit_0(aobject * const this)
+{
+	function_result __result = { .has_return_value = true };
+	if (this != NULL) __increase_reference_count(this);
+	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const)
+		this->object_properties.class_object_properties.object_data.value.custom_value;
+	LONG bit = -1;
+	if (data != NULL && data->window != NULL && data->window->UserPort != NULL) {
+		bit = (LONG) data->window->UserPort->mp_SigBit;
+	}
+	__result.return_value.value.int_value = bit;
+	if (this != NULL) __decrease_reference_count(this);
+	return __result;
+}
+
 function_result Am_Ui_Window_setTitleNative_0(aobject * const this, aobject * const windowTitle, aobject * const screenTitle)
 {
 	function_result __result = { .has_return_value = false };
@@ -906,31 +941,16 @@ __exit: ;
 	return __result;
 }
 
-function_result Am_Ui_Window_nativeAddMenuItem_0(aobject * const this, int menuIndex, aobject * const item, aobject * const label, aobject * const commKey) {
-	function_result __result = { .has_return_value = false };
-	if (this != NULL) {
-		__increase_reference_count(this);
-	}
-	if (item != NULL) {
-		__increase_reference_count(item);
-	}
-	if (label != NULL) {
-		__increase_reference_count(label);
-	}
-	if (commKey != NULL) {
-		__increase_reference_count(commKey);
-	}
-
-	Am_Ui_Window_data * data = (Am_Ui_Window_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
-	if (data == NULL || data->menu_builder == NULL) {
-		goto __exit;
-	}
-	Am_Ui_Window_menu_builder * b = data->menu_builder;
+// Push one entry into the menu builder. Shared between NM_ITEM
+// (level 0) and NM_SUB (level 1) pushers so the bookkeeping stays
+// in one place.
+static void push_builder_entry(Am_Ui_Window_menu_builder * b, int menuIndex, int level, aobject * const item, aobject * const label, aobject * const commKey) {
 	if (b->num_items >= AM_UI_WINDOW_MENU_MAX_ITEMS) {
 		printf("Window menu builder: too many items (max %d)\n", AM_UI_WINDOW_MENU_MAX_ITEMS);
-		goto __exit;
+		return;
 	}
 	b->item_menu_indices[b->num_items] = menuIndex;
+	b->item_levels[b->num_items] = level;
 	b->item_labels[b->num_items] = extract_string_dup(label);
 	// Empty string is treated as "no CommKey" — Intuition only honours
 	// a non-empty first character, and passing "" to NewMenu can confuse
@@ -952,6 +972,65 @@ function_result Am_Ui_Window_nativeAddMenuItem_0(aobject * const this, int menuI
 	}
 	b->item_aobjects[b->num_items] = item;
 	b->num_items++;
+}
+
+function_result Am_Ui_Window_nativeAddMenuItem_0(aobject * const this, int menuIndex, aobject * const item, aobject * const label, aobject * const commKey) {
+	function_result __result = { .has_return_value = false };
+	if (this != NULL) {
+		__increase_reference_count(this);
+	}
+	if (item != NULL) {
+		__increase_reference_count(item);
+	}
+	if (label != NULL) {
+		__increase_reference_count(label);
+	}
+	if (commKey != NULL) {
+		__increase_reference_count(commKey);
+	}
+
+	Am_Ui_Window_data * data = (Am_Ui_Window_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+	if (data == NULL || data->menu_builder == NULL) {
+		goto __exit;
+	}
+	push_builder_entry(data->menu_builder, menuIndex, 0, item, label, commKey);
+
+__exit: ;
+	if (this != NULL) {
+		__decrease_reference_count(this);
+	}
+	if (item != NULL) {
+		__decrease_reference_count(item);
+	}
+	if (label != NULL) {
+		__decrease_reference_count(label);
+	}
+	if (commKey != NULL) {
+		__decrease_reference_count(commKey);
+	}
+	return __result;
+}
+
+function_result Am_Ui_Window_nativeAddMenuSubItem_0(aobject * const this, int menuIndex, aobject * const item, aobject * const label, aobject * const commKey) {
+	function_result __result = { .has_return_value = false };
+	if (this != NULL) {
+		__increase_reference_count(this);
+	}
+	if (item != NULL) {
+		__increase_reference_count(item);
+	}
+	if (label != NULL) {
+		__increase_reference_count(label);
+	}
+	if (commKey != NULL) {
+		__increase_reference_count(commKey);
+	}
+
+	Am_Ui_Window_data * data = (Am_Ui_Window_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+	if (data == NULL || data->menu_builder == NULL) {
+		goto __exit;
+	}
+	push_builder_entry(data->menu_builder, menuIndex, 1, item, label, commKey);
 
 __exit: ;
 	if (this != NULL) {
@@ -996,11 +1075,15 @@ function_result Am_Ui_Window_nativeFinalizeMenuStrip_0(aobject * const this) {
 		n++;
 		// Move title ownership into NewMenu so free_menu_strip releases it.
 		b->menu_titles[m] = NULL;
+		// Items are walked in insertion order — Window.setMenuStrip
+		// pushes every NM_ITEM followed by its NM_SUB children, so
+		// preserving the order here is what makes Intuition attach
+		// each sub-item to the right parent.
 		for (int i = 0; i < b->num_items; i++) {
 			if (b->item_menu_indices[i] != m) {
 				continue;
 			}
-			nm[n].nm_Type = NM_ITEM;
+			nm[n].nm_Type = (b->item_levels[i] == 1) ? NM_SUB : NM_ITEM;
 			nm[n].nm_Label = b->item_labels[i];
 			nm[n].nm_CommKey = b->item_comm_keys[i];
 			nm[n].nm_Flags = 0;
