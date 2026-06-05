@@ -256,6 +256,37 @@ namespace Am.Ui
             }
         }
 
+        // Force a refresh message into the window's UserPort even if
+        // a repaint is already pending. The dedupe in requestRepaint
+        // is needed to avoid re-PutMsg'ing the (single, shared)
+        // refresh_msg before the OS has dispatched the previous one
+        // — but the same dedupe means a worker-thread poller that
+        // calls requestRepaint() in a tight loop only ever wakes the
+        // main Wait once and then goes silent. forceWake() is for
+        // pollers: it sets the dedupe flag AND calls refresh()
+        // regardless, so each call PutMsg's a fresh wake. Re-using
+        // the same refresh_msg slot is documented as safe by the
+        // native side (memset before PutMsg).
+        fun forceWake() {
+            this.repaintRequested = true
+            this.refresh()
+        }
+
+        // Native handles for direct Signal() wakeup from another
+        // task. Used by RunningProcess so that when bebbossh / ssh
+        // writes output, our DOS-handler in the bebbossh process can
+        // Signal amStudio's main task DIRECTLY (skipping the IDCMP
+        // message round-trip), making the output appear in real time
+        // without depending on AmLang's polling cadence.
+        //
+        // getUserPortTaskPtr  → ULONG cast of window->UserPort->mp_SigTask
+        //                       (i.e. the task that owns the UserPort —
+        //                       amStudio's main task)
+        // getUserPortSigBit   → window->UserPort->mp_SigBit (UBYTE,
+        //                       returned widened to Int)
+        native fun getUserPortTaskPtr(): Long
+        native fun getUserPortSigBit(): Int
+
         // Schedule a full repaint — wipes the window background and forces
         // every view (not just ones with their own flag) to repaint on the
         // next paint cycle. Use for resizes / structural changes; everyday
@@ -724,6 +755,15 @@ namespace Am.Ui
                 this.nativeAddMenu(menu.title)
                 each (item in menu.items) {
                     this.nativeAddMenuItem(menuIndex, item, item.label, item.commKey)
+                    // One level of cascade. Intuition supports
+                    // NM_SUB inside NM_ITEM but not arbitrary
+                    // depths, so we only walk subItems one level
+                    // deep and ignore any grand-children.
+                    if (item.subItems.getSize() > 0) {
+                        each (sub in item.subItems) {
+                            this.nativeAddMenuSubItem(menuIndex, sub, sub.label, sub.commKey)
+                        }
+                    }
                 }
                 menuIndex++
             }
@@ -733,6 +773,11 @@ namespace Am.Ui
         private native fun nativeBeginMenuStrip()
         private native fun nativeAddMenu(title: String)
         private native fun nativeAddMenuItem(menuIndex: Int, item: MenuItem, label: String, commKey: String)
+        // Append a NM_SUB entry under the most recently added
+        // NM_ITEM in the menu identified by `menuIndex`. Order
+        // matters: the native side stamps sub-items against the
+        // last NM_ITEM it saw for the same `menuIndex`.
+        private native fun nativeAddMenuSubItem(menuIndex: Int, item: MenuItem, label: String, commKey: String)
         private native fun nativeFinalizeMenuStrip()
         private native fun nativeClearMenuStrip()
 

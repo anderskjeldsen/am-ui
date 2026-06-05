@@ -2,6 +2,7 @@ namespace Am.Ui
 {
     class MenuItem(var label: String, var clickListener: (item: MenuItem) => Bool) {
         import Am.Lang
+        import Am.Collections
 
         var enabled: Bool = true
         // Single-character keyboard shortcut (Right-Amiga + key) for the
@@ -9,6 +10,19 @@ namespace Am.Ui
         // Menu and similar enhancers use the presence of a CommKey to
         // pick a more spacious layout, so even a dummy key adds padding.
         var commKey: String = null
+
+        // Optional sub-items, rendered as a cascading submenu under
+        // this item (Intuition NM_SUB). When non-empty, this item's
+        // own clickListener typically stays null — Intuition only
+        // fires picks on the deepest level the user landed on.
+        // Only one level of nesting is wired through to the native
+        // strip today (NM_SUB inside NM_ITEM); deeper trees get
+        // flattened by Window.setMenuStrip.
+        var subItems: List<MenuItem> = new List<MenuItem>()
+
+        fun addSubItem(item: MenuItem) {
+            this.subItems.add(item)
+        }
 
         fun invokeClick(): Bool {
             var cl = this.clickListener
