@@ -402,13 +402,21 @@ namespace Am.Ui
             // Phase 3: scrollbar, on top of everything else, clipped
             // to the scroll view's full rect.
             //
-            // The lane is always re-painted (the thumb's position is
-            // a function of scrollY which could have shifted between
-            // cycles), so we always report its bounds for the
-            // off-screen → on-screen blit. The lane is a narrow
-            // vertical strip — including it in the dirty union is
-            // cheap relative to the cost of getting it wrong.
-            if (this.needsScrollbar()) {
+            // Gated on `b1 || b2` so the lane only re-stamps when the
+            // ScrollView is genuinely dirty. Painting unconditionally
+            // would overwrite higher-z layers in the offscreen buffer
+            // (e.g. an open Settings sidebar overlapping the file
+            // tree's lane); the LayeredPane pre-pass that flags
+            // overlay layers when a lower-z descendant is dirty is
+            // flag-driven, so Phase 3 has to respect the flag to be
+            // visible to it.
+            //
+            // Every scrollbar-state change (scrollY drag/wheel/page,
+            // thumbHovered, draggingThumb) routes through
+            // `forceRepaintNow()` → `requestRepaintTree()`, which
+            // sets `b2` on the ScrollView. So the gate is non-lossy:
+            // any genuine state change still triggers Phase 3.
+            if (this.needsScrollbar() && (b1 || b2)) {
                 viewClipRect = currentClip.createInnerClipRect(this.x, this.y, this.width, this.height)
                 graphics.pushClipRect(viewClipRect)
                 graphics.translate(this.x, this.y)
@@ -542,6 +550,20 @@ namespace Am.Ui
             if (this.child != null) {
                 this.child.invalidateOverlapping(winRect)
             }
+        }
+
+        override fun hasDirtyOverlapping(target: Rectangle): Bool {
+            var mine = this.computeWindowRect()
+            if (!View.rectsOverlap(mine, target)) {
+                return false
+            }
+            if (this.getRepaintRequested()) {
+                return true
+            }
+            if (this.child != null) {
+                return this.child.hasDirtyOverlapping(target)
+            }
+            return false
         }
 
         fun getChild(): View {

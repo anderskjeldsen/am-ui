@@ -489,6 +489,45 @@ namespace Am.Ui
         open fun propagateDirty(winRect: Rectangle, source: View, sourceOpaque: Bool) {
         }
 
+        // Search this view's subtree for any descendant whose window-
+        // rect overlaps `target` AND whose `repaintRequested` flag is
+        // set (i.e. it WILL paint in the upcoming cycle, and its
+        // pixels will land somewhere `target` cares about). Returns
+        // true on the first hit; ancestor short-circuits to false when
+        // this view's bounds don't intersect `target` at all (a
+        // descendant can never paint outside its ancestor's bounds).
+        //
+        // Used by LayeredPane.paintAll's pre-pass: for each layer N
+        // it asks every lower layer "did anything in your subtree
+        // request a repaint that would overdraw my area?" — if yes,
+        // layer N flips its own `repaintRequested` so it re-stamps on
+        // top in the same paint cycle.
+        //
+        // Default just checks this view itself. Container subclasses
+        // (ViewGroup, Panel, ScrollView) override to recurse.
+        open fun hasDirtyOverlapping(target: Rectangle): Bool {
+            var mine = this.computeWindowRect()
+            if (!View.rectsOverlap(mine, target)) {
+                return false
+            }
+            return this.getRepaintRequested()
+        }
+
+        // Window-rect intersection check, exclusive on the far edges
+        // (matches every other rect-overlap math in the framework —
+        // x2 = x + width, treated as one-past-the-end).
+        static fun rectsOverlap(a: Rectangle, b: Rectangle): Bool {
+            var aX2 = a.x + a.width.toShort()
+            var aY2 = a.y + a.height.toShort()
+            var bX2 = b.x + b.width.toShort()
+            var bY2 = b.y + b.height.toShort()
+            if (aX2 <= b.x) { return false }
+            if (bX2 <= a.x) { return false }
+            if (aY2 <= b.y) { return false }
+            if (bY2 <= a.y) { return false }
+            return true
+        }
+
         // The sub-rect of this view that actually receives paint
         // operations. By default the full view bounds — same area
         // paint() is given to draw into. Views that paint only a
