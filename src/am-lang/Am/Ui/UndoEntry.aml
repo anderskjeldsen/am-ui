@@ -1,0 +1,27 @@
+namespace Am.Ui
+{
+    // One snapshot of editor state captured BEFORE an edit, so that
+    // Ctrl+Z can restore the buffer to that point. `lines` is a fresh
+    // List<String> holding a reference per row — Strings are immutable
+    // in AmLang, so sharing references between the snapshot and the
+    // live buffer is safe (the live buffer mutates by `set`/`insertAt`,
+    // which rebinds slots rather than touching the string objects).
+    //
+    // Cursor and scroll position ride along so undo also restores the
+    // visual state — what the user sees after Ctrl+Z is exactly what
+    // they saw before the edit they undid.
+    //
+    // No-arg constructor + body-style fields rather than a primary
+    // constructor with parameters: every other class in am-ui that
+    // carries a List<T> uses this shape, so we stick with the proven
+    // pattern.
+    class UndoEntry {
+        import Am.Lang
+        import Am.Collections
+
+        var lines: List<String> = null
+        var cursorLine: Int = 0
+        var cursorCol: Int = 0
+        var scrollLine: Int = 0
+    }
+}
