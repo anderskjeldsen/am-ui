@@ -96,8 +96,155 @@ namespace Am.Ui
         // assume currentLine() is non-null.
         var lines: List<String> = TextEditor.singleEmptyLine()
 
-        private var cursorLine: Int = 0
-        private var cursorCol: Int = 0
+        // Cursor position. Public so subclasses (HighlightedTextEditor)
+        // can read and write directly when implementing
+        // command-style edits like Ctrl+/ line-comment toggle.
+        // External callers should prefer moveCursor* / setText, which
+        // also fire the cursor-change listener.
+        var cursorLine: Int = 0
+        var cursorCol: Int = 0
+
+        // -------- selection --------
+        // Block (Amiga-speak for "selected area") spans every character
+        // between the anchor at (selAnchorLine, selAnchorCol) and the
+        // cursor at (cursorLine, cursorCol). Always character-flowing —
+        // a multi-row block highlights the start row from the anchor
+        // col to EOL, every middle row fully, and the end row from col 0
+        // to the cursor col. No rectangular / column-mode rendering.
+        //
+        // `selMode` is a tri-state: 0 = no active selection-bound
+        // gesture, 1 = "selecting" (Ctrl+B has armed the anchor or a
+        // mouse drag is live, arrow keys extend the selection from the
+        // anchor). When 0 and hasSelection() is also false, arrow keys
+        // just move the cursor without producing a selection.
+        //
+        // `selDragging` is true while the left mouse button is held
+        // after a press inside the editor — mouse moves while dragging
+        // extend the selection.
+        //
+        // Theme: selectionBackgroundPen paints behind the selected
+        // text. Defaults to the host's pen 7 which matches the IDE's
+        // standard "selection" palette slot; non-IDE embedders can
+        // override.
+        var selectionBackgroundPen: UByte = 7UB
+        var selAnchorLine: Int = -1
+        var selAnchorCol: Int  = -1
+        private var selDragging: Bool = false
+        var selMode: Int = 0
+
+        // True iff a non-collapsed selection currently exists. Used
+        // by the render pass and by the IDE chrome (e.g. to gray out
+        // edit menu entries when nothing is selected).
+        fun hasSelection(): Bool {
+            if (this.selAnchorLine < 0) {
+                return false
+            }
+            if (this.selAnchorLine == this.cursorLine
+                && this.selAnchorCol == this.cursorCol) {
+                return false
+            }
+            return true
+        }
+
+        // Drop any active selection. Doesn't move the cursor — the
+        // cursor stays where it is, the selection just "uncollapses
+        // into" the cursor's current position.
+        fun clearSelection() {
+            this.selAnchorLine = -1
+            this.selAnchorCol = -1
+            this.selDragging = false
+        }
+
+        // Normalised selection bounds, returning the top-left and
+        // bottom-right of the selection. Callers should check
+        // hasSelection() first — when there's no selection these
+        // values are meaningless. The four getters are separate
+        // because AmLang doesn't have lightweight tuple returns.
+        fun selStartLine(): Int {
+            if (this.selAnchorLine < this.cursorLine) {
+                return this.selAnchorLine
+            }
+            if (this.selAnchorLine > this.cursorLine) {
+                return this.cursorLine
+            }
+            return this.selAnchorLine
+        }
+        fun selEndLine(): Int {
+            if (this.selAnchorLine > this.cursorLine) {
+                return this.selAnchorLine
+            }
+            if (this.selAnchorLine < this.cursorLine) {
+                return this.cursorLine
+            }
+            return this.cursorLine
+        }
+        // For character selection: when the selection is on one line,
+        // the start/end cols are the min/max of anchor and cursor;
+        // when spanning multiple lines, the START col belongs to the
+        // earlier line and the END col to the later line.
+        fun selStartCol(): Int {
+            if (this.selAnchorLine == this.cursorLine) {
+                if (this.selAnchorCol < this.cursorCol) {
+                    return this.selAnchorCol
+                }
+                return this.cursorCol
+            }
+            if (this.selAnchorLine < this.cursorLine) {
+                return this.selAnchorCol
+            }
+            return this.cursorCol
+        }
+        fun selEndCol(): Int {
+            if (this.selAnchorLine == this.cursorLine) {
+                if (this.selAnchorCol > this.cursorCol) {
+                    return this.selAnchorCol
+                }
+                return this.cursorCol
+            }
+            if (this.selAnchorLine > this.cursorLine) {
+                return this.selAnchorCol
+            }
+            return this.cursorCol
+        }
+        // Per-line column range of the selection BG on `lineIdx`. Returns
+        // -1 from both when the line has no selection coverage. Used by
+        // drawLine (base + HighlightedTextEditor override) to switch the
+        // text-bg pen between backgroundPen and selectionBackgroundPen
+        // while walking chars — so each glyph paints with the right bg
+        // cell.
+        //
+        //   - lines strictly inside [sStart, sEnd]: full text-width
+        //     selection (start col 0, end col line.length()).
+        //   - start row: from selStartCol() to line.length().
+        //   - end row: from 0 to selEndCol().
+        fun selStartColOnLine(lineIdx: Int): Int {
+            if (!this.hasSelection()) {
+                return -1
+            }
+            var sStart = this.selStartLine()
+            var sEnd = this.selEndLine()
+            if (lineIdx < sStart || lineIdx > sEnd) {
+                return -1
+            }
+            if (lineIdx == sStart) {
+                return this.selStartCol()
+            }
+            return 0
+        }
+        fun selEndColOnLine(lineIdx: Int): Int {
+            if (!this.hasSelection()) {
+                return -1
+            }
+            var sStart = this.selStartLine()
+            var sEnd = this.selEndLine()
+            if (lineIdx < sStart || lineIdx > sEnd) {
+                return -1
+            }
+            if (lineIdx == sEnd) {
+                return this.selEndCol()
+            }
+            return this.lines.get(lineIdx).length()
+        }
 
         // First line index visible at the top of the viewport. The
         // renderer subtracts this from each line's index when computing
@@ -135,6 +282,20 @@ namespace Am.Ui
         // owning tab's dirty flag.
         var contentChangeListener: () => Bool = null
 
+        // Embedder-side find UI hooks. Ctrl+F fires
+        // findRequestedListener (typically "show the find bar and
+        // focus its input"); Ctrl+G fires findNextListener (step
+        // through matches with whatever query the find bar last
+        // held). Both are no-ops when null — the IDE wires them in
+        // ensureEditor.
+        var findRequestedListener: () => Bool = null
+        var findNextListener: () => Bool = null
+
+        // Last query string handed to findNext. Stored on the editor
+        // so Ctrl+G can keep stepping through matches even after the
+        // find bar closes. Cleared by setText (new file = new state).
+        var lastFindQuery: String = ""
+
         // Fired whenever cursorLine or cursorCol changes — including
         // on setText (which moves the cursor back to 0,0) so a tab
         // switch can immediately resync any external display. Used
@@ -159,6 +320,14 @@ namespace Am.Ui
         // pendingScrollLineFrom == -1 means no scroll queued.
         private var pendingScrollLineFrom: Int = -1
         private var pendingScrollDy: Short = 0S
+
+        // -------- undo --------
+        // Bounded LIFO of pre-edit snapshots. Each editor instance has
+        // its own — undo is per-file by construction. Ctrl+Z pops and
+        // restores. The cap stops a long typing session from chewing
+        // through Amiga RAM; the oldest entry is dropped when full.
+        private var undoStack: List<UndoEntry> = new List<UndoEntry>()
+        private static const UNDO_CAP: Int = 100
 
         private static fun singleEmptyLine(): List<String> {
             var l = new List<String>()
@@ -197,7 +366,12 @@ namespace Am.Ui
             }
         }
 
-        private fun forceFullRepaint() {
+        // Not private so HighlightedTextEditor can flag a full repaint
+        // after a command (Ctrl+/, brace-split) mutates `this.lines`
+        // — the incremental-paint path can't model arbitrary line
+        // insertions / deletions from outside the editor's own edit
+        // primitives.
+        fun forceFullRepaint() {
             this.pendingFullRepaint = true
             this.dirtyLineFrom = -1
             this.dirtyLineTo = -1
@@ -441,8 +615,20 @@ namespace Am.Ui
             this.cursorCol = 0
             this.scrollLine = 0
             this.scrollPixelX = 0S
+            this.lastFindQuery = ""
+            // Loading a fresh file resets undo history — otherwise the
+            // user could undo "all the way back" into the previous
+            // buffer, which is never what they want.
+            this.clearUndo()
             this.forceFullRepaint()
             this.requestRepaint()
+            // Notify the subclass cache (HighlightedTextEditor uses
+            // this to drop its per-line token cache). We don't fire
+            // the public contentChangeListener here on purpose —
+            // setText is the file-load path, and the embedder wires
+            // the listener AFTER the load, so firing it would mark a
+            // freshly-loaded tab dirty.
+            this.onContentChanged()
             this.fireCursorChanged()
         }
 
@@ -657,13 +843,108 @@ namespace Am.Ui
 
         // -------- edits --------
 
+        // Snapshot the current buffer + cursor + scroll into the undo
+        // stack. Call this BEFORE mutating `this.lines`. Strings are
+        // immutable so copying refs into a fresh List is enough — the
+        // edit path replaces slot contents, never mutates a String.
+        // When the cap is hit, drop the oldest entry; the most recent
+        // history is what users actually reach for.
+        // Not private — HighlightedTextEditor's toggleLineComment is
+        // an edit path that doesn't route through insertChar /
+        // insertNewLine, and needs to push its own snapshot.
+        fun pushUndo() {
+            var snap = new List<String>()
+            var i = 0
+            while (i < this.lines.getSize()) {
+                snap.add(this.lines.get(i))
+                i = i + 1
+            }
+            var entry = new UndoEntry()
+            entry.lines = snap
+            entry.cursorLine = this.cursorLine
+            entry.cursorCol = this.cursorCol
+            entry.scrollLine = this.scrollLine
+            if (this.undoStack.getSize() >= TextEditor.UNDO_CAP) {
+                this.undoStack.removeAt(0)
+            }
+            this.undoStack.add(entry)
+        }
+
+        // Ctrl+Z. Restore the most recent snapshot if any, then drop
+        // it. Returns true if it actually undid something, false when
+        // the stack was empty (so the embedder can flash a "nothing
+        // to undo" cue if it wants). Does NOT fire the
+        // contentChangeListener — the editor's own undo isn't a
+        // user-visible "dirty" event (the buffer goes BACK to a prior
+        // state, which is the opposite of a new edit). It does fire
+        // onContentChanged so the subclass cache (HighlightedTextEditor
+        // tokens) reflects the rolled-back content.
+        fun undo(): Bool {
+            if (this.undoStack.getSize() == 0) {
+                return false
+            }
+            var top = this.undoStack.removeAt(this.undoStack.getSize() - 1)
+            this.lines = top.lines
+            this.cursorLine = top.cursorLine
+            this.cursorCol = top.cursorCol
+            this.scrollLine = top.scrollLine
+            this.clampCursorCol()
+            this.forceFullRepaint()
+            this.requestRepaint()
+            this.onContentChanged()
+            this.fireCursorChanged()
+            // Embedder usually wants to mark the tab dirty too — undo
+            // can take the buffer from "saved" to "modified" or back
+            // again, both of which the IDE wants to reflect.
+            var cb = this.contentChangeListener
+            if (cb != null) {
+                cb()
+            }
+            return true
+        }
+
+        // Drop all undo history. Called from setText so loading a fresh
+        // file doesn't leave the user able to "undo" their way into the
+        // previous buffer.
+        private fun clearUndo() {
+            this.undoStack = new List<UndoEntry>()
+        }
+
         private fun insertChar(c: UShort) {
             var line = this.currentLine()
+            // Skip-closer hook: if the char the user just typed
+            // matches the next char in the buffer AND the subclass
+            // says yes, just step over it instead of inserting. This
+            // is what makes auto-pair feel natural — typing `)` after
+            // an auto-inserted `)` advances the cursor instead of
+            // producing `))`. Default returns false; HighlightedText-
+            // Editor consults the per-language autoPairBrackets flag.
+            if (this.shouldSkipInsertedChar(c, line, this.cursorCol)) {
+                this.cursorCol = this.cursorCol + 1
+                this.markDirtyLine(this.cursorLine)
+                if (this.ensureCursorVisible()) {
+                    this.forceFullRepaint()
+                }
+                this.requestRepaint()
+                this.fireCursorChanged()
+                return
+            }
+            this.pushUndo()
             var sb = new StringBuilder()
             if (this.cursorCol > 0) {
                 sb.add(line.substring(0UI, this.cursorCol.toUInt()))
             }
             sb.addChar(c)
+            // Auto-pair completion hook: subclass returns a string to
+            // splice in *after* the typed char (cursor stays between
+            // them). For `(` a HighlightedTextEditor with autoPairBrackets
+            // on would return ")" — the buffer becomes "()" with the
+            // cursor on the `)` ready for inside-the-pair typing.
+            // Default returns null = no completion = base behaviour.
+            var completion = this.completionForInsertedChar(c)
+            if (completion != null && completion.length() > 0) {
+                sb.add(completion)
+            }
             if (this.cursorCol < line.length()) {
                 sb.add(line.substringToEnd(this.cursorCol.toUInt()))
             }
@@ -679,6 +960,7 @@ namespace Am.Ui
         }
 
         private fun insertNewLine() {
+            this.pushUndo()
             var oldCursorLine = this.cursorLine
             var line = this.currentLine()
             var before = ""
@@ -689,10 +971,34 @@ namespace Am.Ui
             if (this.cursorCol < line.length()) {
                 after = line.substringToEnd(this.cursorCol.toUInt())
             }
+            var splitAt = this.cursorCol
             this.lines.set(this.cursorLine, before)
             this.lines.insertAt(this.cursorLine + 1, after)
             this.cursorLine = this.cursorLine + 1
             this.cursorCol = 0
+
+            // Auto-indent hook. Subclasses (HighlightedTextEditor)
+            // can return a leading-whitespace prefix to splice onto
+            // the start of the new line so the cursor lands at the
+            // same indent as the line we just split from. Default
+            // implementation returns "" — no auto-indent — so the
+            // base TextEditor keeps its historical behaviour.
+            // Passes the WHOLE previous line (pre-split) AND the
+            // column the split occurred at, so the hook can inspect
+            // just the content that was BEFORE the cursor when
+            // deciding e.g. "did this line end in `{`".
+            var indent = this.computeIndentForNewLine(line, splitAt)
+            if (indent != null && indent.length() > 0) {
+                this.lines.set(this.cursorLine, indent + after)
+                this.cursorCol = indent.length()
+            }
+
+            // Post-split hook. Fires AFTER the new line has its
+            // auto-indent applied. Subclasses use this to react to
+            // the full split context — typically to detect "Enter
+            // pressed between `{` and `}`" and push the `}` onto a
+            // third line below at the outer indent. Default no-op.
+            this.postInsertNewLine(line, splitAt)
 
             // If the new cursor row would otherwise scroll off the
             // bottom of the viewport, advance scrollLine and do a full
@@ -720,7 +1026,158 @@ namespace Am.Ui
             if (cb != null) {
                 cb()
             }
+            // Subclass hook — fired AFTER the user-installed listener
+            // so a HighlightedTextEditor invalidating its per-line
+            // token cache doesn't race with whatever the embedder
+            // wired contentChangeListener up to (typically tab-dirty
+            // tracking). Default no-op; subclasses override.
+            this.onContentChanged()
         }
+
+        // Subclass-overridable "content just changed" hook. Distinct
+        // from the public `contentChangeListener` var: that one is
+        // owned by the embedder (the IDE wires it to mark the tab
+        // dirty), while this method is for the editor's own subclass
+        // to react without conflicting. Default no-op.
+        open fun onContentChanged() {
+        }
+
+        // Subclass-overridable hook called from insertNewLine() right
+        // after the cursor advances to the new line. Returns the
+        // string to splice onto the start of the new line as
+        // auto-indent — typically the leading whitespace of
+        // `prevLineFull` (the line that just got split). `splitCol`
+        // is the column the cursor was on BEFORE the split, so
+        // subclasses can look only at the chars that ended up on
+        // the original line — e.g. "did the line end in `{` right
+        // before the split". Default returns "" so the base
+        // TextEditor preserves its no-indent behaviour; Highlighted-
+        // TextEditor overrides to consult a per-language behaviour.
+        open fun computeIndentForNewLine(prevLineFull: String, splitCol: Int): String {
+            return ""
+        }
+
+        // Subclass-overridable hook called from insertNewLine AFTER
+        // computeIndentForNewLine has applied the auto-indent to the
+        // freshly-split new line. Default no-op. HighlightedTextEditor
+        // uses this to do the `{<Enter>}` split:
+        //
+        //   before:    something {|}
+        //   after Enter (with this hook):
+        //              something {
+        //                  |
+        //              }
+        //
+        // The hook can mutate `this.lines` and the cursor freely.
+        open fun postInsertNewLine(prevLineFull: String, splitCol: Int) {
+        }
+
+        // Subclass-overridable hook called from insertChar(c) after
+        // the typed char is buffered but before the buffer is written
+        // back. Returns a string to splice in *immediately after* the
+        // typed char without advancing the cursor — i.e. an auto-pair
+        // completion. Returning null or "" means "no completion".
+        //
+        // Default returns null; HighlightedTextEditor overrides to
+        // emit ")" for "(", "]" for "[", etc. when the file's
+        // LanguageBehaviour has autoPairBrackets on.
+        open fun completionForInsertedChar(c: UShort): String {
+            return null
+        }
+
+        // Subclass-overridable hook called BEFORE the typed char is
+        // buffered. When true, insertChar treats the keystroke as a
+        // "skip over the existing closer" gesture: it advances the
+        // cursor by one column instead of inserting `c` (and skips
+        // the completionForInsertedChar path entirely). The skip is
+        // expected to fire ONLY when `c` matches the char at
+        // `(line, col)` — otherwise behaviour gets surprising.
+        //
+        // Default returns false; HighlightedTextEditor consults
+        // LanguageBehaviour.autoPairBrackets and matches the standard
+        // closer set (`)` `]` `}` `"` `'`).
+        open fun shouldSkipInsertedChar(c: UShort, line: String, col: Int): Bool {
+            return false
+        }
+
+        // Toggle a line-comment prefix on the cursor's line. Returns
+        // true when the toggle ran (the keypress is consumed), false
+        // when the subclass declined (caller should treat the key as
+        // not handled — vanilla TextEditor returns false because it
+        // has no notion of a comment syntax). HighlightedTextEditor
+        // overrides to consult LanguageBehaviour.commentLinePrefix.
+        open fun toggleLineComment(): Bool {
+            return false
+        }
+
+        // Search forward from just past the cursor for `query`. On a
+        // hit, moves the cursor to the match start, scrolls so the
+        // match is visible, repaints, and returns true. On a miss,
+        // wraps around once and tries from the top of the buffer; if
+        // still no match, leaves the cursor where it was and returns
+        // false. Callers — typically the IDE's find bar — also call
+        // setLastFindQuery so Ctrl+G repeats the same search.
+        fun findNext(query: String): Bool {
+            if (query == null || query.length() == 0) {
+                return false
+            }
+            this.lastFindQuery = query
+            var lineCount = this.lines.getSize()
+            if (lineCount == 0) {
+                return false
+            }
+            // First pass: from (cursorLine, cursorCol+1) to end-of-
+            // buffer. The +1 stops Ctrl+G from re-matching the same
+            // position the cursor is currently on.
+            var startLine = this.cursorLine
+            var startCol = this.cursorCol + 1
+            if (TextEditor.findInRange(this.lines, query, startLine, startCol, lineCount, this)) {
+                return true
+            }
+            // Second pass: from (0, 0) up to (cursorLine, cursorCol)
+            // so we wrap once around the buffer. Don't pass startCol
+            // here — we want to allow matches that end before the
+            // cursor's column on its line.
+            if (TextEditor.findInRange(this.lines, query, 0, 0, startLine + 1, this)) {
+                return true
+            }
+            return false
+        }
+
+        // Scan `lines[fromLine .. toLine)` starting at `fromCol` for
+        // the first occurrence of `query`. On a hit, applies it to
+        // `target` (moves the cursor and fires the visibility /
+        // repaint side-effects). Defined static so the same routine
+        // serves both passes of findNext without duplicating the
+        // cursor-mutation block.
+        private static fun findInRange(
+            lines: List<String>,
+            query: String,
+            fromLine: Int,
+            fromCol: Int,
+            toLine: Int,
+            target: TextEditor
+        ): Bool {
+            var l = fromLine
+            var c = fromCol
+            while (l < toLine) {
+                var lineText = lines.get(l)
+                var idx = lineText.indexOfAfter(query, c)
+                if (idx >= 0) {
+                    target.cursorLine = l
+                    target.cursorCol = idx
+                    target.ensureCursorVisible()
+                    target.forceFullRepaint()
+                    target.requestRepaint()
+                    target.fireCursorChanged()
+                    return true
+                }
+                l = l + 1
+                c = 0
+            }
+            return false
+        }
+
 
         private fun fireCursorChanged() {
             // Defensive re-clamp before reporting. Every caller already
@@ -750,6 +1207,10 @@ namespace Am.Ui
             if (this.cursorCol > 0 || this.cursorLine > 0) {
                 hadChange = true
             }
+            if (!hadChange) {
+                return
+            }
+            this.pushUndo()
             if (this.cursorCol > 0) {
                 var line = this.currentLine()
                 var sb = new StringBuilder()
@@ -889,32 +1350,63 @@ namespace Am.Ui
         // multiple coloured runs (syntax highlighting). Default draws
         // the entire line with `this.textPen`, with tab characters
         // expanded to a `tabWidthPx`-wide gap.
-        open fun drawLine(graphics: Graphics, line: String, lineIndex: Int, x: Short, y: Short) {
+        //
+        // Selection: when selStartColOnLine(lineIndex) returns a non-
+        // negative col, characters in that range paint with
+        // selectionBackgroundPen as their text-bg cell so the highlight
+        // shows up *under* the glyphs (not behind them, like a
+        // separately-drawn fillRect would — the AmigaOS rastport mode
+        // is JAM2, so each drawString cell repaints its own bg). The
+        // walk flushes the buffer on bg-change as well as on tab so
+        // the pen switch lands between segments. Tab cells in the
+        // selection get a fillRect because drawString skips them; the
+        // `rowTop` / `rowBottom` params bound that rect vertically.
+        open fun drawLine(graphics: Graphics, line: String, lineIndex: Int, x: Short, y: Short, rowTop: Short, rowBottom: Short) {
             graphics.setForegroundPen(this.textPen)
-            // Fast path: no tabs, just dump the line. drawString is
-            // a single native call vs. one per segment.
-            if (line.indexOf("\t") < 0) {
+            var selStart = this.selStartColOnLine(lineIndex)
+            var selEnd   = this.selEndColOnLine(lineIndex)
+            var lineLen = line.length()
+            var hasInLine = selStart >= 0 && selEnd > selStart && selStart < lineLen
+
+            // Fast path: no selection on this line, no tabs.
+            if (!hasInLine && line.indexOf("\t") < 0) {
+                graphics.setBackgroundPen(this.backgroundPen)
                 graphics.drawString(line, x, y)
                 return
             }
-            // Character-walk for the same reason as
-            // measureLineWidthG — split("\t") drops trailing-tab
-            // segments, so a line like "abc\t" would render as
-            // "abc" without the trailing tab gap, and cursor X
-            // calculations against it would disagree with where
-            // the next character would actually be drawn.
+
             var sb = new StringBuilder()
             var curX = x
-            var len = line.length()
             var i = 0
-            while (i < len) {
+            var curBg = this.backgroundPen
+            graphics.setBackgroundPen(curBg)
+            while (i < lineLen) {
+                var bg = this.backgroundPen
+                if (hasInLine && i >= selStart && i < selEnd) {
+                    bg = this.selectionBackgroundPen
+                }
+                var bgChanged = bg != curBg
                 var c = line.characterAt(i.toUInt())
-                if (c == 0x0009US) {
-                    if (sb.getLength() > 0) {
-                        var seg = sb.toString()
-                        graphics.drawString(seg, curX, y)
-                        curX = curX + graphics.calculateStringWidth(seg).toShort()
-                        sb = new StringBuilder()
+                var isTab = c == 0x0009US
+                if ((bgChanged || isTab) && sb.getLength() > 0) {
+                    var seg = sb.toString()
+                    graphics.drawString(seg, curX, y)
+                    curX = curX + graphics.calculateStringWidth(seg).toShort()
+                    sb = new StringBuilder()
+                }
+                if (bgChanged) {
+                    curBg = bg
+                    graphics.setBackgroundPen(curBg)
+                }
+                if (isTab) {
+                    // Paint the tab cell with the current bg so a
+                    // selection that covers a tab still shows the
+                    // highlight stripe (drawString doesn't paint any
+                    // pixels under tabs — it just advances x).
+                    if (curBg != this.backgroundPen) {
+                        graphics.setForegroundPen(curBg)
+                        graphics.fillRect(curX, rowTop, curX + this.tabWidthPx - 1S, rowBottom)
+                        graphics.setForegroundPen(this.textPen)
                     }
                     curX = curX + this.tabWidthPx
                 } else {
@@ -925,6 +1417,8 @@ namespace Am.Ui
             if (sb.getLength() > 0) {
                 graphics.drawString(sb.toString(), curX, y)
             }
+            // Reset bg pen for the caller (cursor draw etc.).
+            graphics.setBackgroundPen(this.backgroundPen)
         }
 
         // Render every visible line — used for full repaints (initial
@@ -1018,7 +1512,13 @@ namespace Am.Ui
                 // negative X and the graphics clip keeps them off
                 // the surrounding chrome.
                 var lineStartX = 0S - this.scrollPixelX
-                this.drawLine(graphics, line, i, lineStartX, textY)
+
+                // drawLine handles selection bg per-character (the
+                // JAM2 mode means each glyph cell repaints its own
+                // bg, so a separately-drawn fillRect would be
+                // overwritten). It also fills the past-EOL gap when
+                // a block selection extends past the line text.
+                this.drawLine(graphics, line, i, lineStartX, textY, y, lineBottom)
 
                 if (i == this.cursorLine && TextEditor.isCursorVisibleNow()) {
                     var cursorX = lineStartX
@@ -1341,8 +1841,63 @@ namespace Am.Ui
                 this.cursorLine = newLine
                 this.cursorCol = newCol
                 this.markCursorMoveDirty(oldLine)
+                // Click resets the selection: drop any prior range,
+                // exit block mode (per the user spec — "turned off
+                // with click"), then plant the new anchor at the
+                // cursor. We start tracking a drag immediately;
+                // if the user releases without moving we'll detect
+                // anchor == cursor and clearSelection() on up.
+                var hadSelection = this.hasSelection() || this.selMode != 0
+                this.selMode = 0
+                this.selAnchorLine = newLine
+                this.selAnchorCol = newCol
+                this.selDragging = true
+                if (hadSelection) {
+                    // Old highlight has to clear from the previously-
+                    // selected rows.
+                    this.forceFullRepaint()
+                }
                 this.requestRepaint()
                 this.fireCursorChanged()
+                return true
+            }
+            // Mouse drag extends the selection while the left button
+            // is held. The cursor follows the pointer; the anchor
+            // stays where it was on the original press.
+            if (type == MouseEventType.move && this.selDragging) {
+                var lineHeight = this.getLineHeight()
+                if (lineHeight <= 0S) {
+                    return true
+                }
+                var lastLine = this.lines.getSize() - 1
+                var newLine = (y.toInt() / lineHeight.toInt()) + this.scrollLine
+                if (newLine < 0) { newLine = 0 }
+                if (newLine > lastLine) { newLine = lastLine }
+                var lineText = this.lines.get(newLine)
+                var newCol = this.colForPixelX(lineText, x + this.scrollPixelX)
+                if (newLine != this.cursorLine || newCol != this.cursorCol) {
+                    var oldLine = this.cursorLine
+                    this.cursorLine = newLine
+                    this.cursorCol = newCol
+                    this.markCursorMoveDirty(oldLine)
+                    // Selection bounds changed — every line between
+                    // the anchor row and the cursor row may need a
+                    // repaint, so don't try to be clever with partial
+                    // dirty tracking.
+                    this.forceFullRepaint()
+                    this.requestRepaint()
+                    this.fireCursorChanged()
+                }
+                return true
+            }
+            // Mouse-up ends the drag. If the cursor never left the
+            // anchor (= just a click, no movement), drop the
+            // pseudo-selection so hasSelection() returns false.
+            if (type == MouseEventType.up && this.selDragging) {
+                this.selDragging = false
+                if (!this.hasSelection()) {
+                    this.clearSelection()
+                }
                 return true
             }
             return base.onMouseEvent(type, button, x, y)
@@ -1378,9 +1933,6 @@ namespace Am.Ui
         }
 
         override fun onKeyboardEvent(type: KeyboardEventType, keyCode: UShort, keyChar: UShort): Bool {
-            if (type != KeyboardEventType.down) {
-                return false
-            }
             // Focus gate: only consume keys when we're the focused
             // view, so typing in the terminal isn't echoed into the
             // active editor as well. A null focus means "nothing is
@@ -1395,6 +1947,46 @@ namespace Am.Ui
                         return false
                     }
                 }
+            }
+            if (type != KeyboardEventType.down) {
+                return false
+            }
+            // Ctrl+B — start (or end) a selection ("block" in Amiga
+            // terminology = selected area). First press plants the
+            // anchor at the cursor; arrow keys then extend the
+            // selection from the anchor. Second press releases the
+            // anchor and clears the selection. Click in the editor
+            // also clears (handled in onMouseEvent).
+            if (keyChar == 2US) {
+                if (this.selMode == 0) {
+                    this.selMode = 1
+                    this.selAnchorLine = this.cursorLine
+                    this.selAnchorCol = this.cursorCol
+                } else {
+                    this.selMode = 0
+                    this.clearSelection()
+                }
+                this.forceFullRepaint()
+                this.requestRepaint()
+                return true
+            }
+            // Selection lifecycle on key press:
+            //   - Arrow keys EXTEND any active selection (block or
+            //     flowing): the anchor stays planted, the cursor moves
+            //     below. Rendering shape (rectangle vs. flow) comes
+            //     from selMode in drawLine, not from this branch.
+            //   - Edit ops (typing, Enter, Backspace, Tab) clear any
+            //     selection so the edit lands at a fresh cursor.
+            //     Handled below, in-line with each op.
+            //   - Ctrl-modifier shortcuts (Ctrl+C, Ctrl+V, Ctrl+F,
+            //     Ctrl+G, Ctrl+/) deliberately PRESERVE the selection
+            //     so e.g. Ctrl+C on a block can copy it.
+            //   - Click (in onMouseEvent) clears the selection, plants
+            //     a new anchor at the click position.
+            var isArrow = keyCode == 76US || keyCode == 77US
+                || keyCode == 78US || keyCode == 79US
+            if (isArrow && (this.selMode == 1 || this.hasSelection())) {
+                this.forceFullRepaint()
             }
             // AmigaOS raw key codes for arrows. The native handler
             // tags shifted arrows with keyChar=1 — we route Shift+Up
@@ -1436,6 +2028,20 @@ namespace Am.Ui
                 this.moveCursorDown()
                 return true
             }
+            // Edit ops clear any active selection before the edit
+            // (typing replaces selection vs. deleting it is a future
+            // feature; today we just drop it and apply the edit at
+            // the cursor's current position). Modifier shortcuts
+            // (Ctrl+C/V/F/G//) are checked further down and never
+            // touch the selection.
+            var isEditOp = keyChar == 8US || keyChar == 13US || keyChar == 10US
+                || keyChar == 9US || (keyChar >= 32US && keyChar <= 126US)
+            if (isEditOp && (this.hasSelection() || this.selMode != 0)) {
+                this.selMode = 0
+                this.clearSelection()
+                this.forceFullRepaint()
+                this.requestRepaint()
+            }
             // ASCII char keys.
             if (keyChar == 8US) {
                 this.backspace()
@@ -1455,6 +2061,50 @@ namespace Am.Ui
                 this.pasteAtCursor()
                 return true
             }
+            // Ctrl+Z — undo the most recent edit. Per-editor history
+            // (each TextEditor instance has its own undoStack), so
+            // tabs don't share state. Falls through and is consumed
+            // even when the stack was empty so a missing-handler
+            // fallback doesn't insert 0x1A literally.
+            if (keyChar == 26US) {
+                this.undo()
+                return true
+            }
+            // Ctrl+/ — toggle line comment on the cursor's line.
+            // Routes through an open hook so HighlightedTextEditor
+            // can apply the per-language commentLinePrefix; the base
+            // class no-ops since vanilla TextEditor has no notion of
+            // "what's a comment in this buffer". Most Amiga keymaps
+            // send 0x1F for Ctrl+/, same as terminal Unix.
+            if (keyChar == 31US) {
+                if (this.toggleLineComment()) {
+                    return true
+                }
+            }
+            // Ctrl+F — open the embedder's find UI. The editor
+            // doesn't own the find bar itself (it lives in the
+            // IDE chrome so multiple tabs can share one); the
+            // embedder wires `findRequestedListener` to bring the
+            // bar up. We swallow the key only if a listener is
+            // installed — otherwise Ctrl+F falls through and gets
+            // inserted as `\x06` (the ASCII code itself), which is
+            // wrong but at least visible.
+            if (keyChar == 6US) {
+                var fr = this.findRequestedListener
+                if (fr != null) {
+                    return fr()
+                }
+            }
+            // Ctrl+G — find-next using the previously-entered query.
+            // Embedder wires `findNextListener` so the find bar
+            // doesn't need to be open to step through matches. Same
+            // swallow-only-if-handled rule as Ctrl+F.
+            if (keyChar == 7US) {
+                var fn = this.findNextListener
+                if (fn != null) {
+                    return fn()
+                }
+            }
             if (keyChar == 13US || keyChar == 10US) {
                 this.insertNewLine()
                 return true
@@ -1471,11 +2121,13 @@ namespace Am.Ui
             return false
         }
 
-        // Copy the line the cursor is on to the system clipboard.
-        // No-op if the view is detached. Stand-in for selection-
-        // based copy — picks up the "copy this snippet" muscle
-        // memory most users have without needing the selection
-        // model.
+        // Ctrl+C — copy the active selection to the clipboard. With
+        // no selection, falls back to copying the current line so the
+        // "copy this snippet" reflex still works without first
+        // marking. After copying, the selection is cleared (the user
+        // already has the content on the clipboard — keeping the
+        // highlight live invites accidental overwrite on the next
+        // keystroke).
         private fun copyCurrentLine() {
             var vc = this.getViewContext()
             if (vc == null) {
@@ -1485,7 +2137,69 @@ namespace Am.Ui
             if (w == null) {
                 return
             }
-            w.copyToClipboard(this.currentLine())
+            var hadSelection = this.hasSelection()
+            var payload: String = null
+            if (hadSelection) {
+                payload = this.getSelectedText()
+            } else {
+                payload = this.currentLine()
+            }
+            w.copyToClipboard(payload)
+            if (hadSelection || this.selMode != 0) {
+                this.selMode = 0
+                this.clearSelection()
+                this.forceFullRepaint()
+                this.requestRepaint()
+            }
+        }
+
+        // Concatenate the lines the selection covers into a single
+        // string, with `\n` between rows. The start row contributes
+        // from selStartCol() to EOL; middle rows contribute fully;
+        // the end row contributes from col 0 to selEndCol(). When the
+        // selection is on a single row it's just the substring between
+        // the start and end cols.
+        fun getSelectedText(): String {
+            if (!this.hasSelection()) {
+                return ""
+            }
+            var sStart = this.selStartLine()
+            var sEnd = this.selEndLine()
+            if (sStart == sEnd) {
+                var only = this.lines.get(sStart)
+                var a = this.selStartCol()
+                var b = this.selEndCol()
+                if (a < 0) { a = 0 }
+                if (b > only.length()) { b = only.length() }
+                if (b <= a) {
+                    return ""
+                }
+                return only.substring(a.toUInt(), b.toUInt())
+            }
+            var sb = new StringBuilder()
+            // Start row: from selStartCol to EOL.
+            var startLine = this.lines.get(sStart)
+            var startCol = this.selStartCol()
+            if (startCol < 0) { startCol = 0 }
+            if (startCol < startLine.length()) {
+                sb.add(startLine.substring(startCol.toUInt(), startLine.length().toUInt()))
+            }
+            sb.addChar(0x000AUS)
+            // Middle rows in full.
+            var i = sStart + 1
+            while (i < sEnd) {
+                sb.add(this.lines.get(i))
+                sb.addChar(0x000AUS)
+                i = i + 1
+            }
+            // End row: from col 0 to selEndCol.
+            var endLine = this.lines.get(sEnd)
+            var endCol = this.selEndCol()
+            if (endCol > endLine.length()) { endCol = endLine.length() }
+            if (endCol > 0) {
+                sb.add(endLine.substring(0UI, endCol.toUInt()))
+            }
+            return sb.toString()
         }
 
         // Paste the system clipboard's contents at the cursor.
@@ -1494,6 +2208,15 @@ namespace Am.Ui
         // on CR we skip (CRLF normalisation), everything else
         // routes through insertChar so the existing dirty / cursor
         // / scroll plumbing fires per char.
+        // Ctrl+V — splice the clipboard's text in at the cursor. CRLF
+        // is normalised to LF (we drop bare CR), and embedded LFs
+        // split the current line into segments. Goes straight to the
+        // lines list rather than routing each char through insertChar /
+        // insertNewLine — pasted content must land verbatim, and the
+        // smart-indent / auto-pair / skip-closer hooks would otherwise
+        // mangle it (every embedded LF would re-apply the previous
+        // line's leading whitespace, compounding into a pyramid
+        // slope; a pasted `(` would auto-pair an extra `)`).
         private fun pasteAtCursor() {
             var vc = this.getViewContext()
             if (vc == null) {
@@ -1507,18 +2230,75 @@ namespace Am.Ui
             if (text == null || text.length() == 0) {
                 return
             }
-            var i = 0
-            while (i < text.length()) {
-                var ch = text.substring(i.toUInt(), 1UI).toBytes("UTF-8")[0UI].toUShort()
+            // Snapshot BEFORE the buffer mutates. One push per paste,
+            // not per char — Ctrl+Z undoes the whole paste as a unit.
+            this.pushUndo()
+            // Split clipboard into per-line segments, dropping any CR
+            // along the way.
+            var segments = new List<String>()
+            var seg = new StringBuilder()
+            var ti = 0
+            while (ti < text.length()) {
+                var ch = text.substring(ti.toUInt(), 1UI).toBytes("UTF-8")[0UI].toUShort()
                 if (ch == 10US) {
-                    this.insertNewLine()
+                    segments.add(seg.toString())
+                    seg = new StringBuilder()
                 } else if (ch == 13US) {
-                    // skip — CRLF normalises to just the LF above
+                    // CRLF normalises to just the LF; drop the CR.
                 } else {
-                    this.insertChar(ch)
+                    seg.addChar(ch)
                 }
-                i = i + 1
+                ti = ti + 1
             }
+            segments.add(seg.toString())
+
+            // Splice into the buffer. Current line gets:
+            //   <before-cursor> + segments[0]
+            // segments[1 .. -2] become standalone new lines.
+            // The final line gets:
+            //   segments[-1] + <after-cursor>
+            // (When only one segment exists — clipboard had no LF —
+            // both branches collapse to "insert into current line".)
+            var curLineText = this.currentLine()
+            var before = ""
+            var after = ""
+            if (this.cursorCol > 0) {
+                before = curLineText.substring(0UI, this.cursorCol.toUInt())
+            }
+            if (this.cursorCol < curLineText.length()) {
+                after = curLineText.substringToEnd(this.cursorCol.toUInt())
+            }
+            var nSeg = segments.getSize()
+            if (nSeg == 1) {
+                var only = segments.get(0)
+                this.lines.set(this.cursorLine, before + only + after)
+                this.cursorCol = before.length() + only.length()
+            } else {
+                // First segment: append to before, replace current
+                // line.
+                this.lines.set(this.cursorLine, before + segments.get(0))
+                // Middle segments: insert as standalone lines below.
+                var si = 1
+                while (si < nSeg - 1) {
+                    this.lines.insertAt(this.cursorLine + si, segments.get(si))
+                    si = si + 1
+                }
+                // Final segment: gets the after-cursor remainder.
+                var last = segments.get(nSeg - 1)
+                this.lines.insertAt(this.cursorLine + nSeg - 1, last + after)
+                this.cursorLine = this.cursorLine + nSeg - 1
+                this.cursorCol = last.length()
+            }
+            // Whole-buffer paint is the safest signal post-paste —
+            // line count may have changed by an arbitrary amount.
+            this.forceFullRepaint()
+            if (this.ensureCursorVisible()) {
+                this.forceFullRepaint()
+            }
+            this.requestRepaint()
+            this.fireContentChanged()
+            this.fireCursorChanged()
+            this.onContentChanged()
         }
     }
 }
