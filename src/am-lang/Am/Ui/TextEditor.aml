@@ -335,6 +335,23 @@ namespace Am.Ui
             return l
         }
 
+        // Re-mount: every time this editor is added to an attached
+        // parent (initial open or a tab switch back to it), force the
+        // next paint to be full. Without this, the cursor-blink path
+        // at the end of paint() leaves
+        // `dirtyLineFrom == cursorLine` set for the next cycle so the
+        // next paint runs as a partial repaint of just the cursor
+        // row. While the editor is hidden between tabs that state
+        // sits unchanged; on re-mount the first paint then repaints
+        // only the cursor line, leaving the rest of the viewport
+        // showing whatever was previously in the offscreen buffer
+        // (typically the other tab's text). Forcing full on attach
+        // makes the first paint refresh the whole viewport.
+        override fun onAttach(viewContext: ViewContext) {
+            base.onAttach(viewContext)
+            this.forceFullRepaint()
+        }
+
         // -------- incremental-repaint bookkeeping --------
 
         private fun markDirtyLine(line: Int) {
