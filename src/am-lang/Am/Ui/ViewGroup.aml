@@ -62,6 +62,30 @@ namespace Am.Ui
             }
         }
 
+        // Recurse into children to find any descendant that's
+        // requesting a repaint within `target`. First hit wins —
+        // we just need the boolean "yes, something here overlaps
+        // and is dirty" to decide whether to flag a higher-z
+        // overlay layer.
+        override fun hasDirtyOverlapping(target: Rectangle): Bool {
+            var mine = this.computeWindowRect()
+            if (!View.rectsOverlap(mine, target)) {
+                return false
+            }
+            if (this.getRepaintRequested()) {
+                return true
+            }
+            var n = this.children.getSize()
+            var i = 0
+            while (i < n) {
+                if (this.children.get(i).hasDirtyOverlapping(target)) {
+                    return true
+                }
+                i = i + 1
+            }
+            return false
+        }
+
         override fun onAttach(viewContext: ViewContext) {
             base.onAttach(viewContext)
             each(this.children, c) {

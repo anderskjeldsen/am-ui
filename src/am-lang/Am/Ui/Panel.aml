@@ -171,6 +171,20 @@ namespace Am.Ui
             }
         }
 
+        override fun hasDirtyOverlapping(target: Rectangle): Bool {
+            var mine = this.computeWindowRect()
+            if (!View.rectsOverlap(mine, target)) {
+                return false
+            }
+            if (this.getRepaintRequested()) {
+                return true
+            }
+            if (this.child != null) {
+                return this.child.hasDirtyOverlapping(target)
+            }
+            return false
+        }
+
         fun getChild(): View {
             return this.child
         }
