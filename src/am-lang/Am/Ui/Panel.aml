@@ -4,6 +4,7 @@ namespace Am.Ui
 
     class Panel() : View {
         import Am.Lang
+        import Am.Collections
 
         private var child: View
 
@@ -168,6 +169,15 @@ namespace Am.Ui
             base.invalidateOverlapping(winRect)
             if (this.child != null) {
                 this.child.invalidateOverlapping(winRect)
+            }
+        }
+
+        override fun collectFocusable(out: List<View>) {
+            if (this.isFocusable()) {
+                out.add(this)
+            }
+            if (this.child != null) {
+                this.child.collectFocusable(out)
             }
         }
 

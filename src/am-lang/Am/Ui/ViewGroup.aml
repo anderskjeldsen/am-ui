@@ -62,6 +62,18 @@ namespace Am.Ui
             }
         }
 
+        override fun collectFocusable(out: List<View>) {
+            if (this.isFocusable()) {
+                out.add(this)
+            }
+            var n = this.children.getSize()
+            var i = 0
+            while (i < n) {
+                this.children.get(i).collectFocusable(out)
+                i = i + 1
+            }
+        }
+
         // Recurse into children to find any descendant that's
         // requesting a repaint within `target`. First hit wins —
         // we just need the boolean "yes, something here overlaps
