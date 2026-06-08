@@ -134,6 +134,14 @@ namespace Am.Ui
             return this.screenTitle
         }
 
+        // The screen this window is mounted on (null for the public
+        // Workbench screen). Used by dialog/modal helpers that need
+        // to open a second window on the SAME screen instead of
+        // accidentally landing on Workbench.
+        fun getScreen(): Screen {
+            return this.screen
+        }
+
         private fun setBorder(left: Short, top: Short, right: Short, bottom: Short) {
             this.border = new Insets(left, top, right, bottom)
         }
