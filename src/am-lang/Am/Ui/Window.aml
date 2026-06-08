@@ -636,6 +636,77 @@ namespace Am.Ui
             }
         }
 
+        // Move keyboard focus to the next / previous focusable view in
+        // the rootView's tree order. Wrap around at the ends so Tab
+        // from the last input lands on the first. If nothing in the
+        // tree reports focusable, no-op. If nothing is currently
+        // focused, focusNext starts at index 0 and focusPrev at the
+        // last entry.
+        //
+        // Called by onKeyboardEvent's Tab / Shift+Tab handler AFTER
+        // the currently-focused view declines the key (so an editor
+        // that wants Tab for indent keeps it; a TextField with no
+        // submit handler falls through and lets Tab navigate).
+        fun focusNext(): Bool {
+            return this.advanceFocus(1)
+        }
+
+        fun focusPrev(): Bool {
+            return this.advanceFocus(-1)
+        }
+
+        // Focus the first focusable view inside `root`. Used by
+        // overlay / sidebar open paths so a freshly-mounted Settings,
+        // ChatGpt or find bar starts with its input ready for typing.
+        // No-op when the subtree has no focusable view.
+        fun focusFirstIn(root: View): Bool {
+            if (root == null) {
+                return false
+            }
+            var list = new List<View>()
+            root.collectFocusable(list)
+            if (list.getSize() == 0) {
+                return false
+            }
+            this.setKeyboardFocus(list.get(0))
+            return true
+        }
+
+        private fun advanceFocus(dir: Int): Bool {
+            if (this.rootView == null) {
+                return false
+            }
+            var list = new List<View>()
+            this.rootView.collectFocusable(list)
+            var n = list.getSize()
+            if (n == 0) {
+                return false
+            }
+            var idx = -1
+            var i = 0
+            while (i < n) {
+                if (list.get(i) == this.keyboardFocus) {
+                    idx = i
+                    i = n
+                } else {
+                    i = i + 1
+                }
+            }
+            var next: Int = 0
+            if (idx < 0) {
+                // No current focus — pick first (forward) or last (back).
+                if (dir > 0) {
+                    next = 0
+                } else {
+                    next = n - 1
+                }
+            } else {
+                next = ((idx + dir) + n) % n
+            }
+            this.setKeyboardFocus(list.get(next))
+            return true
+        }
+
         // Single chokepoint for focus mutations. Detects whether the
         // focus actually moved, requests a repaint on the old AND new
         // focused views so e.g. a TextField can swap its filled
@@ -674,6 +745,16 @@ namespace Am.Ui
             var kf = this.keyboardFocus
             if (kf != null) {
                 if (kf.onKeyboardEvent(type, keyCode, keyChar)) {
+                    return
+                }
+            }
+            // Tab moves focus to the next focusable view when the
+            // currently-focused view declined the key (or there is no
+            // focus). Editors and other consumers of Tab return true
+            // first and keep the key. Only handle on key-down so the
+            // navigation doesn't fire twice per press.
+            if (type == KeyboardEventType.down && keyChar == 9US) {
+                if (this.focusNext()) {
                     return
                 }
             }

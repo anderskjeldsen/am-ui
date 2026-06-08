@@ -489,6 +489,25 @@ namespace Am.Ui
         open fun propagateDirty(winRect: Rectangle, source: View, sourceOpaque: Bool) {
         }
 
+        // Keyboard focusability. Inputs (TextField, TextEditor, etc.)
+        // override to return true so Window.focusNext / focusPrev (Tab
+        // navigation) and Window.focusFirstIn (auto-focus on overlay
+        // mount) can find them. Default false — generic Views and
+        // layout containers don't take focus.
+        open fun isFocusable(): Bool {
+            return false
+        }
+
+        // Append every focusable descendant of this view to `out`, in
+        // tree order. Default: add this view if it's focusable.
+        // Containers (ViewGroup, Panel, ScrollView) override to also
+        // walk their children.
+        open fun collectFocusable(out: List<View>) {
+            if (this.isFocusable()) {
+                out.add(this)
+            }
+        }
+
         // Search this view's subtree for any descendant whose window-
         // rect overlaps `target` AND whose `repaintRequested` flag is
         // set (i.e. it WILL paint in the upcoming cycle, and its

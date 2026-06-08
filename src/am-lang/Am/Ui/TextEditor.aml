@@ -352,6 +352,18 @@ namespace Am.Ui
             this.forceFullRepaint()
         }
 
+        // Not in the Tab / focusFirstIn discovery list: Tab inside an
+        // editor inserts an indent, so being tab-discoverable would
+        // both (a) make Tab get stuck on the editor instead of
+        // walking to the next form input and (b) bury Tab's
+        // navigation feature whenever an editor is anywhere on the
+        // screen. Editors receive focus via direct click
+        // (`setKeyboardFocus(this)` in onMouseEvent), which doesn't
+        // go through `isFocusable`.
+        override fun isFocusable(): Bool {
+            return false
+        }
+
         // -------- incremental-repaint bookkeeping --------
 
         private fun markDirtyLine(line: Int) {

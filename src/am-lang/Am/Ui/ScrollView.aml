@@ -4,6 +4,7 @@ namespace Am.Ui
 
     class ScrollView() : View {
         import Am.Lang
+        import Am.Collections
 
         private var child: View
         private var scrollY: Short = 0S
@@ -564,6 +565,15 @@ namespace Am.Ui
                 return this.child.hasDirtyOverlapping(target)
             }
             return false
+        }
+
+        override fun collectFocusable(out: List<View>) {
+            if (this.isFocusable()) {
+                out.add(this)
+            }
+            if (this.child != null) {
+                this.child.collectFocusable(out)
+            }
         }
 
         fun getChild(): View {

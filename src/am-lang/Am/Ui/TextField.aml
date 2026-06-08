@@ -195,6 +195,10 @@ namespace Am.Ui
         // Single source of truth — no separate `focused` field on
         // the TextField to fall out of sync with the Window. paint()
         // / placeholder-visible / drag-active logic all read here.
+        override fun isFocusable(): Bool {
+            return !this.readOnly
+        }
+
         fun isFocused(): Bool {
             var vc = this.getViewContext()
             if (vc == null) {
