@@ -25,6 +25,9 @@ namespace Am.Ui
         }
 
         fun invokeClick(): Bool {
+            if (!this.enabled) {
+                return false
+            }
             var cl = this.clickListener
             if (cl != null) {
                 return cl(this)
