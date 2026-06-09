@@ -1404,6 +1404,38 @@ namespace Am.Ui
             var lineLen = line.length()
             var hasInLine = selStart >= 0 && selEnd > selStart && selStart < lineLen
 
+            // Pre-fill the selection's pixel range across the FULL
+            // row height (rowTop..rowBottom) so the highlight stripe
+            // reaches into the lineSpacing gap above and below the
+            // glyph cells. Without this, drawString-with-JAM2 only
+            // paints inside the glyph cell, leaving thin horizontal
+            // gaps of editor-bg between selected lines that look
+            // unintentional. Computed here in pixels by walking the
+            // characters up to selStart / selEnd with tab expansion.
+            if (hasInLine) {
+                var selStartX = x
+                var selEndX = x
+                var px = x
+                var ii = 0
+                while (ii < lineLen) {
+                    if (ii == selStart) { selStartX = px }
+                    if (ii == selEnd)   { selEndX = px }
+                    var cc = line.characterAt(ii.toUInt())
+                    if (cc == 0x0009US) {
+                        px = px + this.tabWidthPx
+                    } else {
+                        px = px + graphics.calculateStringWidth(line.substring(ii.toUInt(), 1UI)).toShort()
+                    }
+                    ii = ii + 1
+                }
+                if (selEnd >= lineLen) { selEndX = px }
+                if (selEndX > selStartX) {
+                    graphics.setForegroundPen(this.selectionBackgroundPen)
+                    graphics.fillRect(selStartX, rowTop, selEndX - 1S, rowBottom)
+                    graphics.setForegroundPen(this.textPen)
+                }
+            }
+
             // Fast path: no selection on this line, no tabs.
             if (!hasInLine && line.indexOf("\t") < 0) {
                 graphics.setBackgroundPen(this.backgroundPen)

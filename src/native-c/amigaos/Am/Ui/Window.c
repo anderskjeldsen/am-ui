@@ -1084,7 +1084,6 @@ function_result Am_Ui_Window_nativeFinalizeMenuStrip_0(aobject * const this) {
 				continue;
 			}
 			nm[n].nm_Type = (b->item_levels[i] == 1) ? NM_SUB : NM_ITEM;
-			nm[n].nm_Label = b->item_labels[i];
 			nm[n].nm_CommKey = b->item_comm_keys[i];
 			// MenuItem.enabled → NM_ITEMDISABLED (inverted in GadTools:
 			// NewMenu items are enabled by default; setting the flag
@@ -1092,12 +1091,28 @@ function_result Am_Ui_Window_nativeFinalizeMenuStrip_0(aobject * const this) {
 			// aobject — keeps the native binding signature stable.
 			nm[n].nm_Flags = 0;
 			aobject *amItem = b->item_aobjects[i];
+			bool itemIsSeparator = false;
 			if (amItem != NULL) {
 				bool itemEnabled = amItem->object_properties.class_object_properties
 					.properties[Am_Ui_MenuItem_P_enabled].nullable_value.value.bool_value;
 				if (!itemEnabled) {
 					nm[n].nm_Flags |= NM_ITEMDISABLED;
 				}
+				itemIsSeparator = amItem->object_properties.class_object_properties
+					.properties[Am_Ui_MenuItem_P_isSeparator].nullable_value.value.bool_value;
+			}
+			// MenuItem.isSeparator → NM_BARLABEL (the (STRPTR)-1
+			// sentinel Intuition uses to render a horizontal bar).
+			// Free the dup'd label string we won't use here; the
+			// usual cleanup loop below only knows how to free real
+			// strings, not the sentinel pointer.
+			if (itemIsSeparator) {
+				if (b->item_labels[i] != NULL) {
+					free(b->item_labels[i]);
+				}
+				nm[n].nm_Label = NM_BARLABEL;
+			} else {
+				nm[n].nm_Label = b->item_labels[i];
 			}
 			nm[n].nm_MutualExclude = 0;
 			nm[n].nm_UserData = (APTR) b->item_aobjects[i];

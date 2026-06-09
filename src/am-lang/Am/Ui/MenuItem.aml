@@ -20,6 +20,12 @@ namespace Am.Ui
         // flattened by Window.setMenuStrip.
         var subItems: List<MenuItem> = new List<MenuItem>()
 
+        // When TRUE, the native menu builder emits a horizontal bar
+        // (NM_BARLABEL on Intuition) instead of a clickable item.
+        // Build one via MenuItem.separator(); the label is irrelevant
+        // for separator entries.
+        var isSeparator: Bool = false
+
         fun addSubItem(item: MenuItem) {
             this.subItems.add(item)
         }
@@ -33,6 +39,16 @@ namespace Am.Ui
                 return cl(this)
             }
             return false
+        }
+
+        // Build a non-clickable bar entry that the native side renders
+        // as a horizontal separator. Use to group related items inside
+        // a single Menu without having to split into multiple menus.
+        static fun separator(): MenuItem {
+            var noop: (item: MenuItem) => Bool = (i) => { return true }
+            var mi = new MenuItem("-", noop)
+            mi.isSeparator = true
+            return mi
         }
     }
 }
