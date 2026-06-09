@@ -663,13 +663,18 @@ namespace Am.Ui
                         graphics.drawString(afterSelection, afterSelectionX, textY)
                     }
                 } else {
-                    // Plain text. The cursor still paints in both
-                    // focused and unfocused states (filled vs. hollow
-                    // outline) to mirror CliView's caret semantics.
+                    // Plain text. Cursor only paints when this field
+                    // actually holds keyboard focus — an unfocused
+                    // TextField shouldn't advertise a typing position
+                    // (a row of fields each showing its own caret
+                    // makes the "active" one ambiguous). Terminals /
+                    // editors keep their own carets via their own
+                    // paint paths; this rule is specific to inline
+                    // form inputs.
                     graphics.setForegroundPen(this.textPen)
                     graphics.drawString(displayText, scrolledTextX, textY)
 
-                    if (this.cursorPosition <= displayText.length()) {
+                    if (focused && this.cursorPosition <= displayText.length()) {
                         this.drawCursor(graphics, displayText, scrolledTextX, textY, focused)
                     }
                 }

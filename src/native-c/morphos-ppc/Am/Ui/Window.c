@@ -780,7 +780,18 @@ function_result Am_Ui_Window_nativeFinalizeMenuStrip_0(aobject * const this) {
 			nm[n].nm_Type = (b->item_levels[i] == 1) ? NM_SUB : NM_ITEM;
 			nm[n].nm_Label = b->item_labels[i];
 			nm[n].nm_CommKey = b->item_comm_keys[i];
+			// MenuItem.enabled → NM_ITEMDISABLED. Reads the AmLang
+			// field directly from the aobject so we don't have to
+			// change the native binding signature.
 			nm[n].nm_Flags = 0;
+			aobject *amItem = b->item_aobjects[i];
+			if (amItem != NULL) {
+				bool itemEnabled = amItem->object_properties.class_object_properties
+					.properties[Am_Ui_MenuItem_P_enabled].nullable_value.value.bool_value;
+				if (!itemEnabled) {
+					nm[n].nm_Flags |= NM_ITEMDISABLED;
+				}
+			}
 			nm[n].nm_MutualExclude = 0;
 			nm[n].nm_UserData = (APTR) b->item_aobjects[i];
 			n++;

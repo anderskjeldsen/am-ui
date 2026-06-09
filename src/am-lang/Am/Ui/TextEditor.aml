@@ -291,6 +291,13 @@ namespace Am.Ui
         var findRequestedListener: () => Bool = null
         var findNextListener: () => Bool = null
 
+        // Ctrl+S — embedder-side "save this buffer". The editor
+        // doesn't know its own path so it can't write to disk itself;
+        // the IDE wires this in ensureEditor to the same writer the
+        // File menu's Save item uses. Null = no-op (Ctrl+S falls
+        // through and gets inserted as 0x13).
+        var saveRequestedListener: () => Bool = null
+
         // Last query string handed to findNext. Stored on the editor
         // so Ctrl+G can keep stepping through matches even after the
         // find bar closes. Cleared by setText (new file = new state).
@@ -2132,6 +2139,14 @@ namespace Am.Ui
                 var fn = this.findNextListener
                 if (fn != null) {
                     return fn()
+                }
+            }
+            // Ctrl+S — fire the embedder's "save this buffer" hook.
+            // No-op (and falls through) when no listener is wired.
+            if (keyChar == 19US) {
+                var sl = this.saveRequestedListener
+                if (sl != null) {
+                    return sl()
                 }
             }
             if (keyChar == 13US || keyChar == 10US) {
