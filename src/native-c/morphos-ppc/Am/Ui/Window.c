@@ -841,6 +841,41 @@ __exit: ;
 	return __result;
 }
 
+// Return the task pointer of the task whose Wait() is blocked on the
+// window's UserPort signal bit. RunningProcess uses this to Signal()
+// directly when a child writes output, bypassing the AmLang polling
+// cycle entirely so streams (ping, tail -f, shell prompts) appear in
+// the panel as soon as bytes hit the ring buffer.
+function_result Am_Ui_Window_getUserPortTaskPtr_0(aobject * const this)
+{
+	function_result __result = { .has_return_value = true };
+	if (this != NULL) __increase_reference_count(this);
+	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const)
+		this->object_properties.class_object_properties.object_data.value.custom_value;
+	LONG ptr = 0;
+	if (data != NULL && data->window != NULL && data->window->UserPort != NULL) {
+		ptr = (LONG) data->window->UserPort->mp_SigTask;
+	}
+	__result.return_value.value.long_value = ptr;
+	if (this != NULL) __decrease_reference_count(this);
+	return __result;
+}
+
+function_result Am_Ui_Window_getUserPortSigBit_0(aobject * const this)
+{
+	function_result __result = { .has_return_value = true };
+	if (this != NULL) __increase_reference_count(this);
+	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const)
+		this->object_properties.class_object_properties.object_data.value.custom_value;
+	LONG bit = -1;
+	if (data != NULL && data->window != NULL && data->window->UserPort != NULL) {
+		bit = (LONG) data->window->UserPort->mp_SigBit;
+	}
+	__result.return_value.value.int_value = bit;
+	if (this != NULL) __decrease_reference_count(this);
+	return __result;
+}
+
 // Mirror of the amigaos setTitleNative: hand both strings to Intuition's
 // SetWindowTitles. A NULL screenTitle is passed through as-is (Intuition
 // docs say (UBYTE *)-1 means "leave unchanged" — callers can rely on that).
