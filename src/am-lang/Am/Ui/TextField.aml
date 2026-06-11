@@ -45,9 +45,9 @@ namespace Am.Ui
         // Fires on Tab or Enter while focused. Receives the current
         // text. Used by callers (e.g. FolderTreeView's inline
         // create-new-entry flow) to commit the edit.
-        var submitListener: (text: String) => Bool = null
+        var submitListener: ((text: String) => Bool)? = null
         // Fires on ESC. Used to cancel an in-progress inline edit.
-        var cancelListener: () => Bool = null
+        var cancelListener: (() => Bool)? = null
         
         var textPen: UByte = 1UB
         var backgroundPen: UByte = 0UB
@@ -90,7 +90,7 @@ namespace Am.Ui
         // mouseDown that lands outside our bounds — including clicks
         // routed to a different LayeredPane layer that never reach
         // our regular onMouseEvent. Held so onDetach can deregister.
-        private var windowMouseListener: MouseEventListener = null
+        private var windowMouseListener: MouseEventListener? = null
 
         override fun onAttach(viewContext: ViewContext) {
             base.onAttach(viewContext)

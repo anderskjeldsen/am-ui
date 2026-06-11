@@ -6,14 +6,14 @@ namespace Am.Ui
         import Am.Lang
         import Am.Collections
 
-        private var rootView: View
+        private var rootView: View? = null
         private var x: Short
         private var y: Short
         private var width: UShort
         private var height: UShort
-        private var screen: Screen
-        private var viewContext: ViewContextImpl
-        private var graphics: LayerGraphics
+        private var screen: Screen? = null
+        private var viewContext: ViewContextImpl? = null
+        private var graphics: LayerGraphics? = null
         private var repaintRequested: Bool
         // When true, the next paint clears the window background and tells
         // every view to repaint regardless of its individual flag. Used
@@ -21,15 +21,15 @@ namespace Am.Ui
         // rebuild. Plain view-level requestRepaint() leaves this false so
         // only the views that asked for it actually re-render.
         private var fullRepaintRequested: Bool = true
-        private var border: Insets
+        private var border: Insets? = null
         private var backgroundPen: UByte
         private var fillBackground: Bool
         private var pixelScaleX: UByte
         private var pixelScaleY: UByte
-        private var pixelMetrics: PixelMetrics
+        private var pixelMetrics: PixelMetrics? = null
         private var title: String = ""
         private var screenTitle: String = ""
-        private var menuStrip: MenuStrip
+        private var menuStrip: MenuStrip? = null
 
         // Window-level off-screen buffer for double-buffered painting.
         // Lazy-allocated the first time getOffscreen() is called and sized
@@ -38,8 +38,8 @@ namespace Am.Ui
         // visible surface as a single blit at the end of the cycle —
         // the user never sees the intermediate label-by-label fill that
         // direct on-screen painting would expose.
-        private var offscreen: RenderableBitmap = null
-        private var offscreenGraphics: Graphics = null
+        private var offscreen: RenderableBitmap? = null
+        private var offscreenGraphics: Graphics? = null
 
         // Dirty regions for the current paint cycle, in window-local
         // (post-border, pre-translate) coords. Views call
@@ -110,7 +110,7 @@ namespace Am.Ui
         // cross-layer scenario to exercise.
         var crossLayerDirty: Bool = false
 
-        var font: Font
+        var font: Font? = null
 
         fun getRootView(): View {
             return this.rootView
@@ -194,7 +194,7 @@ namespace Am.Ui
         // of-function-pointer typing has historically been brittle.
         // Lazy-allocated so we don't pay the List overhead until a
         // caller actually wants to listen.
-        private var mouseListeners: List<MouseEventListener> = null
+        private var mouseListeners: List<MouseEventListener>? = null
 
         fun addMouseEventListener(l: MouseEventListener) {
             if (this.mouseListeners == null) {
@@ -233,12 +233,12 @@ namespace Am.Ui
         }
 
 
-        static fun openWindow(x: Short, y: Short, width: UShort, height: UShort, screen: Screen, windowManager: WindowManager): Window {
+        static fun openWindow(x: Short, y: Short, width: UShort, height: UShort, screen: Screen?, windowManager: WindowManager?): Window {
             var properties: WindowProperties = { borderless: false }
             return Window.openWindow(x, y, width, height, screen, windowManager, properties)
         }
 
-        static fun openWindow(x: Short, y: Short, width: UShort, height: UShort, screen: Screen, windowManager: WindowManager, properties: WindowProperties): Window {
+        static fun openWindow(x: Short, y: Short, width: UShort, height: UShort, screen: Screen?, windowManager: WindowManager?, properties: WindowProperties): Window {
             var w = new Window()
             var vc = new ViewContextImpl()
             vc.setWindow(w)
@@ -600,7 +600,7 @@ namespace Am.Ui
         // that aren't naturally first in keyboard-walk order — e.g.
         // an inline terminal docked below an editor that always
         // consumes keys.
-        private var keyboardFocus: View = null
+        private var keyboardFocus: View? = null
 
         // Window-wide focus-change listeners. Fired whenever
         // setKeyboardFocus / clearKeyboardFocus actually changes the
@@ -712,7 +712,7 @@ namespace Am.Ui
         // focused views so e.g. a TextField can swap its filled
         // cursor for a hollow outline (and vice versa), then fires
         // the focus-changed listeners.
-        private fun assignFocus(newFocus: View) {
+        private fun assignFocus(newFocus: View?) {
             var oldFocus = this.keyboardFocus
             if (oldFocus == newFocus) {
                 return
@@ -812,7 +812,7 @@ namespace Am.Ui
             this.rootView?.onMouseEvent(type, button, lx, ly)
         }
 
-        fun calculateStringWidth(font: Font, text: String): UShort {
+        fun calculateStringWidth(font: Font?, text: String): UShort {
             var graphics = this.getGraphics()
             if (font != null) {                
                 graphics.setFont(font)
@@ -861,12 +861,14 @@ namespace Am.Ui
 
         private native fun nativeBeginMenuStrip()
         private native fun nativeAddMenu(title: String)
-        private native fun nativeAddMenuItem(menuIndex: Int, item: MenuItem, label: String, commKey: String)
+        // `commKey` is optional — null/empty leaves the item without a
+        // Right-Amiga shortcut. Matches MenuItem.commKey: String?.
+        private native fun nativeAddMenuItem(menuIndex: Int, item: MenuItem, label: String, commKey: String?)
         // Append a NM_SUB entry under the most recently added
         // NM_ITEM in the menu identified by `menuIndex`. Order
         // matters: the native side stamps sub-items against the
         // last NM_ITEM it saw for the same `menuIndex`.
-        private native fun nativeAddMenuSubItem(menuIndex: Int, item: MenuItem, label: String, commKey: String)
+        private native fun nativeAddMenuSubItem(menuIndex: Int, item: MenuItem, label: String, commKey: String?)
         private native fun nativeFinalizeMenuStrip()
         private native fun nativeClearMenuStrip()
 
@@ -976,7 +978,12 @@ namespace Am.Ui
         native fun getHostScreenWidth(): UShort
         native fun getHostScreenHeight(): UShort
 
-        private native fun open(x: Short, y: Short, width: UShort, height: UShort, screen: Screen, windowManager: WindowManager, properties: WindowProperties)
+        // `screen` and `windowManager` are both optional:
+        //   - null screen ⇒ open on the public Workbench screen.
+        //   - null windowManager ⇒ the window stands alone, no manager
+        //     tracking. Set when the caller wants the window enrolled
+        //     into a multi-window app's lifecycle.
+        private native fun open(x: Short, y: Short, width: UShort, height: UShort, screen: Screen?, windowManager: WindowManager?, properties: WindowProperties)
         native fun close()
         fun dispose() {
             this.viewContext = null

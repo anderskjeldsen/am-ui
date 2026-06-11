@@ -6,8 +6,8 @@ namespace Am.Ui
         import Am.Lang
         import Am.Imaging
 
-        private var renderableBitmap: RenderableBitmap
-        private var window: Window
+        private var renderableBitmap: RenderableBitmap? = null
+        private var window: Window? = null
 
         static fun fromRenderableBitmap(renderableBitmap: RenderableBitmap): LayerGraphics {
             var graphics = new LayerGraphics()

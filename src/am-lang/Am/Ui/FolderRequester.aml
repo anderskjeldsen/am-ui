@@ -8,6 +8,6 @@ namespace Am.Ui
         // path, or null on cancel. `title` is shown in the requester
         // window header; `initialPath` seeds the starting directory
         // (pass null to start in the user's default).
-        static native fun requestFolder(title: String, initialPath: String, parent: Window): String
+        static native fun requestFolder(title: String, initialPath: String?, parent: Window): String
     }
 }

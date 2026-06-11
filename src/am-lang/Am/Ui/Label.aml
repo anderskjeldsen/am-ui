@@ -5,7 +5,7 @@ namespace Am.Ui
     class Label(var text: String) : View {
         import Am.Lang
 
-        var font: Font
+        var font: Font? = null
         var backgroundPen: UByte = 0UB
         var textPen: UByte = 1UB
         // Mouse-over support. Set hoverEnabled = true and pick a contrasting
@@ -23,9 +23,9 @@ namespace Am.Ui
         // `clickListener`. Used by the folder tree for the per-row
         // [...] context-menu glyph; null on every other Label so
         // nothing changes for existing call sites.
-        var trailingGlyph: String = null
+        var trailingGlyph: String? = null
         var trailingPen: UByte = 1UB
-        var trailingClickListener: (view: View) => Bool = null
+        var trailingClickListener: ((view: View) => Bool)? = null
 
         // Optional: when set, paint THIS bitmap at the trailing slot
         // instead of `trailingGlyph` (still gated on hover; same hit
@@ -35,7 +35,7 @@ namespace Am.Ui
         // taken from the bitmap; height from the label's text height
         // so the icon is squashed/stretched as needed to align with
         // the baseline. Null → fall back to trailingGlyph.
-        var trailingBitmap: Bitmap = null
+        var trailingBitmap: Bitmap? = null
 
         // Optional SECOND hover-only affordance, painted just to the
         // left of `trailingGlyph` with the same BADGE_GAP separator.
@@ -45,9 +45,9 @@ namespace Am.Ui
         // hit zone runs from the secondary glyph's left edge up to
         // the primary trailing glyph's left edge, so a click on the
         // primary still fires that one and not this one.
-        var secondaryTrailingGlyph: String = null
+        var secondaryTrailingGlyph: String? = null
         var secondaryTrailingPen: UByte = 1UB
-        var secondaryTrailingClickListener: (view: View) => Bool = null
+        var secondaryTrailingClickListener: ((view: View) => Bool)? = null
 
         // Always-visible badge glyph painted at the far right of the
         // row (further right than `trailingGlyph`, which only paints
@@ -55,7 +55,7 @@ namespace Am.Ui
         // (untracked) tag that should be readable without a hover.
         // The hover-only trailingGlyph sits just to the left of the
         // badge when both are configured.
-        var badgeGlyph: String = null
+        var badgeGlyph: String? = null
         var badgePen: UByte = 1UB
         // Pixel gap between the badge and the hover-only trailing
         // glyph (so the two don't visually merge into one blob).
@@ -68,9 +68,9 @@ namespace Am.Ui
         // git-repo rows with a clickable "G" before the folder name.
         // Clicking the leading glyph fires `leadingClickListener`
         // instead of the row-wide click.
-        var leadingGlyph: String = null
+        var leadingGlyph: String? = null
         var leadingPen: UByte = 1UB
-        var leadingClickListener: (view: View) => Bool = null
+        var leadingClickListener: ((view: View) => Bool)? = null
         // Pixels of gap between the leading glyph and the regular text.
         var leadingGap: Short = 4S
 
@@ -81,10 +81,10 @@ namespace Am.Ui
         // semantics as leadingGlyph; pen-tinted glyphs and a bitmap
         // can coexist when both are set (e.g. folder-tree row: chevron
         // bitmap + git-repo "G" glyph + folder name).
-        var leadingBitmap: Bitmap = null
-        var leadingBitmapClickListener: (view: View) => Bool = null
+        var leadingBitmap: Bitmap? = null
+        var leadingBitmapClickListener: ((view: View) => Bool)? = null
 
-        fun getUsedFont(): Font {
+        fun getUsedFont(): Font? {
             if (this.font != null) {
                 return this.font
             }

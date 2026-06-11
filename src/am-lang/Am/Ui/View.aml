@@ -5,7 +5,7 @@ namespace Am.Ui
     class View {
         import Am.Lang
         import Am.Collections
-        private var viewContext: ViewContext
+        private var viewContext: ViewContext? = null
         var x: Short
         var y: Short
         var width: UShort
@@ -21,7 +21,7 @@ namespace Am.Ui
         //
         // Optional — views that never participate in cross-layer
         // invalidation work fine without anyone reading this.
-        var parentView: View = null
+        var parentView: View? = null
 
         // Window-coord rect captured the last time this view
         // actually painted (via reportPaintedBounds). Used by
@@ -31,7 +31,7 @@ namespace Am.Ui
         // to be overdrawn (either by the parent's bg fill or by
         // a peer LayeredPane layer underneath). Null until the
         // first paint pass completes.
-        private var lastPaintedWindowRect: Rectangle = null
+        private var lastPaintedWindowRect: Rectangle? = null
         var padding: Insets = new Insets(0S, 0S, 0S, 0S)
         var margin: Insets = new Insets(0S, 0S, 0S, 0S)
         var borderWidths: Insets = new Insets(0S, 0S, 0S, 0S)
@@ -52,9 +52,9 @@ namespace Am.Ui
         // of the later "opt-in fine-grained repaints" step. Wiring
         // the storage now means refined callers don't have to be
         // re-edited later.
-        private var dirtyRects: List<Rectangle> = null
+        private var dirtyRects: List<Rectangle>? = null
         var visible: Bool = true
-        var clickListener: (view: View) => Bool = null
+        var clickListener: ((view: View) => Bool)? = null
 
         fun getRepaintRequested(): Bool {
             return this.repaintRequested
@@ -151,7 +151,7 @@ namespace Am.Ui
             return this.viewContext
         }
 
-        fun getWindow(): Window {
+        fun getWindow(): Window? {
             // viewContext is null until the view is attached to a
             // mounted tree — every caller that uses getWindow() to
             // gate "do work that needs the window" against a fresh
@@ -601,7 +601,7 @@ namespace Am.Ui
             // with window.requestFullRepaint() anyway.
             var moved = this.x != x || this.y != y
             var resized = this.width != width || this.height != height
-            var oldRect: Rectangle = null
+            var oldRect: Rectangle? = null
             if ((moved || resized) && this.lastPaintedWindowRect != null) {
                 oldRect = this.lastPaintedWindowRect
             }
@@ -619,7 +619,7 @@ namespace Am.Ui
         // so View.layout's body stays short and so the if/else
         // tower doesn't trip the amlc renderer crash on
         // null-assignments-inside-if-inside-flow.
-        private fun dirtyOldFootprint(oldRect: Rectangle) {
+        private fun dirtyOldFootprint(oldRect: Rectangle?) {
             if (this.viewContext == null) {
                 return
             }
@@ -692,7 +692,7 @@ namespace Am.Ui
             return ((x >= 0S) && (x < this.width) && (y >= 0S) && (y < this.height))
         }
 
-        open fun findViewAt(x: Short, y: Short): View {
+        open fun findViewAt(x: Short, y: Short): View? {
             if (this.contains(x, y)) {
                 return this
             }
@@ -723,7 +723,7 @@ namespace Am.Ui
         // windows without a menu, or via IDCMP_MENUVERIFY interception
         // (not currently wired). On libc / morphos it works
         // unconditionally.
-        var rightClickListener: (view: View) => Bool = null
+        var rightClickListener: ((view: View) => Bool)? = null
 
         // returns true if consumed
         open fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {

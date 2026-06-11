@@ -6,7 +6,7 @@ namespace Am.Ui
     native class WindowManager {
         import Am.Lang
 
-        private static var instance: WindowManager
+        private static var instance: WindowManager? = null
 
         static fun getInstance(): WindowManager {
             if (WindowManager.instance == null) {

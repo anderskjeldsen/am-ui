@@ -19,7 +19,7 @@ namespace Am.Ui
         import Am.Lang
         import Am.Collections
 
-        var lines: List<String> = null
+        var lines: List<String>? = null
         var cursorLine: Int = 0
         var cursorCol: Int = 0
         var scrollLine: Int = 0

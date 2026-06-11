@@ -11,7 +11,7 @@ namespace Am.Ui
 
         // Same as openScreen above but also sets the screen's title bar
         // text. Pass null to leave the title bar empty.
-        static fun openScreen(width: Int, height: Int, depth: Int, displayId: Int, title: String): Screen {
+        static fun openScreen(width: Int, height: Int, depth: Int, displayId: Int, title: String?): Screen {
             return Screen.openScreen(width, height, depth, displayId, title, null)
         }
 
@@ -20,7 +20,7 @@ namespace Am.Ui
         // highlight-text, bar-detail, bar-block, bar-trim) to a specific
         // colour-register index. `systemPens` is read in that order. Pass
         // null for default Workbench pen mapping.
-        static fun openScreen(width: Int, height: Int, depth: Int, displayId: Int, title: String, systemPens: UByte[]): Screen {
+        static fun openScreen(width: Int, height: Int, depth: Int, displayId: Int, title: String?, systemPens: UByte[]?): Screen {
             return Screen.openScreen(width, height, depth, displayId, title, systemPens, null)
         }
 
@@ -31,9 +31,9 @@ namespace Am.Ui
         // setPalette() after open works for the framebuffer pixels we
         // draw, but on chunky RTG screens already-rendered chrome stays
         // at its original RGB.
-        static fun openScreen(width: Int, height: Int, depth: Int, displayId: Int, title: String, systemPens: UByte[], palette: Palette): Screen {
+        static fun openScreen(width: Int, height: Int, depth: Int, displayId: Int, title: String?, systemPens: UByte[]?, palette: Palette?): Screen {
             var s = new Screen()
-            var paletteColors: UInt[] = null
+            var paletteColors: UInt[]? = null
             if (palette != null) {
                 paletteColors = palette.colors
             }

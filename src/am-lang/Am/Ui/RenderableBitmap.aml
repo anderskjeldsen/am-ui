@@ -7,7 +7,7 @@ namespace Am.Ui
         import Am.Lang
         import Am.Imaging
 
-        private var bitmap: Bitmap
+        private var bitmap: Bitmap? = null
 
         // Wire native layer state to the current bitmap.
         private native fun attachLayer()
