@@ -5,7 +5,7 @@ namespace Am.Ui
     native class ScreenModeRequester {
         import Am.Lang
 
-        private var title: String
+        private var title: String? = null
 
         static fun requestDisplay(title: String, min: ScreenMode, desired: ScreenMode, max: ScreenMode): ScreenMode {
             var smr = new ScreenModeRequester()

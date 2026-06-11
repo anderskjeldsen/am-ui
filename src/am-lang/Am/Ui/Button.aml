@@ -5,7 +5,7 @@ namespace Am.Ui
     class Button(var text: String, var buttonClickListener: (view: View) => Bool) : View {
         import Am.Lang
 
-        private var label: Label
+        private var label: Label? = null
         private var active: Bool
         private var hovered: Bool
 

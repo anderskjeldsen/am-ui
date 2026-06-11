@@ -9,7 +9,7 @@ namespace Am.Ui
         // item. Null/empty leaves the item without a shortcut — Magic
         // Menu and similar enhancers use the presence of a CommKey to
         // pick a more spacious layout, so even a dummy key adds padding.
-        var commKey: String = null
+        var commKey: String? = null
 
         // Optional sub-items, rendered as a cascading submenu under
         // this item (Intuition NM_SUB). When non-empty, this item's

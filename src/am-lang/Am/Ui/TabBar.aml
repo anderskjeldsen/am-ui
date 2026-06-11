@@ -49,8 +49,8 @@ namespace Am.Ui
         var arrowEnabledPen: UByte       = 2UB
         var arrowDisabledPen: UByte      = 8UB
 
-        var tabSelectListener: (id: String) => Bool = null
-        var tabCloseListener:  (id: String) => Bool = null
+        var tabSelectListener: ((id: String) => Bool)? = null
+        var tabCloseListener:  ((id: String) => Bool)? = null
 
         // Mirror of ViewGroup's children, typed so we don't need a cast to
         // read tabId / call setActive() in callbacks. addChild/removeChild
@@ -210,7 +210,7 @@ namespace Am.Ui
 
         // -------- internals --------
 
-        private fun findTab(id: String): TabView {
+        private fun findTab(id: String): TabView? {
             var idx = this.indexOf(id)
             if (idx < 0) {
                 return null

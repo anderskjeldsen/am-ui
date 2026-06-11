@@ -7,7 +7,7 @@ namespace Am.Ui
 
         private var children: List<View> = new List<View>()
         
-        var font: Font
+        var font: Font? = null
 
         fun getChildren(): List<View> {
             return this.children
@@ -190,7 +190,7 @@ namespace Am.Ui
             this.layoutChildren()
         }
 
-        override fun findViewAt(x: Short, y: Short): View {
+        override fun findViewAt(x: Short, y: Short): View? {
             if (this.contains(x, y)) {
                 each(this.children, c) {
                     var lx = x - c.x

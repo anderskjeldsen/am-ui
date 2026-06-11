@@ -19,7 +19,7 @@ namespace Am.Ui
 
         native fun calculateStringWidth(text: String): UShort
 
-        static fun loadFont(var name: String, var size: UByte): Font {
+        static fun loadFont(var name: String, var size: UByte): Font? {
             var key = name + ":" + size.toString()
             ("[font.loadFont] enter key=" + key).println()
             if (Font.cache == null) {
@@ -27,7 +27,7 @@ namespace Am.Ui
                 return null
             }
             ("[font.loadFont] cache size before lookup=" + Font.cache.getSize().toString()).println()
-            var font: Font = null
+            var font: Font? = null
             try {
                 font = Font.cache.get(key)
             } catch (e: Exception) {

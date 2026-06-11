@@ -6,7 +6,7 @@ namespace Am.Ui
         import Am.Lang
         import Am.Collections
 
-        private var child: View
+        private var child: View? = null
 
         var backgroundPen: UByte = 0UB
         var drawBorder: Bool = true

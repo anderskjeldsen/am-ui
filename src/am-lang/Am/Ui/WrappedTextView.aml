@@ -30,7 +30,7 @@ namespace Am.Ui
         var textPen: UByte = 1UB
         var backgroundPen: UByte = 0UB
         // Custom font override. null falls back to the window default.
-        var font: Font = null
+        var font: Font? = null
         // Extra blank pixels added to each line's vertical slot. The
         // text is centred within the (fontHeight + lineSpacing)-tall
         // slot so half the gap sits above the glyphs and half below
@@ -43,7 +43,7 @@ namespace Am.Ui
         // Cached wrap result. lineWidthHint is the width the cache was
         // built for; if layout() is called with a different width we
         // rebuild. Null lines means "not yet computed".
-        private var cachedLines: List<String> = null
+        private var cachedLines: List<String>? = null
         private var lineWidthHint: Short = -1S
 
         fun setText(text: String) {
@@ -61,7 +61,7 @@ namespace Am.Ui
             this.requestRepaint()
         }
 
-        fun getUsedFont(): Font {
+        fun getUsedFont(): Font? {
             if (this.font != null) {
                 return this.font
             }

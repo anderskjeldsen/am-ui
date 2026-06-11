@@ -6,7 +6,7 @@ namespace Am.Ui
         import Am.Lang
         import Am.Collections
 
-        private var child: View
+        private var child: View? = null
         private var scrollY: Short = 0S
 
         // Thumb / track colours. Default thumb is pen 1 (host black);
@@ -58,7 +58,7 @@ namespace Am.Ui
         // fires for every move + button event regardless of
         // routing, and the dispatch path keeps handling in-bounds
         // clicks and clean wheel events.
-        private var mouseListener: MouseEventListener = null
+        private var mouseListener: MouseEventListener? = null
 
         override fun setDefaultPadding() {
             this.setPadding(0S)

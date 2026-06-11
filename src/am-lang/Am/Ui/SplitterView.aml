@@ -26,7 +26,7 @@ namespace Am.Ui
         // Fired on every drag-move with the desired pixel delta —
         // positive = move the splitter right, negative = left.
         // Returning true is the standard "consumed" flag.
-        var onDrag: (delta: Short) => Bool = null
+        var onDrag: ((delta: Short) => Bool)? = null
 
         private var dragging: Bool = false
         private var hovered: Bool  = false

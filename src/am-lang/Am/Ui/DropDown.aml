@@ -46,25 +46,25 @@ namespace Am.Ui
 
         // Set by the caller — the LayeredPane the popup is mounted on
         // and the z-index to use. Without these, clicks open nothing.
-        var layerHost: LayeredPane = null
+        var layerHost: LayeredPane? = null
         var layerZ: Int = 100
 
         // Fires with the new index whenever the user picks an item.
         // Selecting the already-selected item still fires (cheap and
         // lets the embedder treat the dropdown as "click confirm").
-        var changeListener: (index: Int) => Bool = null
+        var changeListener: ((index: Int) => Bool)? = null
 
         private var hovered: Bool = false
         // Open popup we still own a reference to. We close it on a
         // second click rather than open a duplicate.
-        private var openMenu: PopupMenu = null
+        private var openMenu: PopupMenu? = null
         // Window-level mouse listener — registered while a popup is
         // open so we can dismiss on any click that misses BOTH the
         // dropdown rect AND the popup rect. PopupMenu's own onMouseEvent
         // catches outside clicks that reach it via the layered-pane
         // dispatch, but a click routed to a non-popup layer can sneak
         // past it. Belt-and-braces.
-        private var windowMouseListener: MouseEventListener = null
+        private var windowMouseListener: MouseEventListener? = null
 
         fun addItem(label: String): DropDown {
             this.items.add(label)

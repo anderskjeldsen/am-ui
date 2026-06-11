@@ -2,6 +2,6 @@ namespace Am.Ui
 {
     class MouseEventListener {
         import Am.Lang
-        var listener: (me: MouseEvent) => Bool = null
+        var listener: ((me: MouseEvent) => Bool)? = null
     }
 }

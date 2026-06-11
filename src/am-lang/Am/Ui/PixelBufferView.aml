@@ -21,7 +21,7 @@ namespace Am.Ui
 
         // ARGB pixel buffer (0xAARRGGBB).  Index = y * bufferWidth + x.
         // Write pixel values here, then call flush() to make changes visible.
-        var pixels: UInt[]
+        var pixels: UInt[]? = null
 
         // Horizontal alignment of the buffer within the view's inner bounds.
         var alignH: Alignment = Alignment.Center

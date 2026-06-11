@@ -50,7 +50,7 @@ namespace Am.Ui
         // any open submenu is closed before the new one is opened
         // — so menus cascade on hover, not click, with no manual
         // close needed by the caller.
-        private var activeSubmenu: PopupMenu = null
+        private var activeSubmenu: PopupMenu? = null
         private var activeSubmenuIdx: Int = -1
 
         // Pixel gap between an item's label and the trailing ">"
@@ -62,14 +62,14 @@ namespace Am.Ui
         // because an item fired its action or because the user
         // clicked outside the menu rect. Mounting code wires this
         // to removeLayer() on the LayeredPane.
-        var closeListener: () => Bool = null
+        var closeListener: (() => Bool)? = null
 
         // The LayeredPane this popup is mounted on. Set by the
         // caller before addLayer — submenus inherit it so a
         // cascading menu mounts each child on the same surface
         // without needing to call back into the Window.
         // null until the popup is mounted somewhere.
-        var layerHost: LayeredPane = null
+        var layerHost: LayeredPane? = null
         // Z-index used when adding submenus of this popup. Caller
         // typically sets this to the same z it used when mounting
         // this popup; LayeredPane's same-z-ties-go-on-top rule
@@ -96,7 +96,7 @@ namespace Am.Ui
             return fh + (PopupMenu.ROW_VPAD * 2S)
         }
 
-        fun getUsedFont(): Font {
+        fun getUsedFont(): Font? {
             var vc = this.getViewContext()
             if (vc == null) {
                 return null

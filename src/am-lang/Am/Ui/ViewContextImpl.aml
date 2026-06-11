@@ -5,7 +5,7 @@ namespace Am.Ui
     class ViewContextImpl : ViewContext {
         import Am.Lang
 
-        private var window: Window
+        private var window: Window? = null
 
         fun getWindow(): Window {
             return this.window

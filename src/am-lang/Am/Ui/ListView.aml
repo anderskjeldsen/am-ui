@@ -5,7 +5,7 @@ namespace Am.Ui
     class ListView() : View {
         import Am.Lang
 
-        private var child: VStack
+        private var child: VStack? = null
 
         override fun setDefaultPadding() {
             this.setPadding(4S, 2S)

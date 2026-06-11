@@ -4,9 +4,19 @@ CMD=java -jar $(AMLC)
 LOGLEVEL:=1
 MAXONEERROR:=false
 RUNTIMELOGGING:=false
+# Local-package-path root: when set, transitive github-realm deps
+# (am-lang-core, am-imaging, …) resolve from <LPP>/<id>/ instead of
+# the cached dependencies/<id>/latest/ snapshot. Lets you build against
+# in-tree changes without manually rsyncing into dependencies/.
+LPP:=/Users/anderskjeldsen/Projects/AmLang
 
 build:
 	$(CMD) build . -bt linux-x64 -ll 5 -maxOneError -fld
+
+# Same as `build` but with -lpp pointing at $(LPP) so unpushed local
+# changes to am-lang-core / am-imaging are picked up directly.
+build-lpp:
+	$(CMD) build . -bt linux-x64 -ll 5 -maxOneError -fld -lpp $(LPP)
 
 build-amigaos:
 	$(CMD) build . -bt amigaos_docker -ll5

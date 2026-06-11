@@ -11,11 +11,11 @@ namespace Am.Ui
         // Fired when the row is clicked. Return value follows the
         // usual View click-listener convention (true = consumed).
         // The PopupMenu will close itself after the action fires.
-        var action: () => Bool = null
+        var action: (() => Bool)? = null
 
         // Reserved for cascading menus (step 3). When set, hovering
         // this row should open the submenu to the right; clicking
         // would do the same. PopupMenu in step 2 ignores this field.
-        var submenu: PopupMenu = null
+        var submenu: PopupMenu? = null
     }
 }
