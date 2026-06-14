@@ -125,16 +125,19 @@ namespace Am.Ui
             // stamped on top of bg + (optional) bevel, INSIDE the
             // button's outer rect so the total dimensions don't
             // change. Drawn last so it always wins the pixel.
+            //
+            // Border stays at its full y1..y2 extent regardless of
+            // press state; only the label gets the press-translate.
+            // Translating the border too pushed the bottom edge to
+            // y2+1 — one pixel OUTSIDE the bg-fill area — and on
+            // release that stray pixel wasn't overdrawn, leaving a
+            // ghost line at the original bottom edge.
             if (this.hovered && this.hoverBorderEnabled) {
                 graphics.setForegroundPen(this.hoverBorderPen)
-                var hx1 = x1
-                var hx2 = x2
-                var hy1 = y1 + pressDy
-                var hy2 = y2 + pressDy
-                graphics.drawLine(hx1, hy1, hx2, hy1)
-                graphics.drawLine(hx1, hy2, hx2, hy2)
-                graphics.drawLine(hx1, hy1, hx1, hy2)
-                graphics.drawLine(hx2, hy1, hx2, hy2)
+                graphics.drawLine(x1, y1, x2, y1)
+                graphics.drawLine(x1, y2, x2, y2)
+                graphics.drawLine(x1, y1, x1, y2)
+                graphics.drawLine(x2, y1, x2, y2)
             }
 
             // Draw label. Use Label.paint() directly (not paintAll)

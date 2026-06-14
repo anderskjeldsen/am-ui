@@ -338,16 +338,29 @@ void handle_message(aobject * this, struct IntuiMessage * msg) {
 		case IDCMP_MENUPICK:
 			{
 				USHORT code = msg->Code;
-				while (code != MENUNULL && window_data->menu_strip != NULL) {
-					struct MenuItem *menu_item = ItemAddress(window_data->menu_strip, code);
+				// Snapshot the strip + NextSelect before each
+				// invokeClick — see the amigaos Window.c version
+				// of this branch for the rationale. Short version:
+				// a click handler that calls setMenuStrip frees
+				// the menu items the dispatch loop is iterating
+				// over, and the next NextSelect read against the
+				// new strip resolves to a phantom item.
+				struct Menu *strip_at_start = window_data->menu_strip;
+				while (code != MENUNULL && strip_at_start != NULL
+						&& window_data->menu_strip == strip_at_start) {
+					struct MenuItem *menu_item = ItemAddress(strip_at_start, code);
 					if (menu_item == NULL) {
 						break;
 					}
+					USHORT next_code = menu_item->NextSelect;
 					aobject *aml_item = (aobject *) GTMENUITEM_USERDATA(menu_item);
 					if (aml_item != NULL) {
 						Am_Ui_MenuItem_f_invokeClick_0(aml_item);
 					}
-					code = menu_item->NextSelect;
+					if (window_data->menu_strip != strip_at_start) {
+						break;
+					}
+					code = next_code;
 				}
 			}
 			break;

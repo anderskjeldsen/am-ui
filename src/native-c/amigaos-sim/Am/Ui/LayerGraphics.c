@@ -109,6 +109,36 @@ __exit: ;
     return __result;
 }
 
+// The headless screen has a 1-byte-per-pixel buffer and no
+// palette concept — pen IS the colour as far as
+// test assertions are concerned. The colour overloads
+// therefore degrade to "use pen 255 as the dynamic slot"; the
+// ARGB triplet is dropped because there's nowhere to remember
+// it. This is fine for AmIDE headless tests (which only check
+// painted shapes, not colours) and keeps the API surface
+// symmetrical between targets.
+function_result Am_Ui_LayerGraphics_setForegroundColor_0(aobject * const this, unsigned int argb)
+{
+    (void) argb;
+    function_result __result = { .has_return_value = false };
+    bool __returning = false;
+    headless_screen_t *s = lg_screen(this);
+    if (s != NULL) s->foreground_pen = 255;
+__exit: ;
+    return __result;
+}
+
+function_result Am_Ui_LayerGraphics_setBackgroundColor_0(aobject * const this, unsigned int argb)
+{
+    (void) argb;
+    function_result __result = { .has_return_value = false };
+    bool __returning = false;
+    headless_screen_t *s = lg_screen(this);
+    if (s != NULL) s->background_pen = 255;
+__exit: ;
+    return __result;
+}
+
 function_result Am_Ui_LayerGraphics_setFont_0(aobject * const this, aobject *font)
 {
     // No real font in the headless build — text cells are 8x8 regardless.

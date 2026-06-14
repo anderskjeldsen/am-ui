@@ -16,6 +16,7 @@
 
 #include <exec/types.h>
 #include <graphics/gfx.h>
+#include <graphics/rpattr.h>
 #include <graphics/layers.h>
 #include <graphics/rastport.h>
 #include <graphics/scale.h>
@@ -214,11 +215,47 @@ __exit: ;
     return __result;
 }
 
+// Direct 24-bit drawing via the cached fg_color / bg_color +
+// CGFX FillPixelArray (see fillRect / eraseRect below). The
+// pen colormap is bypassed entirely — required on RTG TrueColor
+// screens where the colormap doesn't extend beyond the system
+// pens.
+function_result Am_Ui_LayerGraphics_setForegroundColor_0(aobject * const this, unsigned int argb)
+{
+    function_result __result = { .has_return_value = false };
+    bool __returning = false;
+    Am_Ui_LayerGraphics_data *data = get_layer_graphics_data(this);
+    if (data != NULL) {
+        data->fg_color = argb & 0xFFFFFFUL;
+        data->fg_color_active = TRUE;
+    }
+__exit: ;
+    return __result;
+}
+
+function_result Am_Ui_LayerGraphics_setBackgroundColor_0(aobject * const this, unsigned int argb)
+{
+    function_result __result = { .has_return_value = false };
+    bool __returning = false;
+    Am_Ui_LayerGraphics_data *data = get_layer_graphics_data(this);
+    if (data != NULL) {
+        data->bg_color = argb & 0xFFFFFFUL;
+        data->bg_color_active = TRUE;
+    }
+__exit: ;
+    return __result;
+}
+
+// See the amigaos sibling — pen setters clear the colour-mode
+// flag so a follow-up fillRect / eraseRect goes back to the
+// pen path instead of inheriting a stale colour.
 function_result Am_Ui_LayerGraphics_setForegroundPen_0(aobject * const this, unsigned char pen)
 {
     function_result __result = { .has_return_value = false };
     bool __returning = false;
+    Am_Ui_LayerGraphics_data *data = get_layer_graphics_data(this);
     struct RastPort *rp = get_rp(this);
+    if (data != NULL) data->fg_color_active = FALSE;
     if (rp != NULL) SetAPen(rp, pen);
 __exit: ;
     return __result;
@@ -228,7 +265,9 @@ function_result Am_Ui_LayerGraphics_setBackgroundPen_0(aobject * const this, uns
 {
     function_result __result = { .has_return_value = false };
     bool __returning = false;
+    Am_Ui_LayerGraphics_data *data = get_layer_graphics_data(this);
     struct RastPort *rp = get_rp(this);
+    if (data != NULL) data->bg_color_active = FALSE;
     if (rp != NULL) SetBPen(rp, pen);
 __exit: ;
     return __result;
@@ -252,11 +291,18 @@ function_result Am_Ui_LayerGraphics_fillRect_0(aobject * const this, short x, sh
 {
     function_result __result = { .has_return_value = false };
     bool __returning = false;
+    Am_Ui_LayerGraphics_data *data = get_layer_graphics_data(this);
     struct RastPort *rp = get_rp(this);
     if (rp == NULL) goto __exit;
     short tx1 = lg_translated_x(this, x), ty1 = lg_translated_y(this, y);
     short tx2 = lg_translated_x(this, x2), ty2 = lg_translated_y(this, y2);
-    RectFill(rp, tx1, ty1, tx2, ty2);
+    if (data != NULL && data->fg_color_active) {
+        UWORD w = (UWORD)(tx2 - tx1 + 1);
+        UWORD h = (UWORD)(ty2 - ty1 + 1);
+        FillPixelArray(rp, tx1, ty1, w, h, data->fg_color);
+    } else {
+        RectFill(rp, tx1, ty1, tx2, ty2);
+    }
 __exit: ;
     return __result;
 }
@@ -265,11 +311,18 @@ function_result Am_Ui_LayerGraphics_eraseRect_0(aobject * const this, short x, s
 {
     function_result __result = { .has_return_value = false };
     bool __returning = false;
+    Am_Ui_LayerGraphics_data *data = get_layer_graphics_data(this);
     struct RastPort *rp = get_rp(this);
     if (rp == NULL) goto __exit;
     short tx1 = lg_translated_x(this, x), ty1 = lg_translated_y(this, y);
     short tx2 = lg_translated_x(this, x2), ty2 = lg_translated_y(this, y2);
-    EraseRect(rp, tx1, ty1, tx2, ty2);
+    if (data != NULL && data->bg_color_active) {
+        UWORD w = (UWORD)(tx2 - tx1 + 1);
+        UWORD h = (UWORD)(ty2 - ty1 + 1);
+        FillPixelArray(rp, tx1, ty1, w, h, data->bg_color);
+    } else {
+        EraseRect(rp, tx1, ty1, tx2, ty2);
+    }
 __exit: ;
     return __result;
 }
