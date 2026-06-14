@@ -362,16 +362,41 @@ void handle_message(aobject * this, struct IntuiMessage * msg) {
 			window_data->menu_active = FALSE;
 			{
 				USHORT code = msg->Code;
-				while (code != MENUNULL && window_data->menu_strip != NULL) {
-					struct MenuItem *menu_item = ItemAddress(window_data->menu_strip, code);
+				// Snapshot the strip pointer + capture NextSelect
+				// BEFORE firing each invokeClick. The click handler
+				// is free to call setMenuStrip (e.g. AmLang's
+				// refreshSaveEnabled flipping the Save item's
+				// enabled flag), which frees this Intuition menu
+				// and creates a new one — at which point both
+				// `menu_item` and any field we read off it
+				// (including NextSelect) point at released memory.
+				// Without the snapshot, ItemAddress against the
+				// new strip with the dangling code value can
+				// resolve to an unrelated AmLang MenuItem and
+				// fire a phantom second click; in practice this
+				// produced a stray "Open workspace folder..." pop
+				// after every catalog-driven file-open menu pick.
+				struct Menu *strip_at_start = window_data->menu_strip;
+				while (code != MENUNULL && strip_at_start != NULL
+						&& window_data->menu_strip == strip_at_start) {
+					struct MenuItem *menu_item = ItemAddress(strip_at_start, code);
 					if (menu_item == NULL) {
 						break;
 					}
+					USHORT next_code = menu_item->NextSelect;
 					aobject *aml_item = (aobject *) GTMENUITEM_USERDATA(menu_item);
 					if (aml_item != NULL) {
 						Am_Ui_MenuItem_f_invokeClick_0(aml_item);
 					}
-					code = menu_item->NextSelect;
+					// If invokeClick swapped the strip, stop —
+					// any further NextSelect walk would have
+					// dereferenced freed memory, and the new
+					// strip's items are NOT what Intuition
+					// originally registered as picked.
+					if (window_data->menu_strip != strip_at_start) {
+						break;
+					}
+					code = next_code;
 				}
 			}
 			break;

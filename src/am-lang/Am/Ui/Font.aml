@@ -20,41 +20,29 @@ namespace Am.Ui
         native fun calculateStringWidth(text: String): UShort
 
         static fun loadFont(var name: String, var size: UByte): Font? {
-            var key = name + ":" + size.toString()
-            ("[font.loadFont] enter key=" + key).println()
             if (Font.cache == null) {
-                ("[font.loadFont] cache is NULL — static init didn't fire").println()
                 return null
             }
-            ("[font.loadFont] cache size before lookup=" + Font.cache.getSize().toString()).println()
+            var key = name + ":" + size.toString()
             var font: Font? = null
             try {
                 font = Font.cache.get(key)
             } catch (e: Exception) {
-                ("[font.loadFont] cache.get threw: " + e.message).println()
                 font = null
             }
             if (font == null) {
-                ("[font.loadFont] miss — constructing new Font(" + name + ", " + size.toString() + ")").println()
                 try {
                     font = new Font(name, size)
                 } catch (e: Exception) {
-                    ("[font.loadFont] `new Font` threw: " + e.message).println()
                     return null
-                }
-                if (font == null) {
-                    ("[font.loadFont] `new Font` returned null").println()
-                } else {
-                    ("[font.loadFont] constructed font OK").println()
                 }
                 try {
                     Font.cache.set(key, font)
-                    ("[font.loadFont] cache.set OK (size now=" + Font.cache.getSize().toString() + ")").println()
                 } catch (e: Exception) {
-                    ("[font.loadFont] cache.set threw: " + e.message).println()
+                    // Cache write failed — return the constructed
+                    // font anyway; next call will pay the rebuild
+                    // cost again but the caller still works.
                 }
-            } else {
-                ("[font.loadFont] hit — returning cached font").println()
             }
             return font
         }

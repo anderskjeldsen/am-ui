@@ -157,6 +157,41 @@ namespace Am.Ui
 
         abstract fun setForegroundPen(pen: UByte)
         abstract fun setBackgroundPen(pen: UByte)
+
+        // Direct RGB drawing — pick a colour by 0x00RRGGBB / 0xAARRGGBB
+        // value rather than a pen index. The recommended implementation
+        // (LayerGraphics) rewrites colour register 255 on the bound
+        // screen with the supplied RGB triplet, then selects pen 255 —
+        // so a single setForegroundColor / setBackgroundColor call
+        // covers "give me this exact colour". Alpha bits are ignored;
+        // the screen palette has no alpha channel.
+        //
+        // Pen 255 is the "dynamic" slot — callers who paint several
+        // distinct colours in one pass need to reissue setForegroundColor
+        // between each draw, because every call clobbers register 255.
+        // For mass-fill scenarios where the same colour repeats, set
+        // it once and rely on the active pen surviving subsequent
+        // draws.
+        //
+        // Available on CGFX / Picasso96 (any palette-mapped or
+        // emulated-palette RTG screen). Behaviour on 4-bit planar
+        // screens is undefined — pen 255 doesn't exist there — but
+        // those aren't a target for AmIde-class apps.
+        //
+        // Default base-class implementation just selects pen 255
+        // without touching the palette — concrete subclasses that
+        // own the screen (LayerGraphics) override to perform the
+        // SetRGB32 + SetAPen pair. The fallback exists so the
+        // legacy ViewContextGraphics subclass keeps building without
+        // duplicating the per-platform native plumbing; on the
+        // AmIde production path every paint goes through LayerGraphics
+        // so the real implementation runs.
+        open fun setForegroundColor(argb: UInt) {
+            this.setForegroundPen(255UB)
+        }
+        open fun setBackgroundColor(argb: UInt) {
+            this.setBackgroundPen(255UB)
+        }
         abstract fun drawLine(x: Short, y: Short, x2: Short, y2: Short)
         abstract fun fillRect(x: Short, y: Short, x2: Short, y2: Short)
         abstract fun eraseRect(x: Short, y: Short, x2: Short, y2: Short)

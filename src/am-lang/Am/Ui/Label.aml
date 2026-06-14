@@ -37,6 +37,29 @@ namespace Am.Ui
         // the baseline. Null → fall back to trailingGlyph.
         var trailingBitmap: Bitmap? = null
 
+        // Extra pixel padding between the trailing affordance and
+        // the row's right edge. Without it, the [...] / icon sits
+        // flush against the scrollbar / sidebar border which reads
+        // as cramped. The hit-test area still extends to the right
+        // edge so a click past the visible icon still triggers it.
+        var trailingRightPad: Short = 0S
+
+        // When non-zero, paint a coloured bg under the trailing
+        // affordance whenever the cursor is over that affordance
+        // specifically (NOT just over the row). Reads as a hover
+        // affordance on the icon, distinct from the row's own
+        // hoverBackgroundPen.
+        var trailingHoverBackgroundPen: UByte = 0UB
+        // Padding around the trailing hover bg rectangle — a couple
+        // of pixels on each side so the bg breathes a little past
+        // the icon's literal glyph bounds.
+        var trailingHoverBackgroundPad: Short = 2S
+
+        // True while the cursor sits inside the trailing slot. Set
+        // from onMouseEvent's move case; read by paint() to decide
+        // whether to draw the trailing hover bg.
+        private var trailingHovered: Bool = false
+
         // Optional SECOND hover-only affordance, painted just to the
         // left of `trailingGlyph` with the same BADGE_GAP separator.
         // Lets a row carry two distinct hover actions — Git sidebar
@@ -231,9 +254,21 @@ namespace Am.Ui
                 var btx = this.trailingGlyphX(graphics)
                 var bw = this.trailingBitmap.width.toShort()
                 var bh = this.trailingBitmap.height.toShort()
+                if (this.trailingHovered && this.trailingHoverBackgroundPen != 0UB) {
+                    var pad = this.trailingHoverBackgroundPad
+                    graphics.setForegroundPen(this.trailingHoverBackgroundPen)
+                    graphics.fillRect(btx - pad, textY - pad, btx + bw - 1S + pad, textY + bh - 1S + pad)
+                }
                 graphics.drawBitmap(this.trailingBitmap, btx, textY, bw, bh)
             } else if (this.hovered && this.trailingGlyph != null) {
                 var tx = this.trailingGlyphX(graphics)
+                if (this.trailingHovered && this.trailingHoverBackgroundPen != 0UB) {
+                    var pad = this.trailingHoverBackgroundPad
+                    var gw = graphics.calculateStringWidth(this.trailingGlyph).toShort()
+                    var fh = graphics.getCurrentFontSize().toShort()
+                    graphics.setForegroundPen(this.trailingHoverBackgroundPen)
+                    graphics.fillRect(tx - pad, textY - fh + 2S, tx + gw - 1S + pad, textY + pad)
+                }
                 graphics.setForegroundPen(this.trailingPen)
                 graphics.drawString(this.trailingGlyph, tx, textY)
             }
@@ -378,7 +413,9 @@ namespace Am.Ui
                 var badgeW = graphics.calculateStringWidth(this.badgeGlyph).toShort()
                 rightEdge = (rightEdge - badgeW) - Label.BADGE_GAP
             }
-            return rightEdge - glyphW
+            // Pull the slot left by the trailingRightPad so the icon
+            // doesn't sit flush against the row's right edge.
+            return (rightEdge - this.trailingRightPad) - glyphW
         }
 
         // Mouse-side version — onMouseEvent doesn't have Graphics in
@@ -406,7 +443,7 @@ namespace Am.Ui
                 var badgeW = win.calculateStringWidth(f, this.badgeGlyph).toShort()
                 rightEdge = (rightEdge - badgeW) - Label.BADGE_GAP
             }
-            return rightEdge - glyphW
+            return (rightEdge - this.trailingRightPad) - glyphW
         }
 
         override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
@@ -415,6 +452,27 @@ namespace Am.Ui
                     var inside = this.contains(x, y)
                     if (inside != this.hovered) {
                         this.hovered = inside
+                        this.requestRepaint()
+                    }
+                    // Trailing-slot hover state — drives the
+                    // trailingHoverBackgroundPen paint above.
+                    // Only checked when the row is hovered AND a
+                    // trailing affordance is configured; otherwise
+                    // it stays false so the bg is never painted.
+                    var newTrailing = false
+                    if (inside && (this.trailingGlyph != null || this.trailingBitmap != null)) {
+                        var tx = this.trailingGlyphXFromWindow()
+                        if (tx >= 0S && x >= tx) {
+                            var tRight = this.width.toShort()
+                            if (this.badgeGlyph != null) {
+                                var bx = this.badgeGlyphXFromWindow()
+                                if (bx >= 0S) { tRight = bx }
+                            }
+                            if (x < tRight) { newTrailing = true }
+                        }
+                    }
+                    if (newTrailing != this.trailingHovered) {
+                        this.trailingHovered = newTrailing
                         this.requestRepaint()
                     }
                 }

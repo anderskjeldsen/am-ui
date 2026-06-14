@@ -16,6 +16,7 @@
 #include <graphics/gfx.h>
 #include <graphics/layers.h>
 #include <graphics/rastport.h>
+#include <graphics/rpattr.h>
 #include <graphics/scale.h>
 #include <graphics/text.h>
 #include <cybergraphx/cybergraphics.h>
@@ -209,11 +210,27 @@ __exit: ;
     return __result;
 }
 
+// The pen-vs-colour split: setForegroundPen / setBackgroundPen
+// take the classic AmigaOS path (SetAPen / SetBPen, drawing
+// uses the colormap index). setForegroundColor /
+// setBackgroundColor stash a direct 24-bit ARGB on the
+// graphics instance instead — fillRect / eraseRect check the
+// fg_color_active / bg_color_active flag and route through
+// CGFX's FillPixelArray when set, which takes the ARGB direct
+// and skips the colormap entirely. That's how an extension can
+// pick from more than the IDE's 16 reserved palette pens.
+//
+// Pen setters clear the matching colour flag so a caller
+// switching back to a pen actually goes back to the pen path
+// instead of inheriting whatever colour the previous
+// setForegroundColor stashed.
 function_result Am_Ui_LayerGraphics_setForegroundPen_0(aobject * const this, unsigned char pen)
 {
     function_result __result = { .has_return_value = false };
     bool __returning = false;
+    Am_Ui_LayerGraphics_data *data = get_layer_graphics_data(this);
     struct RastPort *rp = get_rp(this);
+    if (data != NULL) data->fg_color_active = FALSE;
     if (rp != NULL) SetAPen(rp, pen);
 __exit: ;
     return __result;
@@ -223,8 +240,51 @@ function_result Am_Ui_LayerGraphics_setBackgroundPen_0(aobject * const this, uns
 {
     function_result __result = { .has_return_value = false };
     bool __returning = false;
+    Am_Ui_LayerGraphics_data *data = get_layer_graphics_data(this);
     struct RastPort *rp = get_rp(this);
+    if (data != NULL) data->bg_color_active = FALSE;
     if (rp != NULL) SetBPen(rp, pen);
+__exit: ;
+    return __result;
+}
+
+// Stash a direct 24-bit ARGB on the graphics instance and flag
+// "colour mode" — subsequent fillRect / eraseRect calls notice
+// the flag and route through CGFX's FillPixelArray, which
+// takes the ARGB straight and skips the screen's colormap.
+// This is how we pick from more than the IDE's 16 reserved
+// palette pens (the colormap on a TrueColor RTG screen doesn't
+// extend past the system-pens table, so SetRGB32 + SetAPen
+// with an index like 255 just aliases to whatever pen sits at
+// the colormap's end — the "all my colours come out the same"
+// symptom). drawLine / drawString aren't routed here; callers
+// that need a coloured line currently still go through pens.
+//
+// Alpha is dropped — the AmigaOS palette has no alpha
+// channel — and the value is masked to 24 bits so a 0xFFRRGGBB
+// passed from JS doesn't sign-extend.
+function_result Am_Ui_LayerGraphics_setForegroundColor_0(aobject * const this, unsigned int argb)
+{
+    function_result __result = { .has_return_value = false };
+    bool __returning = false;
+    Am_Ui_LayerGraphics_data *data = get_layer_graphics_data(this);
+    if (data != NULL) {
+        data->fg_color = argb & 0xFFFFFFUL;
+        data->fg_color_active = TRUE;
+    }
+__exit: ;
+    return __result;
+}
+
+function_result Am_Ui_LayerGraphics_setBackgroundColor_0(aobject * const this, unsigned int argb)
+{
+    function_result __result = { .has_return_value = false };
+    bool __returning = false;
+    Am_Ui_LayerGraphics_data *data = get_layer_graphics_data(this);
+    if (data != NULL) {
+        data->bg_color = argb & 0xFFFFFFUL;
+        data->bg_color_active = TRUE;
+    }
 __exit: ;
     return __result;
 }
@@ -247,11 +307,23 @@ function_result Am_Ui_LayerGraphics_fillRect_0(aobject * const this, short x, sh
 {
     function_result __result = { .has_return_value = false };
     bool __returning = false;
+    Am_Ui_LayerGraphics_data *data = get_layer_graphics_data(this);
     struct RastPort *rp = get_rp(this);
     short tx1 = lg_translated_x(this, x), ty1 = lg_translated_y(this, y);
     short tx2 = lg_translated_x(this, x2), ty2 = lg_translated_y(this, y2);
     if (rp == NULL) goto __exit;
-    RectFill(rp, tx1, ty1, tx2, ty2);
+    // Colour-mode fill — CGFX's FillPixelArray paints the
+    // rectangle with the stashed 24-bit ARGB without touching
+    // the colormap, which is what makes the multi-colour
+    // sprite palette work. Falls back to RectFill (pen path)
+    // when no setForegroundColor preceded this call.
+    if (data != NULL && data->fg_color_active) {
+        UWORD w = (UWORD)(tx2 - tx1 + 1);
+        UWORD h = (UWORD)(ty2 - ty1 + 1);
+        FillPixelArray(rp, tx1, ty1, w, h, data->fg_color);
+    } else {
+        RectFill(rp, tx1, ty1, tx2, ty2);
+    }
 __exit: ;
     return __result;
 }
@@ -260,11 +332,21 @@ function_result Am_Ui_LayerGraphics_eraseRect_0(aobject * const this, short x, s
 {
     function_result __result = { .has_return_value = false };
     bool __returning = false;
+    Am_Ui_LayerGraphics_data *data = get_layer_graphics_data(this);
     struct RastPort *rp = get_rp(this);
     short tx1 = lg_translated_x(this, x), ty1 = lg_translated_y(this, y);
     short tx2 = lg_translated_x(this, x2), ty2 = lg_translated_y(this, y2);
     if (rp == NULL) goto __exit;
-    EraseRect(rp, tx1, ty1, tx2, ty2);
+    // Same colour-mode short-circuit, but for the background
+    // colour. EraseRect normally paints with BPen; in colour
+    // mode we substitute the cached bg_color via FillPixelArray.
+    if (data != NULL && data->bg_color_active) {
+        UWORD w = (UWORD)(tx2 - tx1 + 1);
+        UWORD h = (UWORD)(ty2 - ty1 + 1);
+        FillPixelArray(rp, tx1, ty1, w, h, data->bg_color);
+    } else {
+        EraseRect(rp, tx1, ty1, tx2, ty2);
+    }
 __exit: ;
     return __result;
 }
