@@ -65,8 +65,6 @@ function_result Am_Ui_Font__native_init_0(aobject * const this)
         goto __exit;
     }
 
-    printf("[font.native] OpenDiskFont(name=%s, size=%u)\n", sh->string_value, (unsigned)size); fflush(stdout);
-
     /* diskfont.library's OpenDiskFont is a superset of graphics's
      * OpenFont: it checks the in-memory font list first (so ROM
      * fonts like topaz/8 + anything previously loaded come back
@@ -77,12 +75,10 @@ function_result Am_Ui_Font__native_init_0(aobject * const this)
     struct TextFont *font = OpenDiskFont(&textAttr);
 
     if (font == NULL) {
-        printf("[font.native] OpenDiskFont failed (IoErr=%ld)\n", IoErr()); fflush(stdout);
         __throw_simple_exception("Failed to open font", "in Am_Ui_Font__native_init_0", &__result);
 		goto __exit;
     }
 
-    printf("[font.native] opened font %s/%u OK\n", sh->string_value, (unsigned)size); fflush(stdout);
     this->object_properties.class_object_properties.object_data.value.custom_value = font;
 
 __exit: ;
