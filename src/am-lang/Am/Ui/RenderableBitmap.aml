@@ -26,6 +26,19 @@ namespace Am.Ui
             return rb
         }
 
+        // Same as fromImage but the underlying Bitmap is built via
+        // Bitmap.fromImageWithMask, so transparent pixels in the
+        // source Image preserve a 1-bit mask. When a later blit
+        // routes through Graphics.drawBitmap on AmigaOS that picks
+        // BltMaskBitMapRastPort, so the destination background shows
+        // through wherever the source was transparent.
+        static fun fromImageWithMask(image: Image, window: Window): RenderableBitmap {
+            var rb = new RenderableBitmap()
+            rb.bitmap = Bitmap.fromImageWithMask(image, window)
+            rb.attachLayer()
+            return rb
+        }
+
         fun getBitmap(): Bitmap {
             return this.bitmap
         }
