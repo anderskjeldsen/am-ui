@@ -17,8 +17,30 @@ namespace Am.Ui
         var activeBackgroundPen: UByte = 3UB
         var textPen: UByte             = 1UB
 
+        // Color-flavoured overrides for the pen knobs above. When a
+        // color field is non-null it wins over the matching pen —
+        // paint() calls graphics.setForegroundColor(argb) instead of
+        // setForegroundPen. The defaults are null so existing pen-
+        // configured callers render unchanged; the FormBuilder XML
+        // attribute path (M1 of the styling work) wires these from
+        // `backgroundColor="#RRGGBB"`-style attrs.
+        var backgroundColor: UInt?       = null
+        var activeBackgroundColor: UInt? = null
+        var textColor: UInt?             = null
+        // hoverBackgroundColor is treated as an enable signal on its
+        // own — when non-null the hover fill always uses it, so a
+        // caller doesn't have to set both hoverBackgroundPenEnabled
+        // and hoverBackgroundPen just to pick a hover colour.
+        var hoverBackgroundColor: UInt? = null
+
         private var borderPens: BorderPens = new BorderPens(2UB, 2UB, 1UB, 1UB)
         private var activeBorderPens: BorderPens = new BorderPens(1UB, 1UB, 2UB, 2UB)
+
+        // Optional flat-border colour. When non-null, paint() draws a
+        // single-colour 1-px rectangle instead of the bevel borderPens
+        // / activeBorderPens. Distinct from `hoverBorderColor` (which
+        // only stamps on hover) — this one is the resting border.
+        var borderColor: UInt? = null
 
         // When false, skip the bevel border in paint(). The View's
         // borderWidths still affect layout unless callers also call
@@ -34,6 +56,19 @@ namespace Am.Ui
         // (Settings save button = white).
         var hoverBorderEnabled: Bool = false
         var hoverBorderPen: UByte    = 1UB
+        // Color override for the hover border. Non-null implies
+        // enabled — paint() treats `hoverBorderColor != null` as the
+        // same trigger as `hoverBorderEnabled`.
+        var hoverBorderColor: UInt? = null
+
+        // Optional hover background swap: when enabled, the bg fill
+        // uses `hoverBackgroundPen` while the cursor is over the
+        // button (but it isn't actively pressed). Off by default so
+        // existing buttons render unchanged. `activeBackgroundPen`
+        // still wins on press, so a button can have three distinct
+        // bg pens — default / hover / pressed — without conflict.
+        var hoverBackgroundPenEnabled: Bool = false
+        var hoverBackgroundPen: UByte       = 12UB
 
         // When non-zero, the label + hover border are translated by
         // this many pixels DOWN while the button is held pressed
@@ -98,16 +133,57 @@ namespace Am.Ui
 
             var borderPens = this.borderPens
             var bgPen = this.backgroundPen
+            // Track the chosen bg colour alongside the pen — when
+            // `useColor` is true and bgColor is non-null it wins at
+            // fill time. amlc rejects `local = null` on a nullable
+            // primitive, so we toggle a separate flag for the
+            // "explicitly want the pen path" branches instead of
+            // clearing bgColor.
+            var bgColor: UInt? = this.backgroundColor
+            var useColor: Bool = (bgColor != null)
             if (this.active && this.hovered) {
                 bgPen = this.activeBackgroundPen
                 borderPens = this.activeBorderPens
+                if (this.activeBackgroundColor != null) {
+                    bgColor = this.activeBackgroundColor
+                    useColor = true
+                } else {
+                    useColor = false
+                }
+            } else if (this.hovered && this.hoverBackgroundColor != null) {
+                // Hover with an explicit colour override: take it.
+                bgColor = this.hoverBackgroundColor
+                useColor = true
+            } else if (this.hovered && this.hoverBackgroundPenEnabled) {
+                // Hover but not pressed: bg-only swap, border stays
+                // at its default pens. Keeps the affordance subtle
+                // (no bevel flip) and unambiguously distinct from
+                // the pressed state.
+                bgPen = this.hoverBackgroundPen
+                useColor = false
             }
 
             // Background bl,bt - w-br,h-bb
-            graphics.setForegroundPen(bgPen)
+            if (useColor && bgColor != null) {
+                graphics.setForegroundColor(bgColor as UInt)
+            } else {
+                graphics.setForegroundPen(bgPen)
+            }
             graphics.fillRect(x1, y1, x2, y2)
 
-            if (this.drawBorder) {
+            // Border priority:
+            //   1. Flat `borderColor` overrides everything — themes
+            //      that want a single-colour rectangle never want the
+            //      4-pen bevel underneath bleeding through.
+            //   2. Else bevel via existing pens (unless drawBorder=false).
+            if (this.borderColor != null) {
+                var bc: UInt = this.borderColor as UInt
+                graphics.setForegroundColor(bc)
+                graphics.drawLine(x1, y1, x2, y1)
+                graphics.drawLine(x1, y2, x2, y2)
+                graphics.drawLine(x1, y1, x1, y2)
+                graphics.drawLine(x2, y1, x2, y2)
+            } else if (this.drawBorder) {
                 this.paintNativeBorder(graphics, borderPens)
             }
 
@@ -132,8 +208,13 @@ namespace Am.Ui
             // y2+1 — one pixel OUTSIDE the bg-fill area — and on
             // release that stray pixel wasn't overdrawn, leaving a
             // ghost line at the original bottom edge.
-            if (this.hovered && this.hoverBorderEnabled) {
-                graphics.setForegroundPen(this.hoverBorderPen)
+            if (this.hovered && (this.hoverBorderEnabled || this.hoverBorderColor != null)) {
+                if (this.hoverBorderColor != null) {
+                    var hbc: UInt = this.hoverBorderColor as UInt
+                    graphics.setForegroundColor(hbc)
+                } else {
+                    graphics.setForegroundPen(this.hoverBorderPen)
+                }
                 graphics.drawLine(x1, y1, x2, y1)
                 graphics.drawLine(x1, y2, x2, y2)
                 graphics.drawLine(x1, y1, x1, y2)
@@ -148,8 +229,21 @@ namespace Am.Ui
             // always render the label too, replicating paintAll's
             // outer translate (margin) by hand.
             var label = this.ensureLabel()
+            // Propagate the resolved bg / text choice into the label
+            // so the inner glyph sits on the right backdrop. The
+            // color path wins when set; otherwise fall back to pens
+            // exactly like before. Only push bgColor when the button
+            // actually chose the color path — propagating a stale
+            // bgColor on a pen-only frame would make the label
+            // ignore the pen swap.
             label.backgroundPen = bgPen
+            if (useColor) {
+                label.backgroundColor = bgColor
+            }
             label.textPen = this.textPen
+            if (this.textColor != null) {
+                label.textColor = this.textColor
+            }
             var labelIx = label.x + label.margin.left
             var labelIy = label.y + label.margin.top + pressDy
             graphics.translate(labelIx, labelIy)
@@ -183,12 +277,15 @@ namespace Am.Ui
                 } else if (type == MouseEventType.move) {
                     // Repaint on hover transition when any visible
                     // state depends on hovered — that's `active` (press
-                    // bevel / press translate) OR the optional hover
-                    // border overlay. Vanilla buttons with neither
-                    // skip the repaint so we don't churn paint cycles
-                    // every time the cursor crosses one.
+                    // bevel / press translate), the optional hover
+                    // border overlay, or the optional hover-bg pen.
+                    // Vanilla buttons with none of those skip the
+                    // repaint so we don't churn paint cycles every
+                    // time the cursor crosses one. Mirror the exit
+                    // check below — they must agree, otherwise the
+                    // visible state goes stale on one of the edges.
                     if (!wasHovered) {
-                        if (this.active || this.hoverBorderEnabled) {
+                        if (this.active || this.hoverBorderEnabled || this.hoverBackgroundPenEnabled) {
                             this.requestRepaint()
                         }
                     }
@@ -205,7 +302,7 @@ namespace Am.Ui
                 } else if (wasHovered) {
                     // Same reasoning as the enter case — repaint on
                     // exit if there's something visible to clear.
-                    if (this.active || this.hoverBorderEnabled) {
+                    if (this.active || this.hoverBorderEnabled || this.hoverBackgroundPenEnabled) {
                         this.requestRepaint()
                     }
                 }

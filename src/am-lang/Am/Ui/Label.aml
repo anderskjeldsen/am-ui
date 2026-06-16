@@ -8,12 +8,20 @@ namespace Am.Ui
         var font: Font? = null
         var backgroundPen: UByte = 0UB
         var textPen: UByte = 1UB
+        // Color overrides for the bg / text pens. Non-null wins.
+        // Buttons propagate their resolved bg / text choice into the
+        // private Label inside them via these fields so the glyph
+        // sits on the right backdrop.
+        var backgroundColor: UInt? = null
+        var textColor: UInt?       = null
         // Mouse-over support. Set hoverEnabled = true and pick a contrasting
         // bg pen to get the row to fill itself with that pen while the
         // mouse is over it. Disabled by default so plain Labels keep
         // their original transparent rendering.
         var hoverEnabled: Bool = false
         var hoverBackgroundPen: UByte = 0UB
+        // Color override for the hover bg fill. Non-null wins.
+        var hoverBackgroundColor: UInt? = null
         private var hovered: Bool = false
 
         // Optional trailing affordance — when set, this string is
@@ -176,8 +184,21 @@ namespace Am.Ui
             base.paint(graphics)
 
             var bgPen = this.backgroundPen
+            // bgColor stays null until something explicitly sets it
+            // (resting or hover-with-color). We deliberately avoid
+            // re-assigning null on the hover-pen branch — amlc
+            // rejects `local = null` on a nullable-primitive local —
+            // so the pen branch flips a useColor flag instead.
+            var bgColor: UInt? = this.backgroundColor
+            var useColor: Bool = (bgColor != null)
             if (this.hoverEnabled && this.hovered) {
-                bgPen = this.hoverBackgroundPen
+                if (this.hoverBackgroundColor != null) {
+                    bgColor = this.hoverBackgroundColor
+                    useColor = true
+                } else {
+                    bgPen = this.hoverBackgroundPen
+                    useColor = false
+                }
             }
             // When hover is in play, always paint the whole row's bg — on
             // an un-hover frame this is what wipes the previous hover
@@ -186,15 +207,35 @@ namespace Am.Ui
             // label rect (including any vertical padding) so the hover
             // colour reads as a padded row, not a tight strip behind
             // the glyphs.
-            if (this.hoverEnabled) {
+            //
+            // Also paint when a backgroundColor was set explicitly
+            // (e.g. propagated from a Button parent) — without this,
+            // a Label sitting alone on a transparent parent would
+            // ignore the color override.
+            if (this.hoverEnabled || useColor) {
                 var x2 = this.width.toShort() - 1S
                 var y2 = this.height.toShort() - 1S
-                graphics.setForegroundPen(bgPen)
+                if (useColor && bgColor != null) {
+                    graphics.setForegroundColor(bgColor as UInt)
+                } else {
+                    graphics.setForegroundPen(bgPen)
+                }
                 graphics.fillRect(0S, 0S, x2, y2)
             }
 
-            graphics.setBackgroundPen(bgPen)
-            graphics.setForegroundPen(this.textPen)
+            // Text bg follows the same color-or-pen choice so glyph
+            // anti-aliasing fringes match the surrounding fill.
+            if (useColor && bgColor != null) {
+                graphics.setBackgroundColor(bgColor as UInt)
+            } else {
+                graphics.setBackgroundPen(bgPen)
+            }
+            if (this.textColor != null) {
+                var tc: UInt = this.textColor as UInt
+                graphics.setForegroundColor(tc)
+            } else {
+                graphics.setForegroundPen(this.textPen)
+            }
             var font = this.getUsedFont()
             if (font != null) {
                 graphics.setFont(font)

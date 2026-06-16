@@ -1,0 +1,378 @@
+
+namespace Am.Ui
+{
+
+    // An icon button: same chrome (bg / bevel / hover / press) as
+    // `Button`, but the content is an `Am.Imaging.Image` instead of
+    // a `Label`. The pen / hover / press knobs are kept in lockstep
+    // with `Button` so a themed primary/secondary styler can hit
+    // both widgets uniformly.
+    //
+    // Sizing:
+    //   minWidth  = image.width  + padding + border + margin
+    //   minHeight = image.height + padding + border + margin
+    // A caller that wants a uniform button face independent of icon
+    // dimensions (toolbar strip) should set `iconSize` to a fixed
+    // size and the layout will pad accordingly.
+    class ImageButton(var image: Am.Imaging.Image,
+                       var buttonClickListener: (view: View) => Bool) : View {
+        import Am.Lang
+        import Am.Imaging
+
+        private var active: Bool
+        private var hovered: Bool
+
+        // When set, the inner draw uses this size instead of the
+        // image's native dimensions. Lets a row of mixed-size icons
+        // share a uniform button face. Set to 0 to fall back to
+        // native icon size (the default).
+        var iconWidth: Short = 0S
+        var iconHeight: Short = 0S
+
+        // Theme knobs — same names as `Button` so the styler can
+        // hit both with one code path.
+        var backgroundPen: UByte       = 0UB
+        var activeBackgroundPen: UByte = 3UB
+
+        // Color overrides, same shape as Button. Non-null wins over
+        // the matching pen; defaults stay null so vanilla icon
+        // buttons render unchanged. Wired from the FormBuilder XML
+        // attribute path (`backgroundColor="#RRGGBB"` etc.).
+        var backgroundColor: UInt?       = null
+        var activeBackgroundColor: UInt? = null
+        // hoverBackgroundColor doubles as its own enable signal —
+        // non-null means "use this for the hover fill", no separate
+        // hoverBackgroundPenEnabled-style flag needed.
+        var hoverBackgroundColor: UInt? = null
+
+        private var borderPens: BorderPens = new BorderPens(2UB, 2UB, 1UB, 1UB)
+        private var activeBorderPens: BorderPens = new BorderPens(1UB, 1UB, 2UB, 2UB)
+
+        // Flat single-colour border when non-null. Overrides the
+        // 4-pen bevel — see Button's matching field for the same
+        // rationale.
+        var borderColor: UInt? = null
+
+        // When false, skip the bevel border in paint(). Same
+        // semantics as the matching Button knob.
+        var drawBorder: Bool = true
+
+        // Optional hover overlay: 1-px solid border stamped on top
+        // of the existing chrome whenever the cursor is over the
+        // button. Off by default; themes opt in.
+        var hoverBorderEnabled: Bool = false
+        var hoverBorderPen: UByte    = 1UB
+        // Colour override for the hover border. Non-null implies
+        // enabled — paint() treats `hoverBorderColor != null` as the
+        // same trigger as `hoverBorderEnabled`.
+        var hoverBorderColor: UInt? = null
+
+        // Optional hover background swap: bg fill uses
+        // `hoverBackgroundPen` while the cursor is over the button
+        // (but it isn't actively pressed). Off by default to keep
+        // existing icon buttons looking the same as before.
+        var hoverBackgroundPenEnabled: Bool = false
+        var hoverBackgroundPen: UByte       = 12UB
+
+        // Press translate: shift the icon down by this many px
+        // while held pressed. 0 = no translate (default).
+        var pressTranslateY: Short = 0S
+
+        // Optional tint: when enabled, every opaque pixel of the
+        // source image gets its RGB replaced by `tintColor` (alpha
+        // preserved). Lets a single-glyph icon be recoloured per
+        // button state — e.g. dark on the selected-tool's cyan bg,
+        // white on the default dark bg — without shipping a
+        // separate atlas per state. `tintColor` is read as 0xRRGGBB
+        // (high byte ignored); the source image's alpha channel
+        // still drives transparency.
+        //
+        // The source image is never mutated. A tinted copy is
+        // memoised in `tintedImage` and rebuilt whenever
+        // `tintColor` or `image` changes. Non-ARGB source images
+        // (e.g. indexed PNGs) bypass tinting and render as-is.
+        var tintEnabled: Bool = false
+        var tintColor: UInt   = 0xFFFFFFFFUI   // white
+        private var tintedImage: Image? = null
+        private var tintedCacheKey: UInt = 0UI
+        private var tintedFromImage: Image? = null
+
+        override fun setDefaultPadding() {
+            this.setPadding(5S)
+        }
+
+        override fun setDefaultBorder() {
+            this.setBorderWidths(2S, 1S)
+        }
+
+        fun setImage(image: Am.Imaging.Image) {
+            this.image = image
+            // Invalidate the tint cache — `image` differs and the
+            // ensureTinted path will recompute on next paint.
+            this.tintedImage = null
+            this.tintedFromImage = null
+            this.requestRepaint()
+        }
+
+        fun getImage(): Am.Imaging.Image {
+            return this.image
+        }
+
+        // Explicit fixed icon-draw size. Pass 0/0 to revert to the
+        // image's native dimensions.
+        fun setIconSize(width: Short, height: Short) {
+            this.iconWidth = width
+            this.iconHeight = height
+            this.requestRepaint()
+        }
+
+        // Enable tinting at `rgb` (0xRRGGBB, alpha bits ignored).
+        // Subsequent paints render the icon with every opaque
+        // pixel recoloured to `rgb`.
+        fun setTintColor(rgb: UInt) {
+            this.tintColor = rgb
+            this.tintEnabled = true
+            this.requestRepaint()
+        }
+
+        // Drop the tint — paint reverts to the source image.
+        fun clearTint() {
+            this.tintEnabled = false
+            this.requestRepaint()
+        }
+
+        // Lazily build (and cache) the tinted variant of the
+        // current image. Returns null when tinting is off, the
+        // source is non-ARGB, or there's nothing to tint.
+        private fun ensureTintedImage(): Image? {
+            if (!this.tintEnabled) {
+                return null
+            }
+            var src = this.image
+            if (src == null) {
+                return null
+            }
+            if (src.getPixelFormat() != PixelFormat.ARGB) {
+                return null
+            }
+            if (this.tintedImage != null
+                    && this.tintedCacheKey == this.tintColor
+                    && this.tintedFromImage == src) {
+                return this.tintedImage
+            }
+            var dst = ImageButton.recolorOpaquePixels(src, this.tintColor)
+            this.tintedImage = dst
+            this.tintedCacheKey = this.tintColor
+            this.tintedFromImage = src
+            return dst
+        }
+
+        // Produce a same-size ARGB Image with every opaque pixel's
+        // RGB replaced by `tint & 0xFFFFFF`. Alpha bits are copied
+        // from the source verbatim so the icon's shape is preserved.
+        // Fully-transparent source pixels stay fully transparent
+        // (we don't paint anything where the icon was masked).
+        private static fun recolorOpaquePixels(src: Image, tint: UInt): Image {
+            var w = src.getWidth()
+            var h = src.getHeight()
+            var dst = Image.createARGB(w, h)
+            var srcPixels = src.getPixelColors()
+            var dstPixels = dst.getPixelColors()
+            var pixelCount = w.toUInt() * h.toUInt()
+            var alphaMask: UInt = 0xFF000000UI
+            var rgbMask: UInt   = 0x00FFFFFFUI
+            var tintRgb: UInt = tint & rgbMask
+            var i: UInt = 0UI
+            while (i < pixelCount) {
+                var srcPx = srcPixels[i]
+                var alpha = srcPx & alphaMask
+                if (alpha == 0UI) {
+                    dstPixels[i] = 0UI
+                } else {
+                    dstPixels[i] = alpha | tintRgb
+                }
+                i = i + 1UI
+            }
+            return dst
+        }
+
+        private fun resolvedIconWidth(): Short {
+            if (this.iconWidth > 0S) {
+                return this.iconWidth
+            }
+            if (this.image != null) {
+                return this.image.getWidth().toShort()
+            }
+            return 0S
+        }
+
+        private fun resolvedIconHeight(): Short {
+            if (this.iconHeight > 0S) {
+                return this.iconHeight
+            }
+            if (this.image != null) {
+                return this.image.getHeight().toShort()
+            }
+            return 0S
+        }
+
+        override fun minHeight(): Short {
+            return this.resolvedIconHeight()
+                + this.padding.top + this.padding.bottom
+                + this.margin.top + this.margin.bottom
+                + this.borderWidths.top + this.borderWidths.bottom
+        }
+
+        override fun minWidth(): Short {
+            return this.resolvedIconWidth()
+                + this.padding.left + this.padding.right
+                + this.margin.left + this.margin.right
+                + this.borderWidths.left + this.borderWidths.right
+        }
+
+        override fun paint(graphics: Graphics) {
+            base.paint(graphics)
+
+            var x1 = 0S
+            var x2 = this.width as Short - (this.margin.right + this.margin.left + 1S)
+            var y1 = 0S
+            var y2 = this.height as Short - (this.margin.bottom + this.margin.top + 1S)
+
+            var borderPens = this.borderPens
+            var bgPen = this.backgroundPen
+            // Same color-vs-pen toggle as Button.paint — see the
+            // comment there for the `useColor` flag rationale.
+            var bgColor: UInt? = this.backgroundColor
+            var useColor: Bool = (bgColor != null)
+            if (this.active && this.hovered) {
+                bgPen = this.activeBackgroundPen
+                borderPens = this.activeBorderPens
+                if (this.activeBackgroundColor != null) {
+                    bgColor = this.activeBackgroundColor
+                    useColor = true
+                } else {
+                    useColor = false
+                }
+            } else if (this.hovered && this.hoverBackgroundColor != null) {
+                bgColor = this.hoverBackgroundColor
+                useColor = true
+            } else if (this.hovered && this.hoverBackgroundPenEnabled) {
+                bgPen = this.hoverBackgroundPen
+                useColor = false
+            }
+
+            if (useColor && bgColor != null) {
+                graphics.setForegroundColor(bgColor as UInt)
+            } else {
+                graphics.setForegroundPen(bgPen)
+            }
+            graphics.fillRect(x1, y1, x2, y2)
+
+            // Flat `borderColor` wins over the bevel chrome — see
+            // Button.paint for the same dispatch.
+            if (this.borderColor != null) {
+                var bc: UInt = this.borderColor as UInt
+                graphics.setForegroundColor(bc)
+                graphics.drawLine(x1, y1, x2, y1)
+                graphics.drawLine(x1, y2, x2, y2)
+                graphics.drawLine(x1, y1, x1, y2)
+                graphics.drawLine(x2, y1, x2, y2)
+            } else if (this.drawBorder) {
+                this.paintNativeBorder(graphics, borderPens)
+            }
+
+            var pressDy = 0S
+            if (this.active && this.hovered) {
+                pressDy = this.pressTranslateY
+            }
+
+            // Hover overlay: stamped on top of bg + (optional) bevel,
+            // INSIDE the outer rect so dimensions don't change.
+            if (this.hovered && (this.hoverBorderEnabled || this.hoverBorderColor != null)) {
+                if (this.hoverBorderColor != null) {
+                    var hbc: UInt = this.hoverBorderColor as UInt
+                    graphics.setForegroundColor(hbc)
+                } else {
+                    graphics.setForegroundPen(this.hoverBorderPen)
+                }
+                graphics.drawLine(x1, y1, x2, y1)
+                graphics.drawLine(x1, y2, x2, y2)
+                graphics.drawLine(x1, y1, x1, y2)
+                graphics.drawLine(x2, y1, x2, y2)
+            }
+
+            // Centre the icon in the inner rect. Inner-rect coords
+            // start at margin+border+padding, sized by innerWidth/
+            // innerHeight. paint() draws relative to the View's own
+            // origin (already translated by the parent), so we offset
+            // by the chrome insets to land inside the padded area.
+            var iw = this.resolvedIconWidth()
+            var ih = this.resolvedIconHeight()
+            if (iw <= 0S || ih <= 0S || this.image == null) {
+                return
+            }
+            var innerW = this.innerWidth()
+            var innerH = this.innerHeight()
+            var ix = ((innerW - iw) / 2S)
+                + this.margin.left + this.borderWidths.left + this.padding.left
+            var iy = ((innerH - ih) / 2S)
+                + this.margin.top + this.borderWidths.top + this.padding.top
+                + pressDy
+            var renderImg = this.image
+            var tinted = this.ensureTintedImage()
+            if (tinted != null) {
+                renderImg = tinted
+            }
+            graphics.drawImage(renderImg, ix, iy, iw, ih)
+        }
+
+        override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
+            var wasHovered = this.hovered
+
+            if (this.contains(x, y)) {
+                this.hovered = true
+
+                if (type == MouseEventType.up) {
+                    this.active = false
+                    this.requestRepaint()
+                    var cl = this.buttonClickListener
+                    if (cl != null) {
+                        var res = cl(this)
+                        return res
+                    }
+                } else if (type == MouseEventType.down) {
+                    this.active = true
+                    this.requestRepaint()
+                } else if (type == MouseEventType.move) {
+                    // Repaint on hover transition only when there's
+                    // something visible to redraw — press bevel /
+                    // press translate / hover border / hover-bg pen.
+                    // Vanilla icon buttons skip the churn. Must mirror
+                    // the exit check below — they have to agree or the
+                    // visible state goes stale on one edge.
+                    if (!wasHovered) {
+                        if (this.active || this.hoverBorderEnabled || this.hoverBackgroundPenEnabled) {
+                            this.requestRepaint()
+                        }
+                    }
+                }
+
+            } else {
+                this.hovered = false
+
+                if (type == MouseEventType.up) {
+                    if (this.active) {
+                        this.active = false
+                        this.requestRepaint()
+                    }
+                } else if (wasHovered) {
+                    if (this.active || this.hoverBorderEnabled || this.hoverBackgroundPenEnabled) {
+                        this.requestRepaint()
+                    }
+                }
+            }
+            return false
+        }
+
+    }
+}
