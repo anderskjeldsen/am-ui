@@ -1,0 +1,123 @@
+namespace Am.Ui 
+{
+
+    class ImageView(var image: Am.Imaging.Image) : View {
+        import Am.Lang
+        import Am.Imaging
+
+        var scaleToFit: Bool = false
+        var maintainAspectRatio: Bool = true
+
+        fun setImage(image: Am.Imaging.Image) {
+            this.image = image
+            this.requestRepaint()
+        }
+
+        fun getImage(): Am.Imaging.Image {
+            return this.image
+        }
+
+        override fun minHeight(): Short {
+            if (this.image != null) {
+                return this.image.getHeight().toShort() + base.minHeight()
+            }
+            return base.minHeight()
+        }
+
+        override fun minWidth(): Short {
+            if (this.image != null) {
+                return this.image.getWidth().toShort() + base.minWidth()
+            }
+            return base.minWidth()
+        }
+
+        override fun paint(graphics: Graphics) {
+            base.paint(graphics)
+
+            if (this.image == null) {
+                return
+            }
+
+            var innerW = this.innerWidth()
+            var innerH = this.innerHeight()
+            var imgW = this.image.getWidth().toShort()
+            var imgH = this.image.getHeight().toShort()
+
+            if (innerW <= 0S || innerH <= 0S || imgW <= 0S || imgH <= 0S) {
+                return
+            }
+
+            var innerWInt = innerW.toInt()
+            var innerHInt = innerH.toInt()
+            var imgWInt = imgW.toInt()
+            var imgHInt = imgH.toInt()
+
+            var drawX = 0S
+            var drawY = 0S
+            var drawW = imgW
+            var drawH = imgH
+
+            var drawWInt = imgWInt
+            var drawHInt = imgHInt
+            var drawXInt = 0
+            var drawYInt = 0
+
+            if (this.scaleToFit) {
+                if (this.maintainAspectRatio) {
+                    // Calculate scale factor using integer arithmetic to avoid floats
+                    // Scale factor = min(innerW/imgW, innerH/imgH)
+                    var scaleXNum = innerWInt
+                    var scaleXDen = imgWInt
+                    var scaleYNum = innerHInt
+                    var scaleYDen = imgHInt
+                    
+                    // Choose the smaller scale factor
+                    var useXScale = (scaleXNum * scaleYDen) <= (scaleYNum * scaleXDen)
+                    
+                    if (useXScale) {
+                        drawWInt = innerWInt
+                        drawHInt = (imgHInt * innerWInt) / imgWInt
+                    } else {
+                        drawWInt = (imgWInt * innerHInt) / imgHInt
+                        drawHInt = innerHInt
+                    }
+
+                    if (drawWInt < 1) {
+                        drawWInt = 1
+                    }
+                    if (drawHInt < 1) {
+                        drawHInt = 1
+                    }
+                    
+                    // Center the image
+                    drawXInt = (innerWInt - drawWInt) / 2
+                    drawYInt = (innerHInt - drawHInt) / 2
+                } else {
+                    // Stretch to fill the entire inner area
+                    drawWInt = innerWInt
+                    drawHInt = innerHInt
+                    drawXInt = 0
+                    drawYInt = 0
+                }
+            } else {
+                // Center the image at original size
+                drawWInt = imgWInt
+                drawHInt = imgHInt
+                drawXInt = (innerWInt - imgWInt) / 2
+                drawYInt = (innerHInt - imgHInt) / 2
+            }
+
+            if (drawWInt <= 0 || drawHInt <= 0) {
+                return
+            }
+
+            drawW = drawWInt.toShort()
+            drawH = drawHInt.toShort()
+            drawX = drawXInt.toShort()
+            drawY = drawYInt.toShort()
+
+            // Draw the image using the graphics context
+            graphics.drawImage(this.image, drawX, drawY, drawW, drawH)
+        }
+    }
+}

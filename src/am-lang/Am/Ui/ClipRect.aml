@@ -1,0 +1,60 @@
+namespace Am.Ui
+{
+    struct ClipRect
+    {
+        import Am.Lang
+
+        var x: Short
+        var y: Short
+        var width: UShort
+        var height: UShort
+
+        // Create a new ClipRect that is constrained within this ClipRect's bounds
+        fun createInnerClipRect(x: Short, y: Short, width: UShort, height: UShort): ClipRect {
+            // Calculate absolute coordinates of the requested rectangle
+            var absoluteX = this.x + x
+            var absoluteY = this.y + y
+
+            // Calculate bounds of this ClipRect
+            var thisMaxX = this.x + this.width.toShort()
+            var thisMaxY = this.y + this.height.toShort()
+            var requestedMaxX = absoluteX + width.toShort()
+            var requestedMaxY = absoluteY + height.toShort()
+
+            // Find intersection bounds
+            var intersectX1 = absoluteX
+            if (intersectX1 < this.x) {
+                intersectX1 = this.x
+            }
+
+            var intersectY1 = absoluteY
+            if (intersectY1 < this.y) {
+                intersectY1 = this.y
+            }
+
+            var intersectX2 = requestedMaxX
+            if (intersectX2 > thisMaxX) {
+                intersectX2 = thisMaxX
+            }
+
+            var intersectY2 = requestedMaxY
+            if (intersectY2 > thisMaxY) {
+                intersectY2 = thisMaxY
+            }
+
+            // Calculate final dimensions
+            var finalWidth = intersectX2 - intersectX1
+            var finalHeight = intersectY2 - intersectY1
+
+            // Ensure positive dimensions
+            if (finalWidth < 0S) {
+                finalWidth = 0S
+            }
+            if (finalHeight < 0S) {
+                finalHeight = 0S
+            }
+
+            return { x: intersectX1, y: intersectY1, width: finalWidth.toUShort(), height: finalHeight.toUShort() }
+        }
+    }
+}

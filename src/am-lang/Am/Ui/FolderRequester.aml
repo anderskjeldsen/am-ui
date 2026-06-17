@@ -1,0 +1,13 @@
+namespace Am.Ui
+{
+    #implementationPlatforms "libc", "amigaos", "amigaos-sim", "morphos-ppc"
+    native class FolderRequester {
+        import Am.Lang
+
+        // Pop a modal ASL drawer requester. Returns the selected drawer
+        // path, or null on cancel. `title` is shown in the requester
+        // window header; `initialPath` seeds the starting directory
+        // (pass null to start in the user's default).
+        static native fun requestFolder(title: String, initialPath: String, parent: Window): String
+    }
+}

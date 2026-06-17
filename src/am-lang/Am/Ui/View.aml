@@ -17,6 +17,7 @@ namespace Am.Ui
         var growY: UByte
         private var repaintRequested: Bool = false
         var visible: Bool = true
+        var clickListener: (view: View) => Bool = null
 
         fun getRepaintRequested(): Bool {
             return this.repaintRequested
@@ -139,13 +140,48 @@ namespace Am.Ui
                 var ix = this.x + this.margin.left
                 var iy = this.y + this.margin.top
 
-//                ("Translate " + ix.toString() + "," + iy.toString()).println()
+                // Set clipping area to this view's bounds (excluding margins)
+                var viewWidth = this.width.toShort() - this.margin.left - this.margin.right
+                var viewHeight = this.height.toShort() - this.margin.top - this.margin.bottom
+
+                var viewClipRect: ClipRect
+                var currentClip = graphics.getCurrentClipRect()
+
+                viewClipRect = currentClip.createInnerClipRect(ix, iy, viewWidth.toUShort(), viewHeight.toUShort())
+
+                graphics.pushClipRect(viewClipRect)
 
                 graphics.translate(ix, iy)
                 this.paint(graphics)
+                this.reportPaintedBounds(graphics, viewWidth, viewHeight)
                 this.markAsPainted()
                 graphics.translate(-ix, -iy)
+
+                graphics.popClipRect()
             }
+        }
+
+        // Hook called from every paintAll variant (this one + the
+        // ViewGroup / Panel / ScrollView overrides) immediately after
+        // the view's paint() runs. Computes the absolute (window-
+        // local) bounding rect of the paint that just happened and
+        // unions it into the Window's dirty-rect tracker so the
+        // off-screen → on-screen blit at the end of the cycle covers
+        // exactly the changed pixels.
+        //
+        // Must be called WHILE the graphics' translate state still
+        // reflects the view's inner-content origin (i.e. before the
+        // matching translate(-ix, -iy)). getTranslateX/Y at this
+        // point IS the absolute window-local position.
+        fun reportPaintedBounds(graphics: Graphics, w: Short, h: Short) {
+            if (this.viewContext == null) {
+                return
+            }
+            var win = this.viewContext.getWindow()
+            if (win == null) {
+                return
+            }
+            win.expandDirtyBounds(graphics.getTranslateX(), graphics.getTranslateY(), w, h)
         }
 
         fun markAsPainted() {
@@ -156,8 +192,30 @@ namespace Am.Ui
             var b = this.repaintRequested
             if (!b) {
                 this.repaintRequested = true
-                this.viewContext.getWindow().requestRepaint()
+                if (this.viewContext != null) {
+                    this.viewContext.getWindow().requestRepaint()
+                }
             }
+        }
+
+        // Mark this view dirty. ViewGroup overrides to recurse into
+        // children — use this after swapping the contents of a host
+        // view so the freshly-attached subtree actually paints, without
+        // invalidating siblings (which requestFullRepaint() would do).
+        open fun requestRepaintTree() {
+            this.requestRepaint()
+        }
+
+        // Temporarily shift this view's immediate children by `dy` on
+        // the y axis. Used by ScrollView to bake the scroll offset
+        // into the layout positions before paint, then undo it after,
+        // because the standard clip-and-translate math (parent clip
+        // origin + child.y) doesn't compose with a plain translate
+        // shift — labels would end up with clip rects at their
+        // unscrolled world positions and get clipped out of their
+        // actual draw position. Default is a no-op; ViewGroup
+        // overrides to walk its children.
+        open fun applyScrollOffset(dy: Short) {
         }
 
         open fun layout(x: Short, y: Short, width: UShort, height: UShort) {
@@ -221,13 +279,48 @@ namespace Am.Ui
             return null
         }
 
-        open fun onKeyboardEvent(type: KeyboardEventType, key: UShort): Bool {
+        open fun onKeyboardEvent(type: KeyboardEventType, keyCode: UShort, keyChar: UShort): Bool {
             return false
         }
+
+        // Per-view mouse-wheel hook. `deltaY` is positive when the
+        // wheel was scrolled DOWN (content moves up). x/y are local
+        // coords inside this view — Window dispatches to whichever
+        // view sits under the cursor (hit-test via contains()), so
+        // wheel ticks affect what the user is *pointing at*, not
+        // what holds keyboard focus. Default no-op; ScrollView /
+        // TextEditor override to actually scroll. Return true to
+        // consume.
+        open fun onMouseWheel(deltaY: Short, x: Short, y: Short): Bool {
+            return false
+        }
+
+        // Secondary click handler for right-mouse-button releases.
+        // Used for "context menu"-style affordances (right-click a
+        // folder tree row to open a terminal in that folder, etc.).
+        // On AmigaOS, RMB is normally consumed by Intuition to
+        // display the window's menu strip — so this only fires for
+        // windows without a menu, or via IDCMP_MENUVERIFY interception
+        // (not currently wired). On libc / morphos it works
+        // unconditionally.
+        var rightClickListener: (view: View) => Bool = null
 
         // returns true if consumed
         open fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
             if (this.contains(x, y)) {
+                if (type == MouseEventType.up) {
+                    if (button == MouseButton.right) {
+                        var rcl = this.rightClickListener
+                        if (rcl != null) {
+                            return rcl(this)
+                        }
+                    } else {
+                        var cl = this.clickListener
+                        if (cl != null) {
+                            return cl(this)
+                        }
+                    }
+                }
                 return true
             }
             return false

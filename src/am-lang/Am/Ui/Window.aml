@@ -1,8 +1,10 @@
 
 namespace Am.Ui 
 {
+    #implementationPlatforms "libc", "amigaos", "amigaos-sim", "morphos-ppc"
     native class Window {
         import Am.Lang
+        import Am.Collections
 
         private var rootView: View
         private var x: Short
@@ -11,14 +13,47 @@ namespace Am.Ui
         private var height: UShort
         private var screen: Screen
         private var viewContext: ViewContextImpl
-        private var graphics: ViewContextGraphics
+        private var graphics: LayerGraphics
         private var repaintRequested: Bool
+        // When true, the next paint clears the window background and tells
+        // every view to repaint regardless of its individual flag. Used
+        // for initial paint, resizes, and structural changes like a tree
+        // rebuild. Plain view-level requestRepaint() leaves this false so
+        // only the views that asked for it actually re-render.
+        private var fullRepaintRequested: Bool = true
         private var border: Insets
         private var backgroundPen: UByte
         private var fillBackground: Bool
         private var pixelScaleX: UByte
         private var pixelScaleY: UByte
         private var pixelMetrics: PixelMetrics
+        private var title: String = ""
+        private var screenTitle: String = ""
+        private var menuStrip: MenuStrip
+
+        // Window-level off-screen buffer for double-buffered painting.
+        // Lazy-allocated the first time getOffscreen() is called and sized
+        // to the host screen. Window.paint routes every view's painting
+        // through this buffer and flushes the affected rect to the
+        // visible surface as a single blit at the end of the cycle —
+        // the user never sees the intermediate label-by-label fill that
+        // direct on-screen painting would expose.
+        private var offscreen: RenderableBitmap = null
+        private var offscreenGraphics: Graphics = null
+
+        // Dirty bounds for the current paint cycle, in window-local
+        // (post-border, pre-translate) coords. Views call
+        // expandDirtyBounds() from paintAll() right after they paint;
+        // at the end of the cycle the union is blitted from offscreen
+        // back to the visible window. `dirtyValid` is the "we've
+        // got something" flag — guards against amlc's reluctance to
+        // parse `-32768S` as a literal (unary negate on a value that
+        // exceeds Short.MAX_VALUE).
+        private var dirtyValid: Bool = false
+        private var dirtyMinX: Short = 0S
+        private var dirtyMinY: Short = 0S
+        private var dirtyMaxX: Short = 0S
+        private var dirtyMaxY: Short = 0S
 
         var font: Font
 
@@ -26,8 +61,40 @@ namespace Am.Ui
             return this.rootView
         }
 
+        fun setTitle(title: String) {
+            this.title = title
+            this.setTitleNative(this.title, this.screenTitle)
+        }
+
+        fun getTitle(): String {
+            return this.title
+        }
+
+        fun setScreenTitle(screenTitle: String) {
+            this.screenTitle = screenTitle
+            this.setTitleNative(this.title, this.screenTitle)
+        }
+
+        fun getScreenTitle(): String {
+            return this.screenTitle
+        }
+
         private fun setBorder(left: Short, top: Short, right: Short, bottom: Short) {
             this.border = new Insets(left, top, right, bottom)
+        }
+
+        fun setBackgroundPen(pen: UByte) {
+            this.backgroundPen = pen
+            this.requestRepaint()
+        }
+
+        fun getBackgroundPen(): UByte {
+            return this.backgroundPen
+        }
+
+        fun setFillBackground(fill: Bool) {
+            this.fillBackground = fill
+            this.requestRepaint()
         }
 
         fun setRootView(view: View) {
@@ -44,14 +111,138 @@ namespace Am.Ui
             }
         }
 
+        // Overlay surface — a LayeredPane that floats over the
+        // rootView and gets first crack at mouse + keyboard events.
+        // Holds at most one "dock" view (set via setOverlayView, at
+        // z=0 in the pane) plus any number of stacked popups (at
+        // z=POPUP_Z and above, opened via openPopup). Constructed
+        // lazily in openWindow(): inline `new LayeredPane()` here
+        // crashed at startup, presumably because native-class
+        // instance fields don't run constructor initializers
+        // before the C side of `new Window()` returns.
+        private var overlayPane: LayeredPane = null
+
+        // The single "dock" slot — Settings / NewProject sit here.
+        // Tracked separately from the pane so setOverlayView can
+        // swap in a new view without disturbing any popups stacked
+        // above it.
+        private var dockLayer: View = null
+
+        // Z-index used for popups. Higher than the dock slot so
+        // popups always paint on top and absorb clicks first.
+        static const POPUP_Z: Int = 100
+
+        fun setOverlayView(view: View) {
+            if (this.dockLayer == view) {
+                return
+            }
+            if (this.dockLayer != null) {
+                this.overlayPane.removeLayer(this.dockLayer)
+            }
+            this.dockLayer = view
+            if (view != null) {
+                this.overlayPane.addLayer(view, 0)
+            }
+            this.requestFullRepaint()
+        }
+
+        fun getOverlayView(): View {
+            return this.dockLayer
+        }
+
+        // Mount `view` on the overlay at POPUP_Z. Multiple calls
+        // stack — the latest-added popup sits on top of any earlier
+        // popups (LayeredPane breaks same-z ties in insertion
+        // order). Pair with closePopup() to remove.
+        //
+        // The freshly-attached layer has width=height=0 (View's
+        // default) until something calls layout() on it. Without
+        // this explicit layout, paint's clip rect collapses to
+        // zero pixels and the popup is invisible — even though
+        // it's in the pane's children list and onMouseEvent reaches
+        // it. We give it the pane's current bounds; LayeredPane
+        // would do the same on the next layout pass.
+        fun openPopup(view: View) {
+            this.overlayPane.addLayer(view, Window.POPUP_Z)
+            // innerWidth() / innerHeight() instead of the raw .width
+            // / .height fields — LayeredPane already documents that
+            // direct field access trips the AmLang binder on this
+            // subclass; the method-call form binds cleanly.
+            var pw = this.overlayPane.innerWidth().toUShort()
+            var ph = this.overlayPane.innerHeight().toUShort()
+            view.layout(0S, 0S, pw, ph)
+            this.requestFullRepaint()
+        }
+
+        fun closePopup(view: View) {
+            this.overlayPane.removeLayer(view)
+            this.requestFullRepaint()
+        }
+
+        // Window-level mouse-event observers. Every mouse event the
+        // window receives (down / up / move) is fed to each
+        // registered listener with the original window-absolute
+        // coords — *before* the regular tree dispatch — so a
+        // listener can react first (close a popup on outside-click,
+        // clear a stale hover when the cursor leaves a view, etc.)
+        // independent of which view ends up consuming the event.
+        //
+        // Listeners run as passive observers: their return value is
+        // currently ignored and the regular dispatch always runs
+        // after they fire. Wrapped in MouseEventListener instead of
+        // storing the lambda directly because AmLang's collection-
+        // of-function-pointer typing has historically been brittle.
+        // Lazy-allocated so we don't pay the List overhead until a
+        // caller actually wants to listen.
+        private var mouseListeners: List<MouseEventListener> = null
+
+        fun addMouseEventListener(l: MouseEventListener) {
+            if (this.mouseListeners == null) {
+                this.mouseListeners = new List<MouseEventListener>()
+            }
+            this.mouseListeners.add(l)
+        }
+
+        fun removeMouseEventListener(l: MouseEventListener) {
+            if (this.mouseListeners == null) {
+                return
+            }
+            this.mouseListeners.remove(l)
+        }
+
+        // Fan an event out to every listener. Hoisting the loop
+        // into its own method (instead of inlining it in
+        // onMouseEvent) sidesteps a binder issue we hit when
+        // iterating a `List<MouseEventListener>` in a context where
+        // `this.X` chains. Inside this method's scope, the
+        // generic-list type resolves cleanly and the index walk
+        // compiles.
+        private fun dispatchToMouseListeners(me: MouseEvent) {
+            // Bind the list to a local first — chained `this.X.Y`
+            // access trips the binder for generic-typed fields here.
+            var list = this.mouseListeners
+            if (list == null) {
+                return
+            }
+            var n = list.getSize()
+            var i = 0
+            while (i < n) {
+                list.get(i).listener(me)
+                i = i + 1
+            }
+        }
+
+
         static fun openWindow(x: Short, y: Short, width: UShort, height: UShort, screen: Screen, windowManager: WindowManager): Window {
+            var properties: WindowProperties = { borderless: false }
+            return Window.openWindow(x, y, width, height, screen, windowManager, properties)
+        }
+
+        static fun openWindow(x: Short, y: Short, width: UShort, height: UShort, screen: Screen, windowManager: WindowManager, properties: WindowProperties): Window {
             var w = new Window()
             var vc = new ViewContextImpl()
             vc.setWindow(w)
             w.viewContext = vc
-            var graphics = new ViewContextGraphics(vc)
-            w.graphics = graphics
-//            vc.setGraphics(graphics)
             w.x = x
             w.y = y
             w.fillBackground = true
@@ -59,7 +250,30 @@ namespace Am.Ui
             w.width = width
             w.height = height
             w.screen = screen
-            w.open(x, y, width, height, screen, windowManager)
+            w.open(x, y, width, height, screen, windowManager, properties)
+            var graphics = LayerGraphics.fromWindow(w)
+            w.graphics = graphics
+            // Construct the overlay pane after the native window is
+            // open and viewContext is set. Attach it to vc so any
+            // layer added via setOverlayView / openPopup gets its
+            // onAttach call (LayeredPane.addLayer is conditional on
+            // the pane itself being attached).
+            //
+            // Diagnostic prints: if the "View already attached"
+            // exception fires below, one of the printlns will be
+            // the last visible line — narrows the failure to the
+            // pane allocation vs. the attach.
+            "[Window] before new LayeredPane".println()
+            w.overlayPane = new LayeredPane()
+            "[Window] new LayeredPane returned".println()
+            var paneVcBefore = w.overlayPane.getViewContext()
+            if (paneVcBefore != null) {
+                "[Window] pane already has a viewContext after new!".println()
+            } else {
+                "[Window] pane viewContext is null (expected)".println()
+            }
+            w.overlayPane.onAttach(vc)
+            "[Window] overlayPane.onAttach returned".println()
             return w
         }
 
@@ -70,31 +284,128 @@ namespace Am.Ui
                 this.refresh()
             }
         }
-/*
+
+        // Schedule a full repaint — wipes the window background and forces
+        // every view (not just ones with their own flag) to repaint on the
+        // next paint cycle. Use for resizes / structural changes; everyday
+        // view updates should call requestRepaint() on the affected view.
+        fun requestFullRepaint() {
+            this.fullRepaintRequested = true
+            this.requestRepaint()
+        }
+        // Synchronously paints the root view into the window. On native
+        // platforms paint() is normally driven by the OS event loop in
+        // response to refresh(); tests (and simple synchronous flows) can
+        // call this to force a paint without depending on input events.
         fun repaint() {
             this.paint()
-//            this.repaintRequested = false
         }
-        */
+
+        // Expands the current paint cycle's dirty bounds to enclose
+        // the given rect. Called from each View.paintAll / ViewGroup.paintAll /
+        // Panel.paintAll / ScrollView.paintAll variant right after the
+        // view's paint() runs, so the union at the end of the cycle
+        // covers every pixel that was actually re-drawn. Coords are
+        // window-local (the same frame Window.paint sets up before
+        // walking rootView — i.e. (innerX, innerY) is the origin a
+        // freshly-translated graphics sees).
+        //
+        // Negative widths/heights are no-ops so a caller computing
+        // bounds from a view that hasn't been laid out yet doesn't
+        // poison the union.
+        fun expandDirtyBounds(x: Short, y: Short, w: Short, h: Short) {
+            if (w <= 0S || h <= 0S) {
+                return
+            }
+            var x2 = x + w
+            var y2 = y + h
+            if (!this.dirtyValid) {
+                this.dirtyMinX = x
+                this.dirtyMinY = y
+                this.dirtyMaxX = x2
+                this.dirtyMaxY = y2
+                this.dirtyValid = true
+            } else {
+                if (x < this.dirtyMinX)   { this.dirtyMinX = x }
+                if (y < this.dirtyMinY)   { this.dirtyMinY = y }
+                if (x2 > this.dirtyMaxX)  { this.dirtyMaxX = x2 }
+                if (y2 > this.dirtyMaxY)  { this.dirtyMaxY = y2 }
+            }
+        }
+
+        private fun resetDirtyBounds() {
+            this.dirtyValid = false
+        }
+
+        private fun hasDirtyBounds(): Bool {
+            return this.dirtyValid
+        }
 
         private fun paint() {
-            var graphics = this.getGraphics()
-            graphics.requestRepaintAll()
-            if (this.rootView != null) {
-//                ("X offset: " + this.graphics.xOffset.toString()).println()
-//                if (this.repaintRequested) {
-                    if (this.fillBackground) {
-                        graphics.setForegroundPen(this.backgroundPen)
-                        graphics.fillRect(0S + this.border.left, 0S + this.border.top, this.width.toShort() - (1S + this.border.right), this.height.toShort() - (1S + this.border.bottom))
-                    }
-//                }
-                if (this.font != null) {
-                    graphics.setFont(this.font)
-                }
-                this.rootView.paintAll(graphics)
+            // The whole paint cycle goes to the off-screen buffer; we
+            // blit only the affected sub-rect back to the visible
+            // surface at the end. Painting directly to the screen used
+            // to expose every label's fillRect / drawString in real
+            // time, which on a sidebar with many rows reads as a
+            // visible flicker when anything triggers a repaint.
+            var off = this.getOffscreenGraphics()
+            var full = this.fullRepaintRequested
+            if (full) {
+                // Tell every view in the tree to repaint, even if their
+                // own flag is unset. Partial repaints leave this off, so
+                // only views with their own requestRepaint() actually paint.
+                off.requestRepaintAll()
             }
-            graphics.finalizeRepaintCycle()
+            this.resetDirtyBounds()
+            if (this.rootView != null) {
+                var innerX = this.border.left
+                var innerY = this.border.top
+                var innerWidth = this.width - (this.border.left + this.border.right).toUShort()
+                var innerHeight = this.height - (this.border.top + this.border.bottom).toUShort()
+
+                var windowClipRect: ClipRect = { x: innerX, y: innerY, width: innerWidth, height: innerHeight }
+                off.pushClipRect(windowClipRect)
+
+                if (full && this.fillBackground) {
+                    off.setForegroundPen(this.backgroundPen)
+                    off.fillRect(0S + this.border.left, 0S + this.border.top, this.width.toShort() - (1S + this.border.right), this.height.toShort() - (1S + this.border.bottom))
+                    this.expandDirtyBounds(innerX, innerY, innerWidth.toShort(), innerHeight.toShort())
+                }
+                if (this.font != null) {
+                    off.setFont(this.font)
+                }
+
+                // Enter content-local coord space so the translate accumulator
+                // matches the absolute clip rect we just pushed; otherwise every
+                // nested createInnerClipRect bakes in (border.left, border.top)
+                // while the translate stack does not, and child paints land at
+                // window-frame coords while their clips are at content coords.
+                off.translate(innerX, innerY)
+                this.rootView.paintAll(off)
+                // Overlay layer (if any) renders AFTER the rootView so
+                // its pixels land on top. The whole subtree is marked
+                // dirty before paintAll so it ALWAYS renders — without
+                // that, paintAll skips views with a clean flag, and
+                // any partial repaint inside the rootView (cursor
+                // blink, hover) would leave stale pixels in the
+                // overlay's area.
+                //
+                // With offscreen buffering this re-stamp is now cheap
+                // — paint operations land in the buffer, not the
+                // visible surface, so the user only sees the final
+                // composited result. Dirty-bounds tracking ensures
+                // we only blit the rect that actually changed.
+                this.overlayPane.requestRepaintTree()
+                this.overlayPane.paintAll(off)
+                off.translate(0S - innerX, 0S - innerY)
+
+                off.popClipRect()
+
+                this.flushDirtyBounds(innerX, innerY, innerWidth, innerHeight)
+            }
+            off.finalizeRepaintCycle()
             this.repaintRequested = false
+            this.fullRepaintRequested = false
         }
 
         private fun onResize(x: Short, y: Short, width: UShort, height: UShort) {
@@ -103,30 +414,180 @@ namespace Am.Ui
             this.width = width
             this.height = height
             this.layout()
-            this.paint()
         }
 
         fun layout() {
+            var b = this.border
+            var innerW = this.width - (b.left + b.right).toUShort()
+            var innerH = this.height - (b.top + b.bottom).toUShort()
             if (this.rootView != null) {
-                var b = this.border
-//                ("border top" + b.top.toString()).println()
-//                ("Win size: " + this.width.toString() + " x " + this.height.toString()).println()
-                this.rootView.layout(b.left, b.top, this.width - (b.left + b.right).toUShort(), this.height - (b.top + b.bottom).toUShort())
+                this.rootView.layout(0S, 0S, innerW, innerH)
             }
+            // Overlay pane fills the same area as rootView; each
+            // layer inside picks its own positioning.
+            this.overlayPane.layout(0S, 0S, innerW, innerH)
         }
 
         fun onCloseButtonClick() {
             this.close()
         }
 
-        fun onKeyboardEvent(type: KeyboardEventType, key: UShort) {
-            this.rootView?.onKeyboardEvent(type, key)
+        // Soft keyboard focus: when set, this view gets first crack
+        // at every key event before the usual rootView walk. If the
+        // focused view returns false (didn't consume), dispatch
+        // falls through to the normal tree walk. Used for views
+        // that aren't naturally first in keyboard-walk order — e.g.
+        // an inline terminal docked below an editor that always
+        // consumes keys.
+        private var keyboardFocus: View = null
+
+        // Window-wide focus-change listeners. Fired whenever
+        // setKeyboardFocus / clearKeyboardFocus actually changes the
+        // focused view — same focus passed in twice is a no-op so a
+        // mouse-down that just re-focuses the already-focused field
+        // doesn't fire the listener (or waste a repaint cycle).
+        //
+        // Listeners receive (oldFocus, newFocus) where either side
+        // can be null (no view was / no view is focused). Return
+        // value is ignored — included so the closure type matches
+        // the rest of the codebase's listener convention.
+        //
+        // The function reference is wrapped in FocusChangedListener
+        // instead of being stored as a bare function type in the
+        // List's generic parameter, because amlc currently NPEs the
+        // binder on `HashMap<K, fn>` / `List<fn>` shapes (see
+        // KNOWN_BUGS.md "HashMap<K, (...) => V>"). The wrapper class
+        // is essentially free at runtime.
+        private var focusChangedListeners: List<FocusChangedListener>
+            = new List<FocusChangedListener>()
+
+        fun addFocusChangedListener(listener: (oldFocus: View, newFocus: View) => Bool) {
+            this.focusChangedListeners.add(new FocusChangedListener(listener))
+        }
+
+        fun setKeyboardFocus(view: View) {
+            this.assignFocus(view)
+        }
+
+        fun clearKeyboardFocus(view: View) {
+            if (this.keyboardFocus == view) {
+                this.assignFocus(null)
+            }
+        }
+
+        // Single chokepoint for focus mutations. Detects whether the
+        // focus actually moved, requests a repaint on the old AND new
+        // focused views so e.g. a TextField can swap its filled
+        // cursor for a hollow outline (and vice versa), then fires
+        // the focus-changed listeners.
+        private fun assignFocus(newFocus: View) {
+            var oldFocus = this.keyboardFocus
+            if (oldFocus == newFocus) {
+                return
+            }
+            this.keyboardFocus = newFocus
+            if (oldFocus != null) {
+                oldFocus.requestRepaint()
+            }
+            if (newFocus != null) {
+                newFocus.requestRepaint()
+            }
+            var i = 0
+            while (i < this.focusChangedListeners.getSize()) {
+                var cb = this.focusChangedListeners.get(i)
+                cb.fn(oldFocus, newFocus)
+                i = i + 1
+            }
+        }
+
+        // Read the current keyboard-focused view (or null). Used by
+        // views like TextEditor and CliView to gate their key
+        // handling — they consume only when they're the focused
+        // view, so a click elsewhere makes them stop swallowing
+        // every keystroke.
+        fun getKeyboardFocus(): View {
+            return this.keyboardFocus
+        }
+
+        fun onKeyboardEvent(type: KeyboardEventType, keyCode: UShort, keyChar: UShort) {
+            var kf = this.keyboardFocus
+            if (kf != null) {
+                if (kf.onKeyboardEvent(type, keyCode, keyChar)) {
+                    return
+                }
+            }
+            // Overlay pane gets first crack after the focused view —
+            // a popover drawer should swallow keys aimed at the
+            // chrome behind it.
+            if (this.overlayPane.onKeyboardEvent(type, keyCode, keyChar)) {
+                return
+            }
+            this.rootView?.onKeyboardEvent(type, keyCode, keyChar)
+        }
+
+        // Mouse-wheel dispatch. Routed by cursor position (the
+        // overlay view + rootView each hit-test x/y), NOT by
+        // keyboard focus — wheeling over the editor scrolls the
+        // editor even when the terminal has key focus, and vice
+        // versa. Called from the native event loop when an
+        // IDCMP_EXTENDEDMOUSE wheel event arrives.
+        fun onMouseWheel(deltaY: Short, x: Short, y: Short) {
+            var lx = x - this.border.left
+            var ly = y - this.border.top
+            if (this.overlayPane.onMouseWheel(deltaY, lx, ly)) {
+                return
+            }
+            this.rootView?.onMouseWheel(deltaY, lx, ly)
+        }
+
+        // Most recent mouse event's content-local coords (window
+        // coords minus border). Cached here so listeners deep in
+        // the view tree — where x/y have been progressively
+        // localised by every parent in the dispatch chain — can
+        // still ask "where was the click in window space?" via
+        // getLastMouseX/Y. Updated on every mouse event before the
+        // dispatch walk, so the value is current at the moment any
+        // synchronous listener runs.
+        private var lastMouseX: Short = 0S
+        private var lastMouseY: Short = 0S
+
+        fun getLastMouseX(): Short {
+            return this.lastMouseX
+        }
+
+        fun getLastMouseY(): Short {
+            return this.lastMouseY
         }
 
         fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short) {
-//            var lx = this.border.left
-//            ("Window click: " + button.toString() + " " + x.toString() + " " + y.toString()).println()
-            this.rootView?.onMouseEvent(type, button, x - this.border.left, y - this.border.top)
+            var lx = x - this.border.left
+            var ly = y - this.border.top
+            this.lastMouseX = lx
+            this.lastMouseY = ly
+
+            // Window-level listeners get the *absolute* coords (pre-
+            // border-subtraction). They run BEFORE the regular
+            // dispatch so a listener can react (close a popup,
+            // clear hover state, etc.) before any view consumes the
+            // event. Return value is currently ignored — see the
+            // declaration of `mouseListeners` for the rationale.
+            // All listeners get the absolute coords pre-dispatch.
+            // The actual walk lives in dispatchToMouseListeners
+            // because the generic-list iteration didn't bind
+            // cleanly when inlined here — see that method's comment.
+            this.dispatchToMouseListeners(new MouseEvent(type, button, x, y))
+
+            // Overlay pane sees mouse events before the rootView; if
+            // any layer consumes (typically because the click
+            // landed on its panel / popup), the rootView is
+            // bypassed. Otherwise the click falls through to
+            // whatever the rootView would normally handle — that's
+            // how clicks in the "see-through" area around an
+            // overlay still hit the IDE chrome.
+            if (this.overlayPane.onMouseEvent(type, button, lx, ly)) {
+                return
+            }
+            this.rootView?.onMouseEvent(type, button, lx, ly)
         }
 
         fun calculateStringWidth(font: Font, text: String): UShort {
@@ -145,7 +606,35 @@ namespace Am.Ui
             return graphics.getCurrentFontSize()
         }
 
-        private fun getGraphics(): ViewContextGraphics  {
+        native fun copyToClipboard(text: String)
+
+        native fun pasteFromClipboard(): String
+
+        fun setMenuStrip(strip: MenuStrip) {
+            this.menuStrip = strip
+            if (strip == null) {
+                this.nativeClearMenuStrip()
+                return
+            }
+            this.nativeBeginMenuStrip()
+            var menuIndex = 0
+            each (menu in strip.menus) {
+                this.nativeAddMenu(menu.title)
+                each (item in menu.items) {
+                    this.nativeAddMenuItem(menuIndex, item, item.label, item.commKey)
+                }
+                menuIndex++
+            }
+            this.nativeFinalizeMenuStrip()
+        }
+
+        private native fun nativeBeginMenuStrip()
+        private native fun nativeAddMenu(title: String)
+        private native fun nativeAddMenuItem(menuIndex: Int, item: MenuItem, label: String, commKey: String)
+        private native fun nativeFinalizeMenuStrip()
+        private native fun nativeClearMenuStrip()
+
+        private fun getGraphics(): LayerGraphics  {
             return this.graphics
 //            return this.viewContext.getGraphics()
         }
@@ -165,11 +654,88 @@ namespace Am.Ui
             return this.pixelScaleY
         }
 */
+        // Lazy-allocate the window-level offscreen buffer (sized to the
+        // host screen) and return it. Used together with
+        // getOffscreenGraphics() + flushOffscreenRect() for double-buffered
+        // painting inside a view.
+        fun getOffscreen(): RenderableBitmap {
+            if (this.offscreen == null) {
+                var w = this.getHostScreenWidth()
+                var h = this.getHostScreenHeight()
+                this.offscreen = RenderableBitmap.empty(w, h, this)
+            }
+            return this.offscreen
+        }
+
+        // Cached Graphics bound to the offscreen bitmap. The translate
+        // state on this object accumulates across calls — callers should
+        // undo whatever they translate, just like with the window's own
+        // graphics.
+        fun getOffscreenGraphics(): Graphics {
+            if (this.offscreenGraphics == null) {
+                this.offscreenGraphics = this.getOffscreen().createGraphics()
+            }
+            return this.offscreenGraphics
+        }
+
+        // Blit a rectangle from the offscreen bitmap to this window at the
+        // same coords. Caller passes absolute window-relative coords;
+        // we cancel the in-flight translate on the on-screen graphics so
+        // the blit lands at the absolute (x, y) rather than at
+        // (currentTranslate + x). Without this the destination ends up
+        // double-translated (once via the caller computing x/y from
+        // graphics.getTranslateX/Y(), once via blitBitmapRect itself
+        // applying that same translate again).
+        fun flushOffscreenRect(x: Short, y: Short, w: UShort, h: UShort) {
+            var off = this.getOffscreen()
+            var g = this.graphics
+            var tx = g.getTranslateX()
+            var ty = g.getTranslateY()
+            g.blitBitmapRect(off.getBitmap(), x, y, w, h, x - tx, y - ty)
+        }
+
+        // End-of-paint blit: takes the union of every expandDirtyBounds
+        // call accumulated this cycle, clamps it to the inner area, and
+        // calls flushOffscreenRect for that sub-rect.
+        //
+        // No dirty content (clean paint pass — `repaintRequested` was
+        // set but no view actually painted) → no blit. This is the
+        // common case for redundant requestRepaint cascades that don't
+        // change any visible pixels.
+        private fun flushDirtyBounds(innerX: Short, innerY: Short, innerW: UShort, innerH: UShort) {
+            if (!this.hasDirtyBounds()) {
+                return
+            }
+            // Clamp the union to the window's inner content area so we
+            // don't try to blit pixels outside the visible surface
+            // (e.g. a view that drew slightly outside its bounds).
+            var x1 = this.dirtyMinX
+            var y1 = this.dirtyMinY
+            var x2 = this.dirtyMaxX
+            var y2 = this.dirtyMaxY
+            if (x1 < innerX) { x1 = innerX }
+            if (y1 < innerY) { y1 = innerY }
+            var maxX = innerX + innerW.toShort()
+            var maxY = innerY + innerH.toShort()
+            if (x2 > maxX) { x2 = maxX }
+            if (y2 > maxY) { y2 = maxY }
+            if (x2 <= x1 || y2 <= y1) {
+                return
+            }
+            this.flushOffscreenRect(x1, y1, (x2 - x1).toUShort(), (y2 - y1).toUShort())
+        }
+
         native fun handleInput()
         native fun isOpen(): Bool
         private native fun refresh()
+        private native fun setTitleNative(windowTitle: String, screenTitle: String)
+        // Pixel dimensions of the host Intuition screen (not this window).
+        // Used to size the lazily-allocated offscreen bitmap so any view
+        // anywhere in the window can flush into it.
+        native fun getHostScreenWidth(): UShort
+        native fun getHostScreenHeight(): UShort
 
-        private native fun open(x: Short, y: Short, width: UShort, height: UShort, screen: Screen, windowManager: WindowManager)
+        private native fun open(x: Short, y: Short, width: UShort, height: UShort, screen: Screen, windowManager: WindowManager, properties: WindowProperties)
         native fun close()
         fun dispose() {
             this.viewContext = null

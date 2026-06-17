@@ -1,0 +1,21 @@
+namespace Am.Ui
+{
+    class MenuItem(var label: String, var clickListener: (item: MenuItem) => Bool) {
+        import Am.Lang
+
+        var enabled: Bool = true
+        // Single-character keyboard shortcut (Right-Amiga + key) for the
+        // item. Null/empty leaves the item without a shortcut — Magic
+        // Menu and similar enhancers use the presence of a CommKey to
+        // pick a more spacious layout, so even a dummy key adds padding.
+        var commKey: String = null
+
+        fun invokeClick(): Bool {
+            var cl = this.clickListener
+            if (cl != null) {
+                return cl(this)
+            }
+            return false
+        }
+    }
+}

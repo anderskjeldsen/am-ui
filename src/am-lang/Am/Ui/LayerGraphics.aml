@@ -1,0 +1,56 @@
+namespace Am.Ui
+{
+    // Graphics implementation backed by a cached native layer/rastport target.
+    #implementationPlatforms "libc", "amigaos", "amigaos-sim", "morphos-ppc"
+    native class LayerGraphics : Graphics {
+        import Am.Lang
+        import Am.Imaging
+
+        private var renderableBitmap: RenderableBitmap
+        private var window: Window
+
+        static fun fromRenderableBitmap(renderableBitmap: RenderableBitmap): LayerGraphics {
+            var graphics = new LayerGraphics()
+            graphics.renderableBitmap = renderableBitmap
+            graphics.attachRenderableBitmap()
+            return graphics
+        }
+
+        static fun fromWindow(window: Window): LayerGraphics {
+            var graphics = new LayerGraphics()
+            graphics.window = window
+            graphics.attachWindow()
+            return graphics
+        }
+
+        private native fun attachRenderableBitmap()
+        private native fun attachWindow()
+
+        native override fun setForegroundPen(pen: UByte)
+        native override fun setBackgroundPen(pen: UByte)
+        native override fun drawLine(x: Short, y: Short, x2: Short, y2: Short)
+        native override fun eraseRect(x: Short, y: Short, x2: Short, y2: Short)
+        native override fun fillRect(x: Short, y: Short, x2: Short, y2: Short)
+        native override fun drawString(text: String, x: Short, y: Short)
+        native override fun calculateStringWidth(text: String): UShort
+        native override fun getCurrentFontSize(): UByte
+        native override fun setFont(font: Font)
+        native override fun drawImage(image: Image, x: Short, y: Short, width: Short, height: Short)
+        native override fun drawBitmap(bitmap: Bitmap, x: Short, y: Short, destWidth: Short, destHeight: Short)
+
+        native override fun scrollRect(x: Short, y: Short, w: UShort, h: UShort, dx: Short, dy: Short, fillPen: UByte)
+
+        // Blit a sub-rectangle of `bitmap` to the current RastPort at the
+        // current translate position. Unlike drawBitmap this picks a
+        // source-rect inside the bitmap instead of blitting the whole
+        // thing, which is what makes a window-level offscreen buffer
+        // useful — each view only flushes its own slice.
+        native fun blitBitmapRect(bitmap: Bitmap, srcX: Short, srcY: Short, srcW: UShort, srcH: UShort, dstX: Short, dstY: Short)
+
+        native override fun setClipRect(clipRect: ClipRect)
+        native override fun clearClipRect()
+
+        native override fun beginPainting(clipRect: ClipRect)
+        native override fun endPainting()
+    }
+}

@@ -1,0 +1,13 @@
+namespace Am.Ui
+{
+    class Menu(var title: String) {
+        import Am.Lang
+        import Am.Collections
+
+        var items: List<MenuItem> = new List<MenuItem>()
+
+        fun addItem(item: MenuItem) {
+            this.items.add(item)
+        }
+    }
+}

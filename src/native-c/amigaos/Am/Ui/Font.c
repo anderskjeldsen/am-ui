@@ -76,8 +76,20 @@ __exit: ;
 
 function_result Am_Ui_Font_calculateStringWidth_0(aobject * const this, aobject * text)
 {
-	function_result __result = { .has_return_value = false };
+	/* Previously this function was a no-op (no .return_value assignment,
+	 * has_return_value = false), so every caller received garbage memory
+	 * as a UShort. That broke every layout-time width measurement —
+	 * TabView.minWidth, TextEditor.colForPixelX, and the FolderTreeView
+	 * label positioning all silently received unbounded values.
+	 *
+	 * Proper measurement on Amiga requires a RastPort with the font set
+	 * (TextLength() takes a RastPort, not a TextFont). We keep a static
+	 * scratch RastPort initialised on first use; subsequent calls just
+	 * re-SetFont if the font changed. */
+	function_result __result = { .has_return_value = true };
 	bool __returning = false;
+	__result.return_value.value.ushort_value = 0;
+
 	if (this != NULL) {
 		__increase_reference_count(this);
 	}
@@ -85,8 +97,32 @@ function_result Am_Ui_Font_calculateStringWidth_0(aobject * const this, aobject 
 		__increase_reference_count(text);
 	}
 
-    struct TextFont *font = this->object_properties.class_object_properties.object_data.value.custom_value;
-    string_holder *sh = text->object_properties.class_object_properties.object_data.value.custom_value;
+	if (this == NULL || text == NULL) {
+		goto __exit;
+	}
+
+	struct TextFont *font = this->object_properties.class_object_properties.object_data.value.custom_value;
+	string_holder *sh = text->object_properties.class_object_properties.object_data.value.custom_value;
+
+	if (font == NULL || sh == NULL || sh->length == 0) {
+		goto __exit;
+	}
+
+	static struct RastPort scratch_rp;
+	static int scratch_inited = 0;
+	static struct TextFont *scratch_font = NULL;
+
+	if (!scratch_inited) {
+		InitRastPort(&scratch_rp);
+		scratch_inited = 1;
+	}
+	if (scratch_font != font) {
+		SetFont(&scratch_rp, font);
+		scratch_font = font;
+	}
+
+	__result.return_value.value.ushort_value =
+		(unsigned short) TextLength(&scratch_rp, sh->string_value, sh->length);
 
 __exit: ;
 	if (this != NULL) {

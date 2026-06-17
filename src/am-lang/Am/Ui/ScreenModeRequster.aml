@@ -1,6 +1,7 @@
 
 namespace Am.Ui 
 {
+    #implementationPlatforms "libc", "amigaos", "amigaos-sim", "morphos-ppc"
     native class ScreenModeRequester {
         import Am.Lang
 

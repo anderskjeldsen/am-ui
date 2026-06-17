@@ -25,6 +25,15 @@ namespace Am.Ui
             this.child?.onDetach()
         }
 
+        // Single-child wrapper held outside ViewGroup.children, so
+        // the default walk would only mark the list itself dirty.
+        // Recurse so the wrapped content actually repaints on a
+        // subtree request.
+        override fun requestRepaintTree() {
+            base.requestRepaintTree()
+            this.child?.requestRepaintTree()
+        }
+
         override fun minHeight(): Short {
             var ch = 0S
             if (this.child != null) {
@@ -50,26 +59,48 @@ namespace Am.Ui
         }
 
         override fun paintAll(graphics: Graphics) {
-            var ix = this.x + this.margin.left
-            var iy = this.y + this.margin.top
-//            ("Translate " + ix.toString() + "," + iy.toString()).println()
-
             var b1 = graphics.shouldRepaintAll()
             var b2 = this.getRepaintRequested()
+
+            // Phase 1: paint the list view itself (background + border) inside a
+            // clip that excludes the margin. Clip and translate must be pushed
+            // together so descendants' createInnerClipRect math stays in sync.
+            var ix = this.x + this.margin.left
+            var iy = this.y + this.margin.top
+            var viewWidth = this.width.toShort() - this.margin.left - this.margin.right
+            var viewHeight = this.height.toShort() - this.margin.top - this.margin.bottom
+
+            var currentClip = graphics.getCurrentClipRect()
+            var viewClipRect: ClipRect = currentClip.createInnerClipRect(ix, iy, viewWidth.toUShort(), viewHeight.toUShort())
+            graphics.pushClipRect(viewClipRect)
+
             if (b1 || b2) {
                 graphics.translate(ix, iy)
                 this.paint(graphics)
                 graphics.translate(-ix, -iy)
             }
             this.markAsPainted()
+
+            graphics.popClipRect()
+
+            // Phase 2: paint the child. The child was laid out at offset
+            // (margin.l + border.l + padding.l, margin.t + border.t + padding.t)
+            // inside the outer (x, y), so the clip pushed here must match the
+            // outer rect — same pattern as ViewGroup.paintAll.
+            // Always walk the child — its own partial repaint needs to
+            // reach it even when this ListView itself isn't repainting.
             if (this.child != null) {
-                ix = this.x // + this.margin.left + this.borderWidths.left + this.padding.left
-                iy = this.y // + this.margin.top + this.borderWidths.top + this.padding.top
-//                ("Translate panel children " + ix.toString() + "," + iy.toString()).println()
+                ix = this.x
+                iy = this.y
+
+                viewClipRect = currentClip.createInnerClipRect(ix, iy, this.width, this.height)
+                graphics.pushClipRect(viewClipRect)
 
                 graphics.translate(ix, iy)
                 this.child.paintAll(graphics)
                 graphics.translate(-ix, -iy)
+
+                graphics.popClipRect()
             }
         }
 
@@ -89,9 +120,13 @@ namespace Am.Ui
         }
 
         override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
-            if (this.contains(x, y)) {
+            // Same rationale as ViewGroup.onMouseEvent: mouse-up has
+            // to reach the wrapped child even when the cursor has
+            // moved off the list, otherwise an in-progress drag stays
+            // latched after the release.
+            if (this.contains(x, y) || type == MouseEventType.up) {
                 var c = this.child
-                var lx = x - c.x 
+                var lx = x - c.x
                 var ly = y - c.y
 
                 var consumed = c.onMouseEvent(type, button, lx, ly)

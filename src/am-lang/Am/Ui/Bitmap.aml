@@ -1,0 +1,48 @@
+namespace Am.Ui
+{
+    // A hardware bitmap backed by a native AmigaOS struct BitMap (CyberGraphX true color).
+    // Create via the static factory methods rather than constructing directly.
+    #implementationPlatforms "libc", "amigaos", "amigaos-sim", "morphos-ppc"
+    native class Bitmap {
+        import Am.Lang
+        import Am.Imaging
+
+        var width: UShort
+        var height: UShort
+        var pixelFormat: BitmapPixelFormat
+
+        // Create an empty (cleared) true-colour bitmap.
+        // window is used to obtain a friend bitmap matching the screen's pixel format.
+        private native fun createEmpty(width: UShort, height: UShort, window: Window)
+
+        // Populate the bitmap from an Am.Imaging.Image.
+        // window is used to obtain a friend bitmap matching the screen's pixel format.
+        private native fun createFromImage(image: Am.Imaging.Image, window: Window)
+
+        fun getWidth(): UShort {
+            return this.width
+        }
+
+        fun getHeight(): UShort {
+            return this.height
+        }
+
+        fun getPixelFormat(): BitmapPixelFormat {
+            return this.pixelFormat
+        }
+
+        // Factory: allocate a blank bitmap of the given size.
+        static fun empty(width: UShort, height: UShort, window: Window): Bitmap {
+            var bmp = new Bitmap()
+            bmp.createEmpty(width, height, window)
+            return bmp
+        }
+
+        // Factory: create a bitmap from an image.
+        static fun fromImage(image: Image, window: Window): Bitmap {
+            var bmp = new Bitmap()
+            bmp.createFromImage(image, window)
+            return bmp
+        }
+    }
+}

@@ -1,0 +1,257 @@
+namespace Mesh3D
+{
+    // Software 3D renderer: perspective projection, affine texture mapping,
+    // and z-buffer depth test.
+    // Camera is fixed at the origin looking down +Z.
+    native class Renderer3D {
+        import Am.Lang
+        import Am.Util
+        import Am.Graphics3D
+        import Am.Imaging
+
+        // Fill pixel buffer with background colour and reset z-buffer.
+        static fun clearBuffers(pixels: UInt[], zbuffer: Double[], bufSize: Int) {
+            var bg = 0xFF101018UI
+            for (i = 0 to bufSize) {
+                pixels[i as UInt] = bg
+                zbuffer[i] = 9999999.0
+            }
+        }
+
+        // Draw all polygons of mesh into pixels/zbuffer.
+        // textures is an Image[] indexed by poly.textureIndex.
+        // All rasterization is inlined — no per-polygon function calls.
+        static fun drawPolygons(
+            mesh: Mesh,
+            textures: Image[],
+            pixels: UInt[],
+            zbuffer: Double[],
+            bufW: Int, bufH: Int
+        ) {
+            var halfW = bufW as Double * 0.5
+            var halfH = bufH as Double * 0.5
+            var pd = 200.0
+
+            var meshPos = mesh.getPosition()
+            var meshRot = mesh.getRotation()
+            var rotX = Matrix3.rotationX(Math.toRadians(meshRot.x))
+            var rotY = Matrix3.rotationY(Math.toRadians(meshRot.y))
+            var rotZ = Matrix3.rotationZ(Math.toRadians(meshRot.z))
+            var rotMat = rotY.multiply(rotX).multiply(rotZ)
+
+            var verts = mesh.getVertices()
+            var polys = mesh.getPolygons()
+            var tverts = mesh.getTextureVertices()
+
+            for (pi = 0UI to polys.polygons.length()) {
+                var poly = polys.polygons[pi]
+                var vi0 = poly.vertex1Index as Int
+                var vi1 = poly.vertex2Index as Int
+                var vi2 = poly.vertex3Index as Int
+                var ti0 = poly.textureVertex1Index as Int
+                var ti1 = poly.textureVertex2Index as Int
+                var ti2 = poly.textureVertex3Index as Int
+
+                // Local → world (rotate then translate)
+                var lv0 = verts.getVector(vi0)
+                var lv1 = verts.getVector(vi1)
+                var lv2 = verts.getVector(vi2)
+                var wv0 = rotMat.transformVector(lv0).add(meshPos)
+                var wv1 = rotMat.transformVector(lv1).add(meshPos)
+                var wv2 = rotMat.transformVector(lv2).add(meshPos)
+
+                // Skip if any vertex is behind the near plane
+                if (wv0.z <= 0.1 || wv1.z <= 0.1 || wv2.z <= 0.1) {
+                    continue
+                }
+
+                // Perspective project (Y flipped: screen +Y is down)
+                var ax = wv0.x * pd / wv0.z + halfW
+                var ay = -(wv0.y * pd / wv0.z) + halfH
+                var az = wv0.z
+                var bx = wv1.x * pd / wv1.z + halfW
+                var by = -(wv1.y * pd / wv1.z) + halfH
+                var bz = wv1.z
+                var cx = wv2.x * pd / wv2.z + halfW
+                var cy = -(wv2.y * pd / wv2.z) + halfH
+                var cz = wv2.z
+
+                // Reciprocal Z for perspective-correct texture mapping
+                var ainvz = 1.0 / az
+                var binvz = 1.0 / bz
+                var cinvz = 1.0 / cz
+
+                // Texture UVs (raw values; scaled by 1/z after winding check)
+                var tv0 = tverts.getVector(ti0)
+                var tv1 = tverts.getVector(ti1)
+                var tv2 = tverts.getVector(ti2)
+                var au = tv0.x
+                var av = tv0.y
+                var bu = tv1.x
+                var bv = tv1.y
+                var cu = tv2.x
+                var cv = tv2.y
+
+                // Pick texture for this polygon; access pixel data directly
+                var texIdx = poly.textureIndex as Int
+                var texture = textures[texIdx as UInt]
+                var texPixels = texture.getPixelColors()
+                var tw = texture.getWidth() as Int
+                var th = texture.getHeight() as Int
+                var twDouble = tw as Double
+                var thDouble = th as Double
+
+                // Bounding box clamped to screen
+                var minX = ax
+                if (bx < minX) { minX = bx }
+                if (cx < minX) { minX = cx }
+                var maxX = ax
+                if (bx > maxX) { maxX = bx }
+                if (cx > maxX) { maxX = cx }
+                var minY = ay
+                if (by < minY) { minY = by }
+                if (cy < minY) { minY = cy }
+                var maxY = ay
+                if (by > maxY) { maxY = by }
+                if (cy > maxY) { maxY = cy }
+
+                var x0 = minX as Int
+                var x1 = maxX as Int
+                var y0 = minY as Int
+                var y1 = maxY as Int
+                if (x0 < 0) { x0 = 0 }
+                if (y0 < 0) { y0 = 0 }
+                if (x1 >= bufW) { x1 = bufW - 1 }
+                if (y1 >= bufH) { y1 = bufH - 1 }
+
+                // Barycentric setup
+                var denom = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy)
+                if (denom > -0.0001 && denom < 0.0001) { continue }
+                var e00 = by - cy
+                var e01 = cx - bx
+                var e10 = cy - ay
+                var e11 = ax - cx
+                // Normalise winding: flip edge equations so weights are always
+                // positive inside the triangle (handles both CW and CCW polygons).
+                // Also mirror U so the back face shows the same texture orientation
+                // as the front face (U=0..1 left-to-right on both sides).
+                if (denom < 0.0) {
+                    denom = -denom
+                    e00 = -e00
+                    e01 = -e01
+                    e10 = -e10
+                    e11 = -e11
+                    au = 1.0 - au
+                    bu = 1.0 - bu
+                    cu = 1.0 - cu
+                }
+                var invDenom = 1.0 / denom
+
+                // Scale raw UVs by 1/z so we interpolate u/z, v/z in screen
+                // space. A per-pixel divide then gives perspective-correct UVs,
+                // eliminating the affine seam between the two quad triangles.
+                au = au * ainvz
+                av = av * ainvz
+                bu = bu * binvz
+                bv = bv * binvz
+                cu = cu * cinvz
+                cv = cv * cinvz
+
+                // Per-pixel increments for barycentric weights (dw/dx, dw/dy)
+                var dw0_dx = e00 * invDenom
+                var dw1_dx = e10 * invDenom
+                var dw2_dx = -dw0_dx - dw1_dx
+                var dw0_dy = e01 * invDenom
+                var dw1_dy = e11 * invDenom
+                var dw2_dy = -dw0_dy - dw1_dy
+
+                // Pre-subtract vertex C so: val = w0*(A-C) + w1*(B-C) + C
+                var azCz = az - cz
+                var bzCz = bz - cz
+                var auCu = au - cu
+                var buCu = bu - cu
+                var avCv = av - cv
+                var bvCv = bv - cv
+                var aizCiz = ainvz - cinvz
+                var bizCiz = binvz - cinvz
+
+                // Derived increments for z, u/z, v/z, 1/z
+                var dpz_dx = dw0_dx * azCz + dw1_dx * bzCz
+                var dpu_dx = dw0_dx * auCu + dw1_dx * buCu
+                var dpv_dx = dw0_dx * avCv + dw1_dx * bvCv
+                var dpiz_dx = dw0_dx * aizCiz + dw1_dx * bizCiz
+                var dpz_dy = dw0_dy * azCz + dw1_dy * bzCz
+                var dpu_dy = dw0_dy * auCu + dw1_dy * buCu
+                var dpv_dy = dw0_dy * avCv + dw1_dy * bvCv
+                var dpiz_dy = dw0_dy * aizCiz + dw1_dy * bizCiz
+
+                // Seed all interpolants at the centre of the first pixel (x0+0.5, y0+0.5)
+                var fpx0 = x0 as Double + 0.5
+                var fpy0 = y0 as Double + 0.5
+                var w0_row = (e00 * (fpx0 - cx) + e01 * (fpy0 - cy)) * invDenom
+                var w1_row = (e10 * (fpx0 - cx) + e11 * (fpy0 - cy)) * invDenom
+                var w2_row = 1.0 - w0_row - w1_row
+                var pz_row = w0_row * azCz + w1_row * bzCz + cz
+                var pu_row = w0_row * auCu + w1_row * buCu + cu
+                var pv_row = w0_row * avCv + w1_row * bvCv + cv
+                var piz_row = w0_row * aizCiz + w1_row * bizCiz + cinvz
+
+                // Rasterize — inner loop is additions only
+                var py = y0
+                while (py <= y1) {
+                    var px = x0
+                    var w0 = w0_row
+                    var w1 = w1_row
+                    var w2 = w2_row
+                    var pz = pz_row
+                    var pu = pu_row
+                    var pv = pv_row
+                    var piz = piz_row
+                    while (px <= x1) {
+                        if (w0 >= 0.0 && w1 >= 0.0 && w2 >= 0.0) {
+                            var idx = py * bufW + px
+                            if (pz < zbuffer[idx]) {
+                                zbuffer[idx] = pz
+                                // Perspective divide: recover u and v from u/z and v/z
+                                var perspZ = 1.0 / piz
+                                var clampU = pu * perspZ
+                                if (clampU < 0.0) { clampU = 0.0 }
+                                if (clampU >= 1.0) { clampU = 0.9999 }
+                                var clampV = pv * perspZ
+                                if (clampV < 0.0) { clampV = 0.0 }
+                                if (clampV >= 1.0) { clampV = 0.9999 }
+                                var tpx = (clampU * twDouble) as Int
+                                var tpy = (clampV * thDouble) as Int
+                                pixels[idx] = texPixels[(tpy * tw + tpx)]
+                            }
+                        }
+                        px++
+                        w0 = w0 + dw0_dx
+                        w1 = w1 + dw1_dx
+                        w2 = w2 + dw2_dx
+                        pz = pz + dpz_dx
+                        pu = pu + dpu_dx
+                        pv = pv + dpv_dx
+                        piz = piz + dpiz_dx
+                    }
+                    py++
+                    w0_row = w0_row + dw0_dy
+                    w1_row = w1_row + dw1_dy
+                    w2_row = w2_row + dw2_dy
+                    pz_row = pz_row + dpz_dy
+                    pu_row = pu_row + dpu_dy
+                    pv_row = pv_row + dpv_dy
+                    piz_row = piz_row + dpiz_dy
+                }
+            }
+        }
+
+        native static fun drawPolygons2(
+            mesh: Mesh,
+            textures: Image[],
+            pixels: UInt[],
+            zbuffer: Double[],
+            bufW: Int, bufH: Int
+        )
+    }
+}

@@ -1,13 +1,19 @@
 namespace FileBrowser {
-    import Am.Lang
-    import Am.Threading
-    import Am.IO
-    import Am.Ui
 
     class Folder(var file: File, var parent: Folder) {
+        import Am.Lang
+        import Am.Threading
+        import Am.IO
+        import Am.Ui
+
     }
 
     class Program {
+        import Am.Lang
+        import Am.Threading
+        import Am.IO
+        import Am.Ui
+
         static fun listFolder(prefix: String, folder: Folder) {
             ("list folder " + prefix + folder.file.filename).println()
             var files = folder.file.listFiles()
@@ -16,7 +22,7 @@ namespace FileBrowser {
                 var f = files[i]
                 (prefix + f.filename).println()
                 if (f.isDirectory()) {
-                    Program.listFolder(prefix + "-", f)
+                    Program.listFolder(prefix + "-", new Folder(f, folder))
                 }
                 i++
             }
@@ -47,6 +53,8 @@ namespace FileBrowser {
 
             while(i < len) {
                 var file = list[i++]
+
+                "name: ${file.filename}".println()
 
                 var b = new Button(file.getName(), (v) => {
                     var f2 = file

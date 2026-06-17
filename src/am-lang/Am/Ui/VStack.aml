@@ -6,16 +6,20 @@ namespace Am.Ui
         import Am.Collections
 
         override fun layoutChildren() {
-            var left = 0S // this.margin.left + this.padding.left + this.borderWidths.left
-            var y = 0S // this.margin.top + this.padding.top + this.borderWidths.top
-//            ("First y: " + y.toString()).println()
+            // ViewGroup.paintAll already translates by margin.{left,top},
+            // so children are positioned in post-margin coords. Add the
+            // border + padding so callers that set setPadding(...) on a
+            // VStack get the symmetric left+right (and top+bottom) gap
+            // they expect — without this, innerWidth() correctly subtracts
+            // padding from the available width but the child still starts
+            // at x=0, leaving all the slack on the right edge.
+            var left = this.padding.left + this.borderWidths.left
+            var y = this.padding.top + this.borderWidths.top
             var height = this.innerHeight()
             var minHeight = this.innerMinHeight()
 
-//            ("Height: " + height.toString() + " vs inner height: " + minHeight.toString()).println()
-
             var unusedHeight = Short.max(height - minHeight, 0S)
-            var remainingHeight = unusedHeight            
+            var remainingHeight = unusedHeight
 
             var sumGrowY = this.sumGrowY()
 

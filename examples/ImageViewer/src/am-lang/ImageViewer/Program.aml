@@ -1,0 +1,49 @@
+namespace ImageViewer
+{
+    class Program {
+        import Am.Lang
+        import Am.Ui
+        import Am.IO
+        import Am.Imaging
+        import Am.Imaging.Png
+
+        static fun main() {
+            // Load image.png from the working directory.
+            // Place a PNG file named "image.png" next to the executable.
+            var imageFile = new File("image.png")
+            var image = PngLoader.load(imageFile)
+
+            var imgW = image.getWidth()
+            var imgH = image.getHeight()
+            "Loaded image: ${imgW.toString()}x${imgH.toString()}".println()
+
+            // Open a window sized to the image (capped at a sensible maximum).
+            var winW = imgW
+            var winH = imgH
+            if (winW > 640US) { winW = 640US }
+            if (winH > 400US) { winH = 400US }
+
+            var window = Window.openWindow(50S, 50S, winW, winH, null, null)
+            window.setTitle("Image Viewer")
+            window.setScreenTitle("AmUI Image Viewer")
+
+            // Convert the image to a hardware bitmap (CyberGraphX true colour).
+            // The window is needed to obtain the screen's friend BitMap so
+            // AllocBitMap returns a chunky (CGX) bitmap as expected.
+            var bitmap = Bitmap.fromImage(image, window)
+
+            // BitmapView renders the bitmap, scaling to fit while maintaining aspect ratio.
+            var bitmapView = new BitmapView(bitmap)
+            bitmapView.scaleToFit = false
+            bitmapView.maintainAspectRatio = false
+
+            window.setRootView(bitmapView)
+            window.layout()
+            window.requestRepaint()
+
+            while (window.isOpen()) {
+                window.handleInput()
+            }
+        }
+    }
+}

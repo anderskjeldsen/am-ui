@@ -1,0 +1,15 @@
+namespace Am.Ui
+{
+    // Tiny wrapper around a focus-changed callback so the listener
+    // list can be typed as `List<FocusChangedListener>` instead of
+    // `List<(oldFocus: View, newFocus: View) => Bool>` — the binder
+    // currently NPEs on function types inside collection generics
+    // (see am-lang-compiler-code/KNOWN_BUGS.md).
+    //
+    // Window.addFocusChangedListener accepts a bare function and
+    // wraps it here behind the scenes, so call sites still look
+    // like a plain lambda registration.
+    class FocusChangedListener(var fn: (oldFocus: View, newFocus: View) => Bool) {
+        import Am.Lang
+    }
+}

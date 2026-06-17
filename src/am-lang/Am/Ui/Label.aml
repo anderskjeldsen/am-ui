@@ -8,6 +8,49 @@ namespace Am.Ui
         var font: Font
         var backgroundPen: UByte = 0UB
         var textPen: UByte = 1UB
+        // Mouse-over support. Set hoverEnabled = true and pick a contrasting
+        // bg pen to get the row to fill itself with that pen while the
+        // mouse is over it. Disabled by default so plain Labels keep
+        // their original transparent rendering.
+        var hoverEnabled: Bool = false
+        var hoverBackgroundPen: UByte = 0UB
+        private var hovered: Bool = false
+
+        // Optional trailing affordance — when set, this string is
+        // painted at the right edge of the label whenever the mouse
+        // is over the row, and clicking it fires
+        // `trailingClickListener` instead of the regular
+        // `clickListener`. Used by the folder tree for the per-row
+        // [...] context-menu glyph; null on every other Label so
+        // nothing changes for existing call sites.
+        var trailingGlyph: String = null
+        var trailingPen: UByte = 1UB
+        var trailingClickListener: (view: View) => Bool = null
+
+        // Always-visible badge glyph painted at the far right of the
+        // row (further right than `trailingGlyph`, which only paints
+        // on hover). Used by the Git sidebar for the per-row "U"
+        // (untracked) tag that should be readable without a hover.
+        // The hover-only trailingGlyph sits just to the left of the
+        // badge when both are configured.
+        var badgeGlyph: String = null
+        var badgePen: UByte = 1UB
+        // Pixel gap between the badge and the hover-only trailing
+        // glyph (so the two don't visually merge into one blob).
+        private static const BADGE_GAP: Short = 4S
+
+        // Optional leading affordance — when set, this string paints
+        // at the left edge of the label *always* (no hover gating),
+        // pushing the regular `text` to the right by the glyph's
+        // width plus a small gap. Used by the folder tree to mark
+        // git-repo rows with a clickable "G" before the folder name.
+        // Clicking the leading glyph fires `leadingClickListener`
+        // instead of the row-wide click.
+        var leadingGlyph: String = null
+        var leadingPen: UByte = 1UB
+        var leadingClickListener: (view: View) => Bool = null
+        // Pixels of gap between the leading glyph and the regular text.
+        var leadingGap: Short = 4S
 
         fun getUsedFont(): Font {
             if (this.font != null) {
@@ -22,40 +65,251 @@ namespace Am.Ui
 
         override fun minHeight(): Short {
             var font = this.getUsedFont()
+            var textH = 0S
             if (font != null) {
-                return font.size.toShort()
+                textH = font.getSize().toShort()
+            } else {
+                var vc = this.getViewContext()
+                if (vc != null) {
+                    var win = vc.getWindow()
+                    textH = win.getCurrentFontSize().toShort()
+                }
             }
-            var vc = this.getViewContext()  
-            if (vc != null) {
-                var win = vc.getWindow()
-                var fontSize = win.getCurrentFontSize()
-                return fontSize.toShort()
-//                return vc.getWindow().getCurrentFontSize().toShort()
-            }
-            return 0S
+            return textH + this.padding.top + this.padding.bottom + this.margin.top + this.margin.bottom + this.borderWidths.top + this.borderWidths.bottom
         }
 
         override fun minWidth(): Short {
             var font = this.getUsedFont()
-//            ("text width: " + this.getViewContext() .getWindow().calculateStringWidth(font, this.text).toString()).println()
-
-            return this.getViewContext() .getWindow().calculateStringWidth(font, this.text).toShort()
+            var win = this.getViewContext().getWindow()
+            var textW = win.calculateStringWidth(font, this.text).toShort()
+            var leadW = 0S
+            if (this.leadingGlyph != null) {
+                leadW = win.calculateStringWidth(font, this.leadingGlyph).toShort() + this.leadingGap
+            }
+            // Match minHeight: report the full bounding box so HStack
+            // layout actually reserves room for horizontal padding /
+            // margin / border. Without this, the text draws at
+            // x = padding.left but the label's width = textW, so any
+            // glyph past textW is clipped — a Label with padding
+            // wider than its glyph (e.g. an icon button) renders
+            // invisible until you hover it (the hover bg is anchored
+            // at x=0 and is visible up to the clipped width).
+            return textW + leadW + this.padding.left + this.padding.right + this.margin.left + this.margin.right + this.borderWidths.left + this.borderWidths.right
         }
 
         override fun paint(graphics: Graphics) {
             base.paint(graphics)
 
-            var x1 = 0S
-            var y1 = 0S
+            var bgPen = this.backgroundPen
+            if (this.hoverEnabled && this.hovered) {
+                bgPen = this.hoverBackgroundPen
+            }
+            // When hover is in play, always paint the whole row's bg — on
+            // an un-hover frame this is what wipes the previous hover
+            // colour. Plain labels keep their original transparent
+            // rendering when hover is disabled. The bg covers the full
+            // label rect (including any vertical padding) so the hover
+            // colour reads as a padded row, not a tight strip behind
+            // the glyphs.
+            if (this.hoverEnabled) {
+                var x2 = this.width.toShort() - 1S
+                var y2 = this.height.toShort() - 1S
+                graphics.setForegroundPen(bgPen)
+                graphics.fillRect(0S, 0S, x2, y2)
+            }
 
-            graphics.setBackgroundPen(this.backgroundPen)
+            graphics.setBackgroundPen(bgPen)
             graphics.setForegroundPen(this.textPen)
             var font = this.getUsedFont()
             if (font != null) {
                 graphics.setFont(font)
             }
 
-            graphics.drawString(this.text, x1, y1)
+            // Text sits inside the padding so vertical padding pushes
+            // the glyphs down off the top edge — gives the hover bg
+            // its visible breathing room above + below the text.
+            var textX = this.margin.left + this.borderWidths.left + this.padding.left
+            var textY = this.margin.top + this.borderWidths.top + this.padding.top
+
+            // Leading glyph (always visible). Painted first; text
+            // shifts right by the glyph width + gap.
+            if (this.leadingGlyph != null) {
+                graphics.setForegroundPen(this.leadingPen)
+                graphics.drawString(this.leadingGlyph, textX, textY)
+                var leadW = graphics.calculateStringWidth(this.leadingGlyph).toShort()
+                textX = textX + leadW + this.leadingGap
+                graphics.setForegroundPen(this.textPen)
+            }
+
+            graphics.drawString(this.text, textX, textY)
+
+            // Always-visible badge at the far right (e.g. "U" for
+            // untracked rows). Painted before the hover trailing
+            // glyph so trailingGlyphX can compute its slot against
+            // the badge's left edge.
+            if (this.badgeGlyph != null) {
+                var bx = this.badgeGlyphX(graphics)
+                graphics.setForegroundPen(this.badgePen)
+                graphics.drawString(this.badgeGlyph, bx, textY)
+            }
+
+            // Trailing affordance — only when the row is hovered.
+            // Painted *after* the text so it sits on top of any
+            // glyph the title would otherwise have written into the
+            // right edge of the row. When a badge is also present,
+            // the trailing glyph sits just to its left with a small
+            // gap (BADGE_GAP).
+            if (this.hovered && this.trailingGlyph != null) {
+                var tx = this.trailingGlyphX(graphics)
+                graphics.setForegroundPen(this.trailingPen)
+                graphics.drawString(this.trailingGlyph, tx, textY)
+            }
+        }
+
+        // X coordinate where the leading glyph ENDS (the click zone
+        // extends from textX up to this value). Mirrors trailing's
+        // window-side helper.
+        private fun leadingGlyphRightX(): Short {
+            if (this.leadingGlyph == null) {
+                return -1S
+            }
+            var vc = this.getViewContext()
+            if (vc == null) {
+                return -1S
+            }
+            var leftInset = this.margin.left + this.borderWidths.left + this.padding.left
+            var glyphW = vc.getWindow().calculateStringWidth(this.getUsedFont(), this.leadingGlyph).toShort()
+            return leftInset + glyphW
+        }
+
+        // X coordinate where the badge glyph starts (always painted
+        // when set, sits flush against the row's right inset).
+        // Returns -1 when there's no badge configured.
+        private fun badgeGlyphX(graphics: Graphics): Short {
+            if (this.badgeGlyph == null) {
+                return -1S
+            }
+            var glyphW = graphics.calculateStringWidth(this.badgeGlyph).toShort()
+            var rightInset = this.margin.right + this.borderWidths.right + this.padding.right
+            return (this.width.toShort() - rightInset) - glyphW
+        }
+
+        // Mouse-side version of badgeGlyphX. Mirrors trailing's
+        // window-based helper so onMouseEvent can hit-test without
+        // a Graphics handle.
+        private fun badgeGlyphXFromWindow(): Short {
+            if (this.badgeGlyph == null) {
+                return -1S
+            }
+            var vc = this.getViewContext()
+            if (vc == null) {
+                return -1S
+            }
+            var glyphW = vc.getWindow().calculateStringWidth(this.getUsedFont(), this.badgeGlyph).toShort()
+            var rightInset = this.margin.right + this.borderWidths.right + this.padding.right
+            return (this.width.toShort() - rightInset) - glyphW
+        }
+
+        // X coordinate where the trailing glyph starts. Pulled out of
+        // paint() so onMouseEvent can hit-test against the same value
+        // without re-deriving it. When a badge is also configured,
+        // the trailing slot shifts left of the badge by BADGE_GAP +
+        // badge width — keeps the two glyphs from overlapping.
+        // Returns -1 when there's no glyph configured.
+        private fun trailingGlyphX(graphics: Graphics): Short {
+            if (this.trailingGlyph == null) {
+                return -1S
+            }
+            var glyphW = graphics.calculateStringWidth(this.trailingGlyph).toShort()
+            var rightInset = this.margin.right + this.borderWidths.right + this.padding.right
+            var rightEdge = this.width.toShort() - rightInset
+            if (this.badgeGlyph != null) {
+                var badgeW = graphics.calculateStringWidth(this.badgeGlyph).toShort()
+                rightEdge = (rightEdge - badgeW) - Label.BADGE_GAP
+            }
+            return rightEdge - glyphW
+        }
+
+        // Mouse-side version — onMouseEvent doesn't have Graphics in
+        // hand, so it goes via Window.calculateStringWidth (uses the
+        // same font drawString picks up at paint time).
+        private fun trailingGlyphXFromWindow(): Short {
+            if (this.trailingGlyph == null) {
+                return -1S
+            }
+            var vc = this.getViewContext()
+            if (vc == null) {
+                return -1S
+            }
+            var win = vc.getWindow()
+            var f = this.getUsedFont()
+            var glyphW = win.calculateStringWidth(f, this.trailingGlyph).toShort()
+            var rightInset = this.margin.right + this.borderWidths.right + this.padding.right
+            var rightEdge = this.width.toShort() - rightInset
+            if (this.badgeGlyph != null) {
+                var badgeW = win.calculateStringWidth(f, this.badgeGlyph).toShort()
+                rightEdge = (rightEdge - badgeW) - Label.BADGE_GAP
+            }
+            return rightEdge - glyphW
+        }
+
+        override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
+            if (type == MouseEventType.move) {
+                if (this.hoverEnabled) {
+                    var inside = this.contains(x, y)
+                    if (inside != this.hovered) {
+                        this.hovered = inside
+                        this.requestRepaint()
+                    }
+                }
+                // Return false so sibling labels also see the move event
+                // and can clear their own hover state.
+                return false
+            }
+            // Trailing-affordance click intercept — left-mouse-up that
+            // lands at or past where the [...] glyph is drawn fires
+            // trailingClickListener instead of the row-wide
+            // clickListener. The trailing area is only "live" when
+            // the row is hovered, matching the visual state (we
+            // don't paint the glyph otherwise so a click that
+            // misses the visible glyph shouldn't get the trailing
+            // behaviour).
+            if (type == MouseEventType.up && button == MouseButton.left && this.contains(x, y)) {
+                if (this.hovered && this.trailingGlyph != null) {
+                    var tx = this.trailingGlyphXFromWindow()
+                    // Right edge of the trailing click area: if a
+                    // badge is configured, the click area stops at
+                    // the badge's left edge so clicks on the badge
+                    // glyph itself don't fire the trailing action.
+                    // Otherwise the area extends to the row's right.
+                    var tRight = this.width.toShort()
+                    if (this.badgeGlyph != null) {
+                        var bx = this.badgeGlyphXFromWindow()
+                        if (bx >= 0S) {
+                            tRight = bx
+                        }
+                    }
+                    if (tx >= 0S && x >= tx && x < tRight) {
+                        var tcb = this.trailingClickListener
+                        if (tcb != null) {
+                            return tcb(this)
+                        }
+                        return true
+                    }
+                }
+                // Leading glyph click — independent of hover state.
+                if (this.leadingGlyph != null) {
+                    var lx2 = this.leadingGlyphRightX()
+                    var leftInset = this.margin.left + this.borderWidths.left + this.padding.left
+                    if (lx2 >= 0S && x >= leftInset && x <= lx2) {
+                        var lcb = this.leadingClickListener
+                        if (lcb != null) {
+                            return lcb(this)
+                        }
+                    }
+                }
+            }
+            return base.onMouseEvent(type, button, x, y)
         }
     }
 

@@ -1,6 +1,6 @@
 
 id: am-ui
-version: 0.1.0
+version: 0.10.0
 type: library
 dependencies:
   - id: am-lang-core
@@ -8,6 +8,11 @@ dependencies:
     type: git-repo
     tag: latest
     url: https://github.com/anderskjeldsen/am-lang-core.git
+  - id: am-imaging
+    realm: github
+    type: git-repo
+    tag: latest
+    url: https://github.com/anderskjeldsen/am-imaging.git
 platforms:
   - id: libc
     abstract: true
@@ -21,33 +26,47 @@ platforms:
     additionalIncludePaths:
     gccAdditionalOptions:
       - -noixemul     
+    additionalLinkerFlags:
+      - -noixemul
     gccAdditionalLibraries:
-      - socket
   - id: morphos-ppc
     extends: libc
     gccCommand: ppc-morphos-gcc -O3
     additionalHeaders:
     additionalAsmSources:
-    additionalCSources: 
+    additionalCSources:
     additionalIncludePaths:
     gccAdditionalOptions:
-      - -noixemul     
+      - -noixemul
+    additionalLinkerFlags:
+      - -noixemul
     gccAdditionalLibraries:
+  # Headless platform that simulates AmigaOS graphics on linux-x64. Builds to a
+  # 150x100 byte buffer instead of an OS window — used by the unit-test suite
+  # to verify the layout / clip / paint pipeline. Despite the name it does NOT
+  # cross-compile to AmigaOS; "sim" stands for simulator.
+  - id: amigaos-sim
+    extends: libc
+    gccCommand: gcc
+    additionalHeaders:
+      - headless_painter.h
+    additionalCSources:
+      - inputFilename: headless_painter.c
+        outputFilename: headless_painter.o
+
 
 buildTargets:
-  - id: amigaos_docker_unix-arm
+  - id: amigaos_docker
     platform: amigaos
     dockerBuild:
-      image: kjeldsenanders/dnf-dev:initial
-      buildPath: /host
-  - id: amigaos_docker_unix-x64
-    platform: amigaos
-    dockerBuild:
-      image: kjeldsenanders/dnf-dev:initial-x86
+      image: amiga-gcc:latest
       buildPath: /host
   - id: morphos-ppc_docker
     platform: morphos-ppc
     dockerBuild:
       image: amigadev/crosstools:ppc-morphos
       buildPath: /work
+  - id: amigaos-sim
+    platform: amigaos-sim
+    features: ["floatingPoint"]
 

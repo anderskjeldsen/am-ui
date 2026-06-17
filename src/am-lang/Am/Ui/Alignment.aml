@@ -1,0 +1,9 @@
+namespace Am.Ui
+{
+    enum Alignment<UByte> {
+        import Am.Lang
+        Start = 1UB
+        Center = 2UB
+        End = 3UB
+    }
+}

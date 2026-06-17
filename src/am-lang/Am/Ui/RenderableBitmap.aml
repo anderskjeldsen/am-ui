@@ -1,0 +1,45 @@
+namespace Am.Ui
+{
+    // Off-screen render target that owns a native BitMap + Layer pair.
+    // Use createGraphics() to draw through LayerGraphics.
+    #implementationPlatforms "libc", "amigaos", "amigaos-sim", "morphos-ppc"
+    native class RenderableBitmap {
+        import Am.Lang
+        import Am.Imaging
+
+        private var bitmap: Bitmap
+
+        // Wire native layer state to the current bitmap.
+        private native fun attachLayer()
+
+        static fun empty(width: UShort, height: UShort, window: Window): RenderableBitmap {
+            var rb = new RenderableBitmap()
+            rb.bitmap = Bitmap.empty(width, height, window)
+            rb.attachLayer()
+            return rb
+        }
+
+        static fun fromImage(image: Image, window: Window): RenderableBitmap {
+            var rb = new RenderableBitmap()
+            rb.bitmap = Bitmap.fromImage(image, window)
+            rb.attachLayer()
+            return rb
+        }
+
+        fun getBitmap(): Bitmap {
+            return this.bitmap
+        }
+
+        fun getWidth(): UShort {
+            return this.bitmap.getWidth()
+        }
+
+        fun getHeight(): UShort {
+            return this.bitmap.getHeight()
+        }
+
+        fun createGraphics(): Graphics {
+            return LayerGraphics.fromRenderableBitmap(this)
+        }
+    }
+}

@@ -1,0 +1,41 @@
+namespace DrawPixels
+{
+    class Program {
+        import Am.Lang
+        import Am.Ui
+
+        static fun main() {
+            var bufW = 320US
+            var bufH = 240US
+
+            // Create a fixed-size ARGB pixel buffer view
+            var canvas = PixelBufferView.create(bufW, bufH)
+
+            // Fill the buffer with an RGB gradient:
+            //   red component increases left-to-right (x axis)
+            //   green component increases top-to-bottom (y axis)
+            //   blue is fixed at 128, alpha is fully opaque (0xFF)
+            // ARGB = 0xFF000000 + R*0x10000 + G*0x100 + B
+            for (y = 0UI to bufH.toUInt()) {
+                for (x = 0UI to bufW.toUInt()) {
+                    var r = x * 255UI / 319UI
+                    var g = y * 255UI / 239UI
+                    var b = 128UI
+                    canvas.pixels[y * bufW.toUInt() + x] = 0xFF000000UI + r * 0x10000UI + g * 0x100UI + b
+                }
+            }
+
+            var window = Window.openWindow(50S, 50S, bufW.toShort(), bufH.toShort(), null, null)
+            window.setTitle("Draw Pixels")
+            window.setScreenTitle("AmUI Draw Pixels")
+
+            window.setRootView(canvas)
+            window.layout()
+            window.requestRepaint()
+
+            while (window.isOpen()) {
+                window.handleInput()
+            }
+        }
+    }
+}

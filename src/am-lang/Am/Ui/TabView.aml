@@ -1,0 +1,323 @@
+namespace Am.Ui
+{
+    // Single tab in a TabBar. Renders a small box containing the tab's
+    // label and an always-visible close-x icon on the right.
+    //
+    // Visual states (in order of paint precedence):
+    //   active     — bright background, accent stripe along the bottom
+    //   hovered    — slightly brighter background, no accent stripe
+    //   inactive   — dim background
+    //
+    // A thin vertical 1-px divider is painted on the right edge of every
+    // tab so adjacent tabs are visually separated even when they share
+    // the same inactive background colour.
+    //
+    // Mouse handling:
+    //   - .move events update the hovered flag (returns false so sibling
+    //     tabs also see the move and can clear their own hover state).
+    //   - .down + left button inside the close-x rect → onClose()
+    //   - .down + left button elsewhere inside the tab → onActivate()
+    //
+    // The TabBar wires up onActivate/onClose to its own state management.
+    class TabView(var tabId: String, var label: String) : View {
+        import Am.Lang
+
+        var font: Font
+        var textPen: UByte             = 1UB
+        var activeBackgroundPen: UByte = 0UB
+        var inactiveBackgroundPen: UByte = 4UB
+        var hoverBackgroundPen: UByte  = 3UB
+        var bottomBorderPen: UByte     = 5UB
+        var closeXPen: UByte           = 2UB
+        // Vertical 1-px divider painted on the tab's right edge so that
+        // adjacent tabs are visually separated even when they share the
+        // same inactive background colour. Set to inactiveBackgroundPen
+        // to disable.
+        var separatorPen: UByte        = 8UB
+
+        // Pixel cap on the label area. Tabs are sized to fit their
+        // label up to this width; labels that would otherwise exceed
+        // it are truncated with an ellipsis (see truncateLabel()).
+        // Owners can override before the tab is added to the bar.
+        var labelMaxWidth: Short       = 160S
+        // Minimum reserved label width — keeps very short labels from
+        // shrinking the tab to a thumbnail. Sized to comfortably hold
+        // ~8 characters of the default font.
+        var labelMinWidth: Short       = 60S
+
+        var active: Bool = false
+
+        // Dirty flag — the IDE sets this when the content shown in the
+        // editor for this tab has unsaved changes. Surface is purely
+        // visual (a "•" prefix on the label); the TabView doesn't
+        // react to the change itself.
+        var dirty: Bool = false
+
+        // Called by TabBar to wire up state changes. Return value is the
+        // standard "consumed" flag — TabBar always returns true.
+        var onActivate: () => Bool = null
+        var onClose: () => Bool    = null
+
+        private var hovered: Bool = false
+
+        // Pixel reservations. Layout left-to-right:
+        //   [PADDING_LEFT][label text][LABEL_GAP][CLOSE_HIT_W][PADDING_RIGHT]
+        // The close-x's hit-rect (CLOSE_HIT_W) is reserved even when not
+        // hovering so the label doesn't shift when hover state changes.
+        // The visible X glyph (CLOSE_VISUAL) is centred inside that
+        // hit-rect — smaller than the rect for clearer click targeting.
+        // LABEL_GAP is the breathing room between the rightmost glyph of
+        // the label and the start of the close-x slot.
+        private static const PADDING_LEFT: Short  = 10S
+        private static const LABEL_GAP: Short     = 12S
+        private static const CLOSE_HIT_W: Short   = 14S
+        private static const CLOSE_VISUAL: Short  = 8S
+        private static const PADDING_RIGHT: Short = 8S
+        private static const VERTICAL_PAD: Short  = 4S
+        private static const ACCENT_THICKNESS: Short = 2S
+        private static const SEPARATOR_W: Short   = 1S
+
+        fun getUsedFont(): Font {
+            if (this.font != null) {
+                return this.font
+            }
+            var vc = this.getViewContext()
+            if (vc != null) {
+                var w = vc.getWindow()
+                if (w != null) {
+                    return w.font
+                }
+            }
+            return null
+        }
+
+        override fun minWidth(): Short {
+            // Width is the label's actual pixel width clamped to
+            // [labelMinWidth, labelMaxWidth], plus fixed reservations
+            // for padding, label↔close gap and the close hit-rect.
+            // Tabs never need to be wider than their content but they
+            // also never get narrower than labelMinWidth, so a strip
+            // of single-letter filenames stays usable.
+            var f = this.getUsedFont()
+            var labelW = this.labelMinWidth
+            if (f != null) {
+                labelW = f.calculateStringWidth(this.label).toShort()
+                if (this.dirty) {
+                    labelW = labelW + f.calculateStringWidth("* ").toShort()
+                }
+            }
+            if (labelW < this.labelMinWidth) {
+                labelW = this.labelMinWidth
+            }
+            if (labelW > this.labelMaxWidth) {
+                labelW = this.labelMaxWidth
+            }
+            return TabView.PADDING_LEFT + labelW + TabView.LABEL_GAP + TabView.CLOSE_HIT_W + TabView.PADDING_RIGHT
+        }
+
+        // Return either `this.label` unchanged (when it fits inside
+        // `available` pixels using the current font) or a prefix of it
+        // with an "..." suffix that *does* fit. Works in proportional
+        // fonts by walking the label character-by-character and
+        // measuring each prefix. Linear in label length; cheap enough
+        // for tab labels even when called on every paint.
+        private fun truncateLabel(available: Short): String {
+            var f = this.getUsedFont()
+            if (f == null) {
+                return this.label
+            }
+            if (this.label.isEmpty()) {
+                return this.label
+            }
+            var fullW = f.calculateStringWidth(this.label).toShort()
+            if (fullW <= available) {
+                return this.label
+            }
+            var ellipsis = "..."
+            var elW = f.calculateStringWidth(ellipsis).toShort()
+            if (elW >= available) {
+                // Not even the ellipsis fits; return as much of the
+                // label as we can rather than rendering nothing — this
+                // only triggers on absurdly narrow labelMaxWidth values.
+                return ellipsis
+            }
+            var budget = available - elW
+            var len = this.label.getLength()
+            var lastFit = 0
+            var i = 1
+            while (i <= len) {
+                var prefix = this.label.substring(0UI, i.toUInt())
+                var w = f.calculateStringWidth(prefix).toShort()
+                if (w > budget) {
+                    break
+                }
+                lastFit = i
+                i = i + 1
+            }
+            if (lastFit == 0) {
+                return ellipsis
+            }
+            return this.label.substring(0UI, lastFit.toUInt()) + ellipsis
+        }
+
+        override fun minHeight(): Short {
+            var f = this.getUsedFont()
+            var th = 10S
+            if (f != null) {
+                th = f.getSize().toShort()
+            }
+            return th + (TabView.VERTICAL_PAD * 2S) + TabView.ACCENT_THICKNESS
+        }
+
+        // Close-x hit rect (CLOSE_HIT_W wide), in local coords.
+        // Explicit parens are *required*: AmLang parses chained `-` as
+        // right-associative, so `w - A - B` becomes `w - (A - B)` =
+        // `w - A + B`, which placed the X past the right edge of the
+        // tab and got it clipped away. Parenthesising forces the
+        // intended left-to-right evaluation. Same correction applied
+        // throughout the rest of this file.
+        private fun closeRectX1(): Short {
+            return (this.width.toShort() - TabView.PADDING_RIGHT) - TabView.CLOSE_HIT_W
+        }
+        private fun closeRectContains(x: Short, y: Short): Bool {
+            var x1 = this.closeRectX1()
+            return x >= x1 && x < (x1 + TabView.CLOSE_HIT_W)
+        }
+
+        override fun paint(graphics: Graphics) {
+            base.paint(graphics)
+
+            var bg = this.inactiveBackgroundPen
+            if (this.active) {
+                bg = this.activeBackgroundPen
+            } else if (this.hovered) {
+                bg = this.hoverBackgroundPen
+            }
+            graphics.setForegroundPen(bg)
+            graphics.fillRect(0S, 0S, this.width.toShort() - 1S, this.height.toShort() - 1S)
+
+            // Bottom accent stripe for the active tab only.
+            if (this.active) {
+                graphics.setForegroundPen(this.bottomBorderPen)
+                var stripeTop = this.height.toShort() - TabView.ACCENT_THICKNESS
+                graphics.fillRect(0S, stripeTop, this.width.toShort() - 1S, this.height.toShort() - 1S)
+            }
+
+            // Label text. Vertically centred via VERTICAL_PAD. We set
+            // the background pen explicitly here because the Amiga
+            // rastport draws text in JAM2 mode by default — without
+            // this line the per-glyph background fills with whatever
+            // bg pen was last set by a sibling view (often the very
+            // colour we're trying to draw the glyph in, which makes it
+            // invisible).
+            var f = this.getUsedFont()
+            if (f != null) {
+                graphics.setFont(f)
+            }
+            graphics.setBackgroundPen(bg)
+            graphics.setForegroundPen(this.textPen)
+            // Dirty-buffer indicator: a leading "* " on unsaved tabs.
+            // Subtract the prefix's pixel width from the truncation
+            // budget so a dirty long-filename tab doesn't suddenly
+            // overflow its slot.
+            var prefix = ""
+            var prefixW = 0S
+            if (this.dirty) {
+                prefix = "* "
+                if (f != null) {
+                    prefixW = f.calculateStringWidth(prefix).toShort()
+                }
+            }
+            // Truncation budget is derived from the actual painted
+            // width, not labelMaxWidth — if the bar shrinks a tab below
+            // its preferred size we still want the label to fit.
+            var availableLabelArea = (((this.width.toShort() - TabView.PADDING_LEFT) - TabView.LABEL_GAP) - TabView.CLOSE_HIT_W) - TabView.PADDING_RIGHT
+            var shown = prefix + this.truncateLabel(availableLabelArea - prefixW)
+            graphics.drawString(shown, TabView.PADDING_LEFT, TabView.VERTICAL_PAD)
+
+            // Close X — only painted while the pointer is hovering
+            // this tab. Drawn as a pair of single-pixel diagonals via
+            // fillRect (each stroke is a loop of 1×1 fillRect calls);
+            // a second loop offset by 1 px gives a 2-px-thick stroke
+            // without needing a thick-line API. The hover gate keeps
+            // inactive tabs visually quiet.
+            if (this.hovered) {
+                this.paintCloseX(graphics)
+            }
+
+            // Right-edge separator. Painted last so it sits on top of the
+            // background fill. Skipped on the rightmost tab via the
+            // TabBar (which can override separatorPen for that tab).
+            graphics.setForegroundPen(this.separatorPen)
+            var sepX = this.width.toShort() - TabView.SEPARATOR_W
+            var sepBottom = this.height.toShort() - 1S
+            if (this.active) {
+                // Don't paint over the active accent stripe.
+                sepBottom = sepBottom - TabView.ACCENT_THICKNESS
+            }
+            graphics.fillRect(sepX, 0S, sepX, sepBottom)
+        }
+
+        // Hand-drawn X glyph for the close icon. Centred on (hitCx,
+        // hitCy) — the centre of the close hit-rect. Each diagonal is
+        // a loop of 1-px fillRect calls; a second loop offset by 1 px
+        // gives a 2-px-thick stroke without needing a thick-line API.
+        private fun paintCloseX(graphics: Graphics) {
+            graphics.setForegroundPen(this.closeXPen)
+            var hitX1 = this.closeRectX1()
+            var hitCx = hitX1 + (TabView.CLOSE_HIT_W / 2S)
+            var hitCy = (this.height.toShort() - TabView.ACCENT_THICKNESS) / 2S
+            var half  = TabView.CLOSE_VISUAL / 2S
+            var i = 0S - half
+            while (i <= half) {
+                // Main diagonal (top-left → bottom-right).
+                graphics.fillRect(hitCx + i, hitCy + i, hitCx + i, hitCy + i)
+                // Anti-diagonal (top-right → bottom-left).
+                graphics.fillRect(hitCx + i, hitCy - i, hitCx + i, hitCy - i)
+                // Second pixel on each diagonal one step over —
+                // doubles the stroke thickness so the X reads as bold
+                // at the default font size.
+                graphics.fillRect(hitCx + i + 1S, hitCy + i, hitCx + i + 1S, hitCy + i)
+                graphics.fillRect(hitCx + i + 1S, hitCy - i, hitCx + i + 1S, hitCy - i)
+                i = i + 1S
+            }
+        }
+
+        override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
+            // Stale-hover guard: any mouse event whose coords sit outside
+            // this tab is a signal to drop our hover mark. The bar's
+            // parent ViewGroup doesn't dispatch move events to children
+            // when the cursor leaves the bar's bounds, so without this
+            // a tab can stay visually hovered after the cursor moves on.
+            if (this.hovered && !this.contains(x, y)) {
+                this.hovered = false
+                this.requestRepaint()
+            }
+            if (type == MouseEventType.move) {
+                var inside = this.contains(x, y)
+                if (inside && !this.hovered) {
+                    this.hovered = true
+                    this.requestRepaint()
+                }
+                // Return false so sibling tabs also see the move event and
+                // can clear their own hover state when we just entered.
+                return false
+            }
+            if (type == MouseEventType.down && button == MouseButton.left && this.contains(x, y)) {
+                if (this.closeRectContains(x, y)) {
+                    var cl = this.onClose
+                    if (cl != null) {
+                        return cl()
+                    }
+                    return true
+                }
+                var al = this.onActivate
+                if (al != null) {
+                    return al()
+                }
+                return true
+            }
+            return base.onMouseEvent(type, button, x, y)
+        }
+    }
+}

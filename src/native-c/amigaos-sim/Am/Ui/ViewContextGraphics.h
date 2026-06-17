@@ -1,0 +1,15 @@
+#pragma once
+#include <libc/core.h>
+#include <Am/Ui/ViewContextGraphics.h>
+#include <Am/Lang/ClassRef.h>
+#include <Am/Ui/Graphics.h>
+#include <Am/Ui/ViewContext.h>
+#include <Am/Ui/Window.h>
+#include <Am/Lang/UByte.h>
+#include <Am/Lang/Short.h>
+#include <Am/Lang/String.h>
+#include <Am/Lang/UShort.h>
+#include <Am/Ui/Font.h>
+#include <Am/Imaging/Image.h>
+#include <Am/Ui/Bitmap.h>
+#include <Am/Ui/ClipRect.h>

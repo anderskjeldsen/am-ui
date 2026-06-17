@@ -1,16 +1,123 @@
 
-namespace Am.Ui 
+namespace Am.Ui
 {
+    #implementationPlatforms "libc", "amigaos", "amigaos-sim", "morphos-ppc"
     native class Screen {
         import Am.Lang
 
         static fun openScreen(width: Int, height: Int, depth: Int, displayId: Int): Screen {
+            return Screen.openScreen(width, height, depth, displayId, null, null)
+        }
+
+        // Same as openScreen above but also sets the screen's title bar
+        // text. Pass null to leave the title bar empty.
+        static fun openScreen(width: Int, height: Int, depth: Int, displayId: Int, title: String): Screen {
+            return Screen.openScreen(width, height, depth, displayId, title, null)
+        }
+
+        // Open a screen and pin every Intuition system pen role (detail,
+        // block, text, shine, shadow, fill, fill-text, background,
+        // highlight-text, bar-detail, bar-block, bar-trim) to a specific
+        // colour-register index. `systemPens` is read in that order. Pass
+        // null for default Workbench pen mapping.
+        static fun openScreen(width: Int, height: Int, depth: Int, displayId: Int, title: String, systemPens: UByte[]): Screen {
+            return Screen.openScreen(width, height, depth, displayId, title, systemPens, null)
+        }
+
+        // Same as above but also loads `palette` into the screen's colour
+        // map *before* it is rendered for the first time. Use this instead
+        // of setPalette() when you need the title bar, drag bar etc. to
+        // pick up the custom colours from the very first frame — calling
+        // setPalette() after open works for the framebuffer pixels we
+        // draw, but on chunky RTG screens already-rendered chrome stays
+        // at its original RGB.
+        static fun openScreen(width: Int, height: Int, depth: Int, displayId: Int, title: String, systemPens: UByte[], palette: Palette): Screen {
             var s = new Screen()
-            s.open(width, height, depth, displayId)
+            var paletteColors: UInt[] = null
+            if (palette != null) {
+                paletteColors = palette.colors
+            }
+            s.open(width, height, depth, displayId, title, systemPens, paletteColors)
             return s
         }
 
-        private native fun open(width: Int, height: Int, depth: Int, displayId: Int)
+        // Height in pixels of the screen's title/menu bar. Useful when
+        // sizing a borderless full-screen window that should sit below it.
+        native fun getBarHeight(): UShort
+        native fun getWidth(): UShort
+        native fun getHeight(): UShort
+
+        // Pick the best Amiga display id for the requested mode. Returns
+        // INVALID_ID (0xFFFFFFFF reinterpreted as -1) when no matching mode
+        // is available — caller should treat that as failure.
+        static native fun bestModeId(width: Int, height: Int, depth: Int): Int
+
+        // Returns a ScreenMode describing the current default public screen
+        // (Workbench, typically). Useful for opening an app screen that
+        // matches the user's existing resolution / colour depth.
+        static fun getDefaultScreenMode(): ScreenMode {
+            var sm = new ScreenMode(0, 0, 0)
+            Screen.fillDefaultScreenMode(sm)
+            return sm
+        }
+
+        private static native fun fillDefaultScreenMode(mode: ScreenMode)
+
+        // Update a single colour register on this screen. Channels are
+        // 8-bit (0..255) and are expanded to the Amiga's 32-bit
+        // SetRGB32 components internally. `index` is Int so callers can
+        // pass an enum value (via .getValue()) directly.
+        native fun setColor(index: Int, r: UByte, g: UByte, b: UByte)
+
+        // Copy the first `count` colour registers from the host's default
+        // public screen (the Workbench, usually) into this screen so that
+        // pens 0..count-1 visually match what the user has configured.
+        // Use this on a custom screen if you want Intuition chrome — the
+        // title bar, depth/close gadgets, drop-down menus, etc. — to
+        // render in the host's theme instead of Intuition's factory
+        // defaults.
+        //
+        // Note: on chunky / RTG screens (Picasso96, CGX HiColor /
+        // TrueColor) this can't repaint chrome that's already been drawn
+        // — pixels are baked RGB at draw time. Prefer fillHostPaletteColors
+        // + passing the host colours via the openScreen palette arg so
+        // the screen is painted with the right colours from the first
+        // frame.
+        native fun copyHostPens(count: Int)
+
+        // Read the first `count` colour registers from the host's default
+        // public screen (Workbench) into `out` as packed 0x00RRGGBB UInt
+        // values. Call BEFORE openScreen so the colours can be passed in
+        // via the palette argument — that's the only way to get
+        // host-themed chrome (title bar, drag bar, menus) on chunky /
+        // RTG screens where the bar is painted exactly once at OpenScreen
+        // time. `out` is filled in-place; entries past `count` are left
+        // untouched. Internally clamped at 32.
+        static native fun fillHostPaletteColors(out: UInt[], count: Int)
+
+        // Read the first `count` DrawInfo pen-role mappings (DETAILPEN /
+        // BLOCKPEN / TEXTPEN / SHINEPEN / SHADOWPEN / FILLPEN /
+        // FILLTEXTPEN / BACKGROUNDPEN / HIGHLIGHTTEXTPEN / BARDETAILPEN /
+        // BARBLOCKPEN / BARTRIMPEN) from the host's default public
+        // screen into `out`. Pass the resulting array as `systemPens` to
+        // openScreen so chrome on the new screen uses the same role →
+        // register mapping the user has configured for Workbench —
+        // without this, Intuition assigns a defensive minimal mapping on
+        // chunky / TrueColor screens that routes everything to pens 0/1.
+        static native fun fillHostDrawInfoPens(out: UByte[], count: Int)
+
+        // Push every entry of `palette` into this screen's colour map
+        // starting at index 0.
+        fun setPalette(palette: Palette) {
+            var size = palette.getSize().toInt()
+            var i = 0
+            while (i < size) {
+                this.setColor(i, palette.getRed(i), palette.getGreen(i), palette.getBlue(i))
+                i++
+            }
+        }
+
+        private native fun open(width: Int, height: Int, depth: Int, displayId: Int, title: String, systemPens: UByte[], paletteColors: UInt[])
         native fun close()
 
     }

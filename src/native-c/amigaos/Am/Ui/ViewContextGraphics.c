@@ -3,26 +3,35 @@
 #include <amigaos/Am/Ui/ViewContextGraphics.h>
 #include <Am/Ui/Graphics.h>
 #include <Am/Ui/ViewContext.h>
+#include <Am/Ui/ClipRect.h>
 #include <Am/Lang/UByte.h>
 #include <Am/Lang/Short.h>
 
 #include <amigaos/amiga.h>
 #include <amigaos/Am/Ui/Window.h>
 #include <amigaos/Am/Ui/Screen.h>
+#include <amigaos/Am/Ui/Bitmap.h>
+#include <Am/Ui/Bitmap.h>
 #include <libc/Am/Lang/String.h>
 
 #include <exec/types.h>
 #include <intuition/intuition.h>
 #include <libraries/gadtools.h>
 #include <graphics/gfx.h>
+#include <graphics/scale.h>
+#include <cybergraphx/cybergraphics.h>
 
 #include <proto/exec.h>
 #include <proto/intuition.h>
 #include <proto/gadtools.h>
 #include <proto/graphics.h>
+#include <proto/cybergraphics.h>
 
 
 #include <libc/core_inline_functions.h>
+
+// Forward declaration for AmigaOS layers function (not in standard headers)
+struct Region *InstallClipRegion(struct Layer *layer, struct Region *region);
 
 short translated_x(aobject *g, short x) {
 	short tx = g->object_properties.class_object_properties.properties[Am_Ui_Graphics_P_xOffset].nullable_value.value.short_value;
@@ -336,6 +345,318 @@ __exit: ;
 	}
 	if (font != NULL) {
 		__decrease_reference_count(font);
+	}
+	return __result;
+};
+
+function_result Am_Ui_ViewContextGraphics_drawImage_0(aobject * const this, aobject * image, short x, short y, short width, short height)
+{
+	function_result __result = { .has_return_value = false };
+	bool __returning = false;
+	if (this != NULL) {
+		__increase_reference_count(this);
+	}
+	if (image != NULL) {
+		__increase_reference_count(image);
+	}
+
+	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
+	struct RastPort *rp = window_data->window->RPort;
+
+	short tx = translated_x(this, x);
+	short ty = translated_y(this, y);
+
+	// TODO: Implement actual image drawing using Am.Imaging.Image data
+	// For now, just draw a placeholder rectangle
+	SetAPen(rp, 2); // Use pen 2 for image placeholder
+	RectFill(rp, tx, ty, tx + width - 1, ty + height - 1);
+
+__exit: ;
+	if (window != NULL) {
+		__decrease_reference_count(window);
+	}
+	if (this != NULL) {
+		__decrease_reference_count(this);
+	}
+	if (image != NULL) {
+		__decrease_reference_count(image);
+	}
+	return __result;
+};
+
+function_result Am_Ui_ViewContextGraphics_setClipRect_0(aobject * const this, struct Am_Ui_ClipRect * clipRect)
+{
+	function_result __result = { .has_return_value = false };
+	bool __returning = false;
+	if (this != NULL) {
+		__increase_reference_count(this);
+	}
+	// clipRect is a struct value-type (not ARC-tracked); no ref count adjustments needed.
+
+	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
+
+	// Add the current clipRect to the master region
+	if (clipRect != NULL) {
+		InstallClipRegion(window_data->window->WLayer, NULL);
+		ClearRegion(window_data->clip_region);
+
+		// ClipRect is a struct (value type) — read fields directly.
+		struct Rectangle rect;
+		rect.MinX = clipRect->x;
+		rect.MinY = clipRect->y;
+		rect.MaxX = clipRect->x + clipRect->width - 1;
+		rect.MaxY = clipRect->y + clipRect->height - 1;
+
+		OrRectRegion(window_data->clip_region, &rect);
+		InstallClipRegion(window_data->window->WLayer, window_data->clip_region);
+//		BeginRefresh(window_data->window);
+	}
+
+__exit: ;
+	if (window != NULL) {
+		__decrease_reference_count(window);
+	}
+	if (this != NULL) {
+		__decrease_reference_count(this);
+	}
+	return __result;
+};
+
+function_result Am_Ui_ViewContextGraphics_clearClipRect_0(aobject * const this)
+{
+	function_result __result = { .has_return_value = false };
+	bool __returning = false;
+	if (this != NULL) {
+		__increase_reference_count(this);
+	}
+
+	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
+
+	InstallClipRegion(window_data->window->WLayer, NULL);
+
+__exit: ;
+	if (window != NULL) {
+		__decrease_reference_count(window);
+	}
+	if (this != NULL) {
+		__decrease_reference_count(this);
+	}
+	return __result;
+};
+
+function_result Am_Ui_ViewContextGraphics_beginPainting_0(aobject * const this, struct Am_Ui_ClipRect * clipRect) {
+	function_result __result = { .has_return_value = false };
+	bool __returning = false;
+	if (this != NULL) {
+		__increase_reference_count(this);
+	}
+	// clipRect is a struct value-type (not ARC-tracked); no ref count adjustments needed.
+
+	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
+
+	// Add the current clipRect to the master region
+	if (clipRect != NULL) {
+		InstallClipRegion(window_data->window->WLayer, NULL);
+		ClearRegion(window_data->clip_region);
+
+		// ClipRect is a struct (value type) — read fields directly.
+		struct Rectangle rect;
+		rect.MinX = clipRect->x;
+		rect.MinY = clipRect->y;
+		rect.MaxX = clipRect->x + clipRect->width - 1;
+		rect.MaxY = clipRect->y + clipRect->height - 1;
+
+		OrRectRegion(window_data->clip_region, &rect);
+		InstallClipRegion(window_data->window->WLayer, window_data->clip_region);
+//		BeginRefresh(window_data->window);
+	}
+
+__exit: ;
+	if (window != NULL) {
+		__decrease_reference_count(window);
+	}
+	if (this != NULL) {
+		__decrease_reference_count(this);
+	}
+	return __result;
+}
+
+function_result Am_Ui_ViewContextGraphics_endPainting_0(aobject * const this)
+{
+	function_result __result = { .has_return_value = false };
+	bool __returning = false;
+	if (this != NULL) {
+		__increase_reference_count(this);
+	}
+
+	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
+
+	InstallClipRegion(window_data->window->WLayer, NULL);
+	// Clear the region
+//	ClearRegion(window_data->clip_region);
+
+//	EndRefresh(window_data->window, FALSE);
+
+__exit: ;
+	if (window != NULL) {
+		__decrease_reference_count(window);
+	}
+	if (this != NULL) {
+		__decrease_reference_count(this);
+	}
+	return __result;
+};
+
+// ---------------------------------------------------------------------------
+// drawBitmap: blit a Bitmap to the window RastPort, scaling if necessary.
+//
+// When source size == dest size: BltBitMapRastPort (fast, no copy).
+// When scaling is needed: allocate a temporary bitmap, BitMapScale into it,
+//   then BltBitMapRastPort the result, then free the temp bitmap.
+// ---------------------------------------------------------------------------
+
+function_result Am_Ui_ViewContextGraphics_drawBitmap_0(aobject * const this,
+                                                         aobject * bitmap,
+                                                         short x, short y,
+                                                         short destWidth, short destHeight)
+{
+	function_result __result = { .has_return_value = false };
+	bool __returning = false;
+	if (this != NULL) {
+		__increase_reference_count(this);
+	}
+	if (bitmap != NULL) {
+		__increase_reference_count(bitmap);
+	}
+
+	if (bitmap == NULL) goto __exit;
+	if (destWidth <= 0 || destHeight <= 0) goto __exit;
+
+	{
+		Am_Ui_Bitmap_data * const bitmapData =
+			(Am_Ui_Bitmap_data *)bitmap->object_properties.class_object_properties.object_data.value.custom_value;
+		if (bitmapData == NULL || bitmapData->bitmap == NULL) goto __exit;
+
+		aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
+		Am_Ui_Window_data * const window_data =
+			(Am_Ui_Window_data * const)window->object_properties.class_object_properties.object_data.value.custom_value;
+		struct RastPort * const rp = window_data->window->RPort;
+
+		short tx = translated_x(this, x);
+		short ty = translated_y(this, y);
+
+		unsigned short srcW = bitmap->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_width].nullable_value.value.ushort_value;
+		unsigned short srcH = bitmap->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_height].nullable_value.value.ushort_value;
+
+		if (destWidth == (short)srcW && destHeight == (short)srcH) {
+			/* 1:1 blit — no scaling needed */
+			BltBitMapRastPort(bitmapData->bitmap, 0, 0,
+			                  rp, tx, ty,
+			                  srcW, srcH, 0xC0);
+		} else {
+			/* Scale into a temporary bitmap, then blit to screen */
+			ULONG depth = GetBitMapAttr(bitmapData->bitmap, BMA_DEPTH);
+			struct BitMap *scaledBitmap =
+				AllocBitMap(destWidth, destHeight, depth,
+				            BMF_CLEAR | BMF_MINPLANES, bitmapData->bitmap);
+			if (scaledBitmap != NULL) {
+				struct BitScaleArgs bsa;
+				memset(&bsa, 0, sizeof(bsa));
+				bsa.bsa_SrcBitMap    = bitmapData->bitmap;
+				bsa.bsa_DestBitMap   = scaledBitmap;
+				bsa.bsa_SrcX         = 0;
+				bsa.bsa_SrcY         = 0;
+				bsa.bsa_SrcWidth     = srcW;
+				bsa.bsa_SrcHeight    = srcH;
+				bsa.bsa_XSrcFactor   = srcW;
+				bsa.bsa_YSrcFactor   = srcH;
+				bsa.bsa_DestX        = 0;
+				bsa.bsa_DestY        = 0;
+				bsa.bsa_DestWidth    = destWidth;
+				bsa.bsa_DestHeight   = destHeight;
+				bsa.bsa_XDestFactor  = destWidth;
+				bsa.bsa_YDestFactor  = destHeight;
+				bsa.bsa_Flags        = 0;
+				BitMapScale(&bsa);
+				BltBitMapRastPort(scaledBitmap, 0, 0,
+				                  rp, tx, ty,
+				                  destWidth, destHeight, 0xC0);
+				FreeBitMap(scaledBitmap);
+			} else {
+				/* Fallback: blit unscaled if we ran out of memory */
+				BltBitMapRastPort(bitmapData->bitmap, 0, 0,
+				                  rp, tx, ty,
+				                  srcW, srcH, 0xC0);
+			}
+		}
+
+		if (window != NULL) {
+			__decrease_reference_count(window);
+		}
+	}
+
+__exit: ;
+	if (bitmap != NULL) {
+		__decrease_reference_count(bitmap);
+	}
+	if (this != NULL) {
+		__decrease_reference_count(this);
+	}
+	return __result;
+};
+
+
+
+
+function_result Am_Ui_ViewContextGraphics_scrollRect_0(aobject * const this,
+                                                        short x, short y,
+                                                        unsigned short w, unsigned short h,
+                                                        short dx, short dy,
+                                                        unsigned char fillPen)
+{
+	function_result __result = { .has_return_value = false };
+	bool __returning = false;
+	if (this != NULL) {
+		__increase_reference_count(this);
+	}
+
+	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
+	if (window == NULL || w == 0 || h == 0) goto __exit;
+	if (dx == 0 && dy == 0) goto __exit;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
+	if (window_data == NULL || window_data->window == NULL || window_data->window->RPort == NULL) goto __exit;
+	struct RastPort *rp = window_data->window->RPort;
+
+	short tx = translated_x(this, x);
+	short ty = translated_y(this, y);
+	short tx2 = tx + (short)w - 1;
+	short ty2 = ty + (short)h - 1;
+
+	UBYTE prevAPen = rp->FgPen;
+	UBYTE prevBPen = rp->BgPen;
+	UBYTE prevDrMd = rp->DrawMode;
+
+	SetAPen(rp, fillPen);
+	SetBPen(rp, fillPen);
+	SetDrMd(rp, JAM2);
+
+	ScrollRaster(rp, -dx, -dy, tx, ty, tx2, ty2);
+
+	SetAPen(rp, prevAPen);
+	SetBPen(rp, prevBPen);
+	SetDrMd(rp, prevDrMd);
+
+__exit: ;
+	if (window != NULL) {
+		__decrease_reference_count(window);
+	}
+	if (this != NULL) {
+		__decrease_reference_count(this);
 	}
 	return __result;
 };

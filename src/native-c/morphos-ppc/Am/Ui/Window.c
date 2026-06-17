@@ -1,7 +1,10 @@
 #include <libc/core.h>
 
 #include <Am/Ui/Window.h>
+#include <Am/Ui/WindowProperties.h>
+#include <Am/Ui/MenuItem.h>
 #include <Am/Lang/Object.h>
+#include <Am/Lang/String.h>
 #include <Am/Ui/Screen.h>
 #include <Am/Lang/Int.h>
 
@@ -12,29 +15,62 @@
 #include <exec/types.h>
 #include <intuition/intuition.h>
 #include <libraries/gadtools.h>
+#include <devices/inputevent.h>
 
 #include <proto/exec.h>
 #include <proto/intuition.h>
 #include <proto/gadtools.h>
 #include <proto/graphics.h>
+#include <proto/keymap.h>
 
 #include <libc/core_inline_functions.h>
 
-void close_window_native(aobject * const this) {
+static void do_full_close(aobject * const this) {
 	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
-	if ( data != NULL ) {		
+	if ( data != NULL ) {
 		bool releasing = this->reference_count == 0; // diiiirty
 		if (releasing) {
 			this->reference_count = -100;
 		}
-		Am_Ui_Window_setRootView_0(this, NULL);
+		Am_Ui_Window_f_setRootView_0(this, NULL);
 		if (releasing) {
 			this->reference_count = 0;
 		}
 
 		if (data->window != NULL) {
+			if (data->menu_strip != NULL) {
+				ClearMenuStrip(data->window);
+			}
 			CloseWindow(data->window);
 			data->window = NULL;
+		}
+
+		if (data->menu_strip != NULL) {
+			FreeMenus(data->menu_strip);
+			data->menu_strip = NULL;
+		}
+		if (data->menu_new_menus != NULL) {
+			for (int i = 0; data->menu_new_menus[i].nm_Type != NM_END; i++) {
+				if (data->menu_new_menus[i].nm_Label != NULL && data->menu_new_menus[i].nm_Label != NM_BARLABEL) {
+					free((void *) data->menu_new_menus[i].nm_Label);
+				}
+				if (data->menu_new_menus[i].nm_CommKey != NULL) {
+					free((void *) data->menu_new_menus[i].nm_CommKey);
+				}
+			}
+			free(data->menu_new_menus);
+			data->menu_new_menus = NULL;
+		}
+		for (int i = 0; i < data->menu_item_count; i++) {
+			if (data->menu_item_aobjects[i] != NULL) {
+				__decrease_reference_count(data->menu_item_aobjects[i]);
+				data->menu_item_aobjects[i] = NULL;
+			}
+		}
+		data->menu_item_count = 0;
+		if (data->menu_builder != NULL) {
+			free(data->menu_builder);
+			data->menu_builder = NULL;
 		}
 
 		if (data->context_gadget != NULL) {
@@ -50,11 +86,28 @@ void close_window_native(aobject * const this) {
 			UnlockPubScreen(NULL, data->locked_screen);
 			data->locked_screen = NULL;
 		}
+
+		if (data->clip_region != NULL) {
+			DisposeRegion(data->clip_region);
+			data->clip_region = NULL;
+		}
 	}
 
 	free(this->object_properties.class_object_properties.object_data.value.custom_value);
 	this->object_properties.class_object_properties.object_data.value.custom_value = NULL;
 
+}
+
+void close_window_native(aobject * const this) {
+	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
+	if (data == NULL) {
+		return;
+	}
+	if (data->inside_handle_input) {
+		data->deferred_full_close = true;
+		return;
+	}
+	do_full_close(this);
 }
 
 function_result Am_Ui_Window__native_init_0(aobject * const this)
@@ -121,7 +174,7 @@ UBYTE calculate_pixel_scale_y(USHORT screen_width, USHORT screen_height) {
 }
 
 
-function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHORT width, USHORT height, aobject * screen, aobject * windowManager) //, aobject * screen)
+function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHORT width, USHORT height, aobject * screen, aobject * windowManager, struct Am_Ui_WindowProperties * properties)
 {
 	function_result __result = { .has_return_value = false };
 	bool __returning = false;
@@ -131,6 +184,13 @@ function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHO
 		__increase_reference_count(this);
 	}
 
+	bool borderless = (properties != NULL) ? properties->borderless : false;
+	// WFLG_RMBTRAP is intentionally NOT set: Intuition needs the right
+	// mouse button to pop up the menu strip when one is installed.
+	ULONG window_flags = borderless
+		? (WFLG_ACTIVATE | WFLG_BORDERLESS | WFLG_SIMPLE_REFRESH)
+		: (WFLG_SIZEGADGET | WFLG_ACTIVATE | WFLG_DRAGBAR | WFLG_DEPTHGADGET | WFLG_CLOSEGADGET | WFLG_SIMPLE_REFRESH | WFLG_SIZEBBOTTOM);
+
 	SysBase = *((struct ExecBase **)4UL);
 	printf("Intuition base: %d\n", (unsigned int) IntuitionBase);
 	if (IntuitionBase == NULL) {
@@ -139,6 +199,7 @@ function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHO
 
 	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) calloc(1, sizeof(Am_Ui_Window_data));
 	this->object_properties.class_object_properties.object_data.value.custom_value = data;
+	data->clip_region = NewRegion();
 
 	struct Screen *amiga_screen = NULL;
 	struct VisualInfo *visual_info = NULL;
@@ -182,10 +243,15 @@ function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHO
 		WA_Height, height,
 		WA_DetailPen, 1,
 		WA_BlockPen, 2,
-		WA_IDCMP, IDCMP_CLOSEWINDOW | IDCMP_GADGETUP | MENUPICK | MOUSEBUTTONS | REFRESHWINDOW | IDCMP_INTUITICKS | IDCMP_NEWSIZE | IDCMP_MOUSEBUTTONS,
-		WA_Flags, WFLG_SIZEGADGET | WFLG_ACTIVATE | WFLG_RMBTRAP | WFLG_DRAGBAR | WFLG_DEPTHGADGET | WFLG_CLOSEGADGET | WFLG_SIMPLE_REFRESH | WFLG_SIZEBBOTTOM, //WFLG_BORDERLESS WFLG_BACKDROP
+		// MorphOS delivers mouse-wheel events as NewMouse RAWKEY codes
+		// (NM_WHEEL_UP/DOWN/LEFT/RIGHT, 0x7A..0x7D) through IDCMP_RAWKEY,
+		// not via OS4's IDCMP_EXTENDEDMOUSE. The RAWKEY handler below
+		// picks them out before falling through to MapRawKey.
+		WA_IDCMP, IDCMP_CLOSEWINDOW | IDCMP_GADGETUP | MENUPICK | MOUSEBUTTONS | REFRESHWINDOW | IDCMP_INTUITICKS | IDCMP_NEWSIZE | IDCMP_MOUSEBUTTONS | IDCMP_RAWKEY,
+		WA_Flags, window_flags,
+		WA_Borderless, borderless ? TRUE : FALSE,
 		WA_Gadgets, 0, // (ULONG) data->context_gadget,
-		WA_Title, (ULONG) "Hello",
+		WA_Title, borderless ? (ULONG) NULL : (ULONG) "Hello",
 		WA_MinWidth, 0,
 		WA_MaxWidth, 1000,
 		WA_MinHeight, 0,
@@ -213,8 +279,8 @@ function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHO
 	this->object_properties.class_object_properties.properties[Am_Ui_Window_P_pixelScaleX].nullable_value.value.uchar_value = calculate_pixel_scale_x(window->WScreen->Width, window->WScreen->Height);
 	this->object_properties.class_object_properties.properties[Am_Ui_Window_P_pixelScaleY].nullable_value.value.uchar_value = calculate_pixel_scale_y(window->WScreen->Width, window->WScreen->Height);
 
-	Am_Ui_Window_setBorder_0(this, window->BorderLeft, window->BorderTop, window->BorderRight, window->BorderBottom);
-	Am_Ui_Window_onResize_0(this, window->LeftEdge, window->TopEdge, window->Width, window->Height);
+	Am_Ui_Window_f_setBorder_0(this, window->BorderLeft, window->BorderTop, window->BorderRight, window->BorderBottom);
+	Am_Ui_Window_f_onResize_0(this, window->LeftEdge, window->TopEdge, window->Width, window->Height);
 
 	GT_RefreshWindow(window, NULL);
 
@@ -269,33 +335,116 @@ void handle_message(aobject * this, struct IntuiMessage * msg) {
 				window_data->pending_refresh = TRUE;
 			}
 			break;
+		case IDCMP_MENUPICK:
+			{
+				USHORT code = msg->Code;
+				while (code != MENUNULL && window_data->menu_strip != NULL) {
+					struct MenuItem *menu_item = ItemAddress(window_data->menu_strip, code);
+					if (menu_item == NULL) {
+						break;
+					}
+					aobject *aml_item = (aobject *) GTMENUITEM_USERDATA(menu_item);
+					if (aml_item != NULL) {
+						Am_Ui_MenuItem_f_invokeClick_0(aml_item);
+					}
+					code = menu_item->NextSelect;
+				}
+			}
+			break;
 		case IDCMP_NEWSIZE:
 //			printf("Resize %dx%d\n", win->Width, win->Height);
-	//					Am_Ui_Window_setBorder_0(this, win->BorderLeft, win->BorderTop, win->BorderRight, win->BorderBottom);
+	//					Am_Ui_Window_f_setBorder_0(this, win->BorderLeft, win->BorderTop, win->BorderRight, win->BorderBottom);
 			window_data->pending_resize= TRUE;
-//			Am_Ui_Window_onResize_0(this, win->LeftEdge, win->TopEdge, win->Width, win->Height);
+//			Am_Ui_Window_f_onResize_0(this, win->LeftEdge, win->TopEdge, win->Width, win->Height);
 	//					GT_RefreshWindow(win, NULL);
 			break;
 		case IDCMP_MOUSEBUTTONS:
 //			printf("Mouse click %d\n", msg->Code);
 			if (msg->Code == MENUUP) // Check for right mouse button // IECODE_RBUTTON
 			{
-				Am_Ui_Window_onMouseEvent_0(this, 2, 2, msg->MouseX, msg->MouseY);
+				Am_Ui_Window_f_onMouseEvent_0(this, 2, 2, msg->MouseX, msg->MouseY);
 			} else if (msg->Code == SELECTUP) {
-				Am_Ui_Window_onMouseEvent_0(this, 2, 1, msg->MouseX, msg->MouseY);
+				Am_Ui_Window_f_onMouseEvent_0(this, 2, 1, msg->MouseX, msg->MouseY);
 			} else if (msg->Code == MENUDOWN) // Check for right mouse button
 			{
-				Am_Ui_Window_onMouseEvent_0(this, 3, 2, msg->MouseX, msg->MouseY);
+				Am_Ui_Window_f_onMouseEvent_0(this, 3, 2, msg->MouseX, msg->MouseY);
 			} else if (msg->Code == SELECTDOWN) {
-				Am_Ui_Window_onMouseEvent_0(this, 3, 1, msg->MouseX, msg->MouseY);
+				Am_Ui_Window_f_onMouseEvent_0(this, 3, 1, msg->MouseX, msg->MouseY);
 			}
 			break;
 		case IDCMP_MOUSEMOVE:
 		case IDCMP_INTUITICKS:
-			if (msg->MouseX != window_data->last_mouse_x && msg->MouseY != window_data->last_mouse_y) {
+			if (msg->MouseX != window_data->last_mouse_x || msg->MouseY != window_data->last_mouse_y) {
 				window_data->last_mouse_x = msg->MouseX;
 				window_data->last_mouse_y = msg->MouseY;
-				Am_Ui_Window_onMouseEvent_0(this, 1, 0, msg->MouseX, msg->MouseY);
+				Am_Ui_Window_f_onMouseEvent_0(this, 1, 0, msg->MouseX, msg->MouseY);
+			}
+			break;
+		case IDCMP_RAWKEY:
+			{
+				// Intuition's raw-key code: low 7 bits are the key index,
+				// bit 7 set indicates a key release. We ignore releases
+				// for now (the AmLang side gets a single type=down event).
+				if (msg->Code & 0x80) {
+					break;
+				}
+
+				// NewMouse class events arrive on RAWKEY: wheel up/down/
+				// left/right are 0x7A..0x7D, 4th button is 0x7E. Each
+				// detent is one press+release pair; the release was
+				// filtered out above, so each click yields one callback.
+				if (msg->Code == 0x7A) { // NM_WHEEL_UP
+					Am_Ui_Window_f_onMouseWheel_0(this, -1, msg->MouseX, msg->MouseY);
+					break;
+				} else if (msg->Code == 0x7B) { // NM_WHEEL_DOWN
+					Am_Ui_Window_f_onMouseWheel_0(this, 1, msg->MouseX, msg->MouseY);
+					break;
+				} else if (msg->Code == 0x7C || msg->Code == 0x7D) {
+					// NM_WHEEL_LEFT / NM_WHEEL_RIGHT — horizontal wheel
+					// not wired up on the AmLang side yet.
+					break;
+				}
+
+				// Special keys (arrows, backspace, delete) are recognised
+				// directly by their AmigaOS raw codes — same as the
+				// amigaos build — because MapRawKey doesn't produce
+				// useful ASCII for them. keyChar=1 piggybacks shift state
+				// onto arrow keys so the AmLang side can implement
+				// shift+arrow selection without us inventing a second
+				// modifier channel.
+				if (msg->Code == 65) {
+					Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, 8); // backspace
+				} else if (msg->Code == 70) {
+					Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, 127); // delete
+				} else if (msg->Code == 79) { // left
+					UBYTE shifted = (msg->Qualifier & (IEQUALIFIER_LSHIFT | IEQUALIFIER_RSHIFT)) ? 1 : 0;
+					Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, shifted);
+				} else if (msg->Code == 78) { // right
+					UBYTE shifted = (msg->Qualifier & (IEQUALIFIER_LSHIFT | IEQUALIFIER_RSHIFT)) ? 1 : 0;
+					Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, shifted);
+				} else if (msg->Code == 76) { // up
+					UBYTE shifted = (msg->Qualifier & (IEQUALIFIER_LSHIFT | IEQUALIFIER_RSHIFT)) ? 1 : 0;
+					Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, shifted);
+				} else if (msg->Code == 77) { // down
+					UBYTE shifted = (msg->Qualifier & (IEQUALIFIER_LSHIFT | IEQUALIFIER_RSHIFT)) ? 1 : 0;
+					Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, shifted);
+				} else {
+					// Everything else: translate to ASCII via the
+					// currently-installed keymap.
+					struct InputEvent input_event;
+					input_event.ie_Class = IECLASS_RAWKEY;
+					input_event.ie_Code = msg->Code;
+					input_event.ie_Qualifier = msg->Qualifier;
+					input_event.ie_position.ie_addr = 0;
+
+					UBYTE key_buffer[8];
+					WORD actual_length = MapRawKey(&input_event, (STRPTR) key_buffer, 8, NULL);
+					UBYTE ascii_char = 0;
+					if (actual_length > 0) {
+						ascii_char = key_buffer[0];
+					}
+					Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, ascii_char);
+				}
 			}
 			break;
 	}
@@ -316,6 +465,7 @@ function_result Am_Ui_Window_handleInput_0(aobject * const this)
 	window_data->pending_refresh = FALSE;
 	window_data->pending_full_refresh = FALSE;
 	window_data->pending_resize = FALSE;
+	window_data->deferred_full_close = false;
 
 	ULONG sig_mask = 1L << window_data->window->UserPort->mp_SigBit;
 //	printf("Wait %d\n", sig_mask);
@@ -323,6 +473,7 @@ function_result Am_Ui_Window_handleInput_0(aobject * const this)
 //	printf("Wait done %d\n", signals);
 
 //	printf("Wait done %d, %d\n", sig_mask, signals & sig_mask);
+	window_data->inside_handle_input = true;
 	if (signals & sig_mask ) // )
 	{
 		struct IntuiMessage *msg;
@@ -332,34 +483,40 @@ function_result Am_Ui_Window_handleInput_0(aobject * const this)
 
 			handle_message(this, msg);
 
-			ReplyMsg((struct Message *) msg);				
+			ReplyMsg((struct Message *) msg);
 		}
+	}
+	window_data->inside_handle_input = false;
+
+	if (window_data->deferred_full_close) {
+		do_full_close(this);
+		goto __exit;
 	}
 
 //	printf("Handling done %d\n", signals);
 
 	if (window_data->pending_resize) {
-		Am_Ui_Window_onResize_0(this, win->LeftEdge, win->TopEdge, win->Width, win->Height);
+		Am_Ui_Window_f_onResize_0(this, win->LeftEdge, win->TopEdge, win->Width, win->Height);
 	}
 
 	if (window_data->pending_full_refresh) {
-		Am_Ui_Window_paint_0(this);
+		Am_Ui_Window_f_paint_0(this);
 	}
 	else if (window_data->pending_refresh) {
 		printf("handle pending refresh\n");
 
 		BeginRefresh(window_data->window);
-		Am_Ui_Window_paint_0(this);
+		Am_Ui_Window_f_paint_0(this);
 		EndRefresh(window_data->window, TRUE);
 	}
 
 /*
 	if (window_data->pending_repaint) {
-		Am_Ui_Window_paint_0(this);
+		Am_Ui_Window_f_paint_0(this);
 	}
 */
 	if (window_data->pending_close) {
-		Am_Ui_Window_onCloseButtonClick_0(this);
+		Am_Ui_Window_f_onCloseButtonClick_0(this);
 	}
 
 __exit: ;
@@ -384,6 +541,34 @@ __exit: ;
 	}
 	return __result;
 };
+
+function_result Am_Ui_Window_getHostScreenWidth_0(aobject * const this)
+{
+	function_result __result = { .has_return_value = true };
+	__increase_reference_count(this);
+	Am_Ui_Window_data * data = (Am_Ui_Window_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+	unsigned short v = 0;
+	if (data != NULL && data->window != NULL && data->window->WScreen != NULL) {
+		v = (unsigned short) data->window->WScreen->Width;
+	}
+	__result.return_value.value.ushort_value = v;
+	__decrease_reference_count(this);
+	return __result;
+}
+
+function_result Am_Ui_Window_getHostScreenHeight_0(aobject * const this)
+{
+	function_result __result = { .has_return_value = true };
+	__increase_reference_count(this);
+	Am_Ui_Window_data * data = (Am_Ui_Window_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+	unsigned short v = 0;
+	if (data != NULL && data->window != NULL && data->window->WScreen != NULL) {
+		v = (unsigned short) data->window->WScreen->Height;
+	}
+	__result.return_value.value.ushort_value = v;
+	__decrease_reference_count(this);
+	return __result;
+}
 
 function_result Am_Ui_Window_refresh_0(aobject * const this)
 {
@@ -412,3 +597,269 @@ __exit: ;
 	}
 	return __result;
 };
+
+static char * extract_string_dup(aobject * str) {
+	if (str == NULL) {
+		return NULL;
+	}
+	string_holder * sh = (string_holder *) str->object_properties.class_object_properties.object_data.value.custom_value;
+	if (sh == NULL || sh->string_value == NULL) {
+		return NULL;
+	}
+	return strdup(sh->string_value);
+}
+
+static void free_menu_strip(Am_Ui_Window_data * data) {
+	if (data->window != NULL && data->menu_strip != NULL) {
+		ClearMenuStrip(data->window);
+	}
+	if (data->menu_strip != NULL) {
+		FreeMenus(data->menu_strip);
+		data->menu_strip = NULL;
+	}
+	if (data->menu_new_menus != NULL) {
+		for (int i = 0; data->menu_new_menus[i].nm_Type != NM_END; i++) {
+			if (data->menu_new_menus[i].nm_Label != NULL && data->menu_new_menus[i].nm_Label != NM_BARLABEL) {
+				free((void *) data->menu_new_menus[i].nm_Label);
+			}
+		}
+		free(data->menu_new_menus);
+		data->menu_new_menus = NULL;
+	}
+	for (int i = 0; i < data->menu_item_count; i++) {
+		if (data->menu_item_aobjects[i] != NULL) {
+			__decrease_reference_count(data->menu_item_aobjects[i]);
+			data->menu_item_aobjects[i] = NULL;
+		}
+	}
+	data->menu_item_count = 0;
+}
+
+function_result Am_Ui_Window_nativeBeginMenuStrip_0(aobject * const this) {
+	function_result __result = { .has_return_value = false };
+	if (this != NULL) {
+		__increase_reference_count(this);
+	}
+	Am_Ui_Window_data * data = (Am_Ui_Window_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+	if (data == NULL) {
+		goto __exit;
+	}
+	if (data->menu_builder != NULL) {
+		for (int i = 0; i < data->menu_builder->num_menus; i++) {
+			free(data->menu_builder->menu_titles[i]);
+		}
+		for (int i = 0; i < data->menu_builder->num_items; i++) {
+			free(data->menu_builder->item_labels[i]);
+			if (data->menu_builder->item_comm_keys[i] != NULL) {
+				free(data->menu_builder->item_comm_keys[i]);
+			}
+		}
+		free(data->menu_builder);
+	}
+	data->menu_builder = (Am_Ui_Window_menu_builder *) calloc(1, sizeof(Am_Ui_Window_menu_builder));
+__exit: ;
+	if (this != NULL) {
+		__decrease_reference_count(this);
+	}
+	return __result;
+}
+
+function_result Am_Ui_Window_nativeAddMenu_0(aobject * const this, aobject * const title) {
+	function_result __result = { .has_return_value = false };
+	if (this != NULL) __increase_reference_count(this);
+	if (title != NULL) __increase_reference_count(title);
+	Am_Ui_Window_data * data = (Am_Ui_Window_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+	if (data == NULL || data->menu_builder == NULL) {
+		goto __exit;
+	}
+	Am_Ui_Window_menu_builder * b = data->menu_builder;
+	if (b->num_menus >= AM_UI_WINDOW_MENU_MAX_MENUS) {
+		printf("Window menu builder: too many menus (max %d)\n", AM_UI_WINDOW_MENU_MAX_MENUS);
+		goto __exit;
+	}
+	b->menu_titles[b->num_menus] = extract_string_dup(title);
+	b->num_menus++;
+__exit: ;
+	if (this != NULL) __decrease_reference_count(this);
+	if (title != NULL) __decrease_reference_count(title);
+	return __result;
+}
+
+function_result Am_Ui_Window_nativeAddMenuItem_0(aobject * const this, int menuIndex, aobject * const item, aobject * const label, aobject * const commKey) {
+	function_result __result = { .has_return_value = false };
+	if (this != NULL) __increase_reference_count(this);
+	if (item != NULL) __increase_reference_count(item);
+	if (label != NULL) __increase_reference_count(label);
+	if (commKey != NULL) __increase_reference_count(commKey);
+	Am_Ui_Window_data * data = (Am_Ui_Window_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+	if (data == NULL || data->menu_builder == NULL) {
+		goto __exit;
+	}
+	Am_Ui_Window_menu_builder * b = data->menu_builder;
+	if (b->num_items >= AM_UI_WINDOW_MENU_MAX_ITEMS) {
+		printf("Window menu builder: too many items (max %d)\n", AM_UI_WINDOW_MENU_MAX_ITEMS);
+		goto __exit;
+	}
+	b->item_menu_indices[b->num_items] = menuIndex;
+	b->item_labels[b->num_items] = extract_string_dup(label);
+	if (commKey != NULL) {
+		char * dup = extract_string_dup(commKey);
+		if (dup != NULL && dup[0] == '\0') {
+			free(dup);
+			dup = NULL;
+		}
+		b->item_comm_keys[b->num_items] = dup;
+	} else {
+		b->item_comm_keys[b->num_items] = NULL;
+	}
+	if (item != NULL) {
+		__increase_reference_count(item);
+	}
+	b->item_aobjects[b->num_items] = item;
+	b->num_items++;
+__exit: ;
+	if (this != NULL) __decrease_reference_count(this);
+	if (item != NULL) __decrease_reference_count(item);
+	if (label != NULL) __decrease_reference_count(label);
+	if (commKey != NULL) __decrease_reference_count(commKey);
+	return __result;
+}
+
+function_result Am_Ui_Window_nativeFinalizeMenuStrip_0(aobject * const this) {
+	function_result __result = { .has_return_value = false };
+	if (this != NULL) __increase_reference_count(this);
+	Am_Ui_Window_data * data = (Am_Ui_Window_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+	if (data == NULL || data->menu_builder == NULL || data->window == NULL) {
+		goto __exit;
+	}
+	free_menu_strip(data);
+	Am_Ui_Window_menu_builder * b = data->menu_builder;
+	int total = b->num_menus + b->num_items + 1;
+	struct NewMenu * nm = (struct NewMenu *) calloc(total, sizeof(struct NewMenu));
+	int n = 0;
+	for (int m = 0; m < b->num_menus; m++) {
+		nm[n].nm_Type = NM_TITLE;
+		nm[n].nm_Label = b->menu_titles[m];
+		nm[n].nm_CommKey = NULL;
+		nm[n].nm_Flags = 0;
+		nm[n].nm_MutualExclude = 0;
+		nm[n].nm_UserData = NULL;
+		n++;
+		b->menu_titles[m] = NULL;
+		for (int i = 0; i < b->num_items; i++) {
+			if (b->item_menu_indices[i] != m) {
+				continue;
+			}
+			nm[n].nm_Type = NM_ITEM;
+			nm[n].nm_Label = b->item_labels[i];
+			nm[n].nm_CommKey = b->item_comm_keys[i];
+			nm[n].nm_Flags = 0;
+			nm[n].nm_MutualExclude = 0;
+			nm[n].nm_UserData = (APTR) b->item_aobjects[i];
+			n++;
+			b->item_labels[i] = NULL;
+			b->item_comm_keys[i] = NULL;
+			data->menu_item_aobjects[data->menu_item_count++] = b->item_aobjects[i];
+			b->item_aobjects[i] = NULL;
+		}
+	}
+	nm[n].nm_Type = NM_END;
+	struct Menu * menu = CreateMenus(nm, TAG_END);
+	if (menu == NULL) {
+		printf("CreateMenus failed\n");
+		free(nm);
+		goto __exit;
+	}
+	if (!LayoutMenus(menu, data->visual_info, GTMN_NewLookMenus, TRUE, TAG_END)) {
+		printf("LayoutMenus failed\n");
+		FreeMenus(menu);
+		free(nm);
+		goto __exit;
+	}
+	if (!SetMenuStrip(data->window, menu)) {
+		printf("SetMenuStrip failed\n");
+		FreeMenus(menu);
+		free(nm);
+		goto __exit;
+	}
+	data->menu_strip = menu;
+	data->menu_new_menus = nm;
+	free(b);
+	data->menu_builder = NULL;
+__exit: ;
+	if (this != NULL) __decrease_reference_count(this);
+	return __result;
+}
+
+function_result Am_Ui_Window_nativeClearMenuStrip_0(aobject * const this) {
+	function_result __result = { .has_return_value = false };
+	if (this != NULL) __increase_reference_count(this);
+	Am_Ui_Window_data * data = (Am_Ui_Window_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+	if (data != NULL) {
+		free_menu_strip(data);
+	}
+__exit: ;
+	if (this != NULL) __decrease_reference_count(this);
+	return __result;
+}
+
+// Mirror of the amigaos setTitleNative: hand both strings to Intuition's
+// SetWindowTitles. A NULL screenTitle is passed through as-is (Intuition
+// docs say (UBYTE *)-1 means "leave unchanged" — callers can rely on that).
+function_result Am_Ui_Window_setTitleNative_0(aobject * const this, aobject * const windowTitle, aobject * const screenTitle)
+{
+	function_result __result = { .has_return_value = false };
+	if (this != NULL) __increase_reference_count(this);
+	if (windowTitle != NULL) __increase_reference_count(windowTitle);
+	if (screenTitle != NULL) __increase_reference_count(screenTitle);
+
+	Am_Ui_Window_data * const data = (Am_Ui_Window_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+	if (data != NULL && data->window != NULL) {
+		char * windowTitleStr = NULL;
+		if (windowTitle != NULL) {
+			string_holder * sh = (string_holder *) windowTitle->object_properties.class_object_properties.object_data.value.custom_value;
+			if (sh != NULL && sh->string_value != NULL) {
+				windowTitleStr = sh->string_value;
+			}
+		}
+		char * screenTitleStr = NULL;
+		if (screenTitle != NULL) {
+			string_holder * sh = (string_holder *) screenTitle->object_properties.class_object_properties.object_data.value.custom_value;
+			if (sh != NULL && sh->string_value != NULL && sh->length > 0) {
+				screenTitleStr = sh->string_value;
+			}
+		}
+		SetWindowTitles(data->window, (STRPTR) windowTitleStr, (STRPTR) screenTitleStr);
+	}
+
+__exit: ;
+	if (this != NULL) __decrease_reference_count(this);
+	if (windowTitle != NULL) __decrease_reference_count(windowTitle);
+	if (screenTitle != NULL) __decrease_reference_count(screenTitle);
+	return __result;
+}
+
+// Clipboard support requires iffparse + clipboard.device — not wired up
+// on MorphOS yet. Stubs so the link resolves.
+function_result Am_Ui_Window_copyToClipboard_0(aobject * const this, aobject * const text)
+{
+	function_result __result = { .has_return_value = false };
+	if (this != NULL) __increase_reference_count(this);
+	if (text != NULL) __increase_reference_count(text);
+	printf("TODO: implement Am_Ui_Window_copyToClipboard_0 on morphos-ppc\n");
+__exit: ;
+	if (this != NULL) __decrease_reference_count(this);
+	if (text != NULL) __decrease_reference_count(text);
+	return __result;
+}
+
+function_result Am_Ui_Window_pasteFromClipboard_0(aobject * const this)
+{
+	function_result __result = { .has_return_value = true };
+	if (this != NULL) __increase_reference_count(this);
+	printf("TODO: implement Am_Ui_Window_pasteFromClipboard_0 on morphos-ppc\n");
+	__result.return_value.value.object_value = NULL;
+__exit: ;
+	if (this != NULL) __decrease_reference_count(this);
+	return __result;
+}

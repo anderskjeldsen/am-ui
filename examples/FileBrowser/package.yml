@@ -4,10 +4,12 @@ version: 1.0.0
 type: application
 dependencies:
   - id: am-lang-core
-    realm: github
-    type: git-repo
-    tag: latest
-    url: https://github.com/anderskjeldsen/am-lang-core.git
+#    realm: github
+#    type: git-repo
+#    tag: latest
+#    url: https://github.com/anderskjeldsen/am-lang-core.git
+    type: local
+    path: ../../../am-lang-core/
   - id: am-ui
     type: local
     path: ../../
@@ -23,9 +25,10 @@ platforms:
     additionalCSources: 
     additionalIncludePaths:
     gccAdditionalOptions:
-      - -noixemul     
+      - -noixemul  
+    additionalLinkerFlags:
+      - -noixemul
     gccAdditionalLibraries:
-      - socket
   - id: morphos-ppc
     extends: libc
     gccCommand: ppc-morphos-gcc -O3
@@ -35,18 +38,15 @@ platforms:
     additionalIncludePaths:
     gccAdditionalOptions:
       - -noixemul     
+    additionalLinkerFlags:
+      - -noixemul
     gccAdditionalLibraries:
 
 buildTargets:
-  - id: amigaos_docker_unix-arm
+  - id: amigaos_docker
     platform: amigaos
     dockerBuild:
-      image: kjeldsenanders/dnf-dev:initial
-      buildPath: /host
-  - id: amigaos_docker_unix-x64
-    platform: amigaos
-    dockerBuild:
-      image: kjeldsenanders/dnf-dev:initial-x86
+      image: amiga-gcc:latest
       buildPath: /host
   - id: morphos-ppc_docker
     platform: morphos-ppc

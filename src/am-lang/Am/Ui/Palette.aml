@@ -1,0 +1,40 @@
+namespace Am.Ui
+{
+    // 8-bits-per-channel RGB palette, packed into UInt entries as
+    // 0x00RRGGBB. Push to a Screen with Screen.setPalette.
+    class Palette(var size: UShort) {
+        import Am.Lang
+
+        var colors: UInt[] = new UInt[this.size.toInt()]
+
+        fun getSize(): UShort {
+            return this.size
+        }
+
+        // Pen index is Int so callers can pass an enum value (via
+        // .getValue()) directly. Internal storage is bounded by `size`.
+        fun setRGB(index: Int, r: UByte, g: UByte, b: UByte) {
+            this.colors[index] = r.toUInt() * 0x10000UI + g.toUInt() * 0x100UI + b.toUInt()
+        }
+
+        fun setPacked(index: Int, rgb: UInt) {
+            this.colors[index] = rgb & 0xFFFFFFUI
+        }
+
+        fun getPacked(index: Int): UInt {
+            return this.colors[index]
+        }
+
+        fun getRed(index: Int): UByte {
+            return ((this.colors[index] / 0x10000UI) & 0xFFUI).toUByte()
+        }
+
+        fun getGreen(index: Int): UByte {
+            return ((this.colors[index] / 0x100UI) & 0xFFUI).toUByte()
+        }
+
+        fun getBlue(index: Int): UByte {
+            return (this.colors[index] & 0xFFUI).toUByte()
+        }
+    }
+}
