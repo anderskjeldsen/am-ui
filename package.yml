@@ -77,6 +77,28 @@ platforms:
       # file or extra build rule is needed.
       - -framework
       - AppKit
+  # Linux desktop backend on SDL2 — same native impl as macos-arm
+  # (src/native-c/linux-x64/, copied from macos-arm). The Cocoa menu
+  # bridge + NSOpenPanel folder requester are gated behind __APPLE__,
+  # so on linux those compile to no-op stubs; everything else is the
+  # portable SDL2 path (AM_UI_LINUX_SDL_TTF selects SDL_ttf rendering).
+  # Needs the SDL2 dev packages: `apt install libsdl2-dev libsdl2-ttf-dev`.
+  # Headers are <SDL2/SDL.h>/<SDL2/SDL_ttf.h>, found via the default
+  # /usr/include path, so no extra -I is required.
+  - id: linux-x64
+    extends: libc
+    gccCommand: gcc -O2
+    gccAdditionalOptions:
+      - -DAM_UI_LINUX_SDL_TTF
+    # Use gccAdditionalLibraries (not additionalLinkerFlags) so amlc
+    # places -lSDL2/-lSDL2_ttf AFTER the object files. GNU ld is
+    # link-order sensitive — libs before the objects that reference
+    # them get dropped (macOS's ld64 isn't, which is why macos-arm can
+    # use additionalLinkerFlags). Matches how am-ssl/am-png declare
+    # their libs.
+    gccAdditionalLibraries:
+      - SDL2
+      - SDL2_ttf
 
 
 buildTargets:
@@ -95,5 +117,8 @@ buildTargets:
     features: ["floatingPoint"]
   - id: macos-arm
     platform: macos-arm
+    features: ["floatingPoint"]
+  - id: linux-x64
+    platform: linux-x64
     features: ["floatingPoint"]
 
