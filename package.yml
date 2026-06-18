@@ -53,6 +53,30 @@ platforms:
     additionalCSources:
       - inputFilename: headless_painter.c
         outputFilename: headless_painter.o
+  # Apple Silicon desktop backend on SDL2. Single SDL2 native impl
+  # under src/native-c/macos-arm/ — the same set of files would
+  # land under macos/ and linux-x64/ when those targets are added
+  # (SDL2 is the portable abstraction; nothing in the impl is
+  # arm-specific).
+  #
+  # `-I/opt/homebrew/include` / `-L/opt/homebrew/lib` resolve the
+  # Homebrew SDL2 install (`brew install sdl2 sdl2_ttf`).
+  - id: macos-arm
+    extends: libc
+    gccCommand: gcc -O2
+    gccAdditionalOptions:
+      - -DAM_UI_LINUX_SDL_TTF
+      - -I/opt/homebrew/include
+    additionalLinkerFlags:
+      - -L/opt/homebrew/lib
+      - -lSDL2
+      - -lSDL2_ttf
+      # AppKit gives us NSMenu / NSApplication for the native menu bar
+      # at the top of the screen. The bridge in Window.c uses the
+      # Objective-C runtime through plain C (objc_msgSend) so no .m
+      # file or extra build rule is needed.
+      - -framework
+      - AppKit
 
 
 buildTargets:
@@ -68,5 +92,8 @@ buildTargets:
       buildPath: /work
   - id: amigaos-sim
     platform: amigaos-sim
+    features: ["floatingPoint"]
+  - id: macos-arm
+    platform: macos-arm
     features: ["floatingPoint"]
 

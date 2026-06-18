@@ -14,6 +14,7 @@
 #include <intuition/screens.h>
 #include <graphics/displayinfo.h>
 #include <graphics/view.h>
+#include <cybergraphx/cybergraphics.h>
 
 #include <proto/exec.h>
 #include <proto/intuition.h>
@@ -51,8 +52,7 @@ function_result Am_Ui_Screen__native_mark_children_0(aobject * const this)
 	bool __returning = false;
 __exit: ;
 	return __result;
-};
-
+}
 
 function_result Am_Ui_Screen_open_0(aobject * const this, int width, int height, int depth, int displayId, aobject * title, aobject * systemPens, aobject * paletteColors)
 {
@@ -73,6 +73,8 @@ function_result Am_Ui_Screen_open_0(aobject * const this, int width, int height,
 		IntuitionBase = (struct IntuitionBase *) __ensure_library("intuition.library", 0L);
 	}
 
+	// Extract the AmLang string into a C string pointer. NULL means
+	// "no SA_Title tag" — Intuition will leave the title bar empty.
 	const char * title_cstr = NULL;
 	if (title != NULL) {
 		string_holder * sh = (string_holder *) (title + 1);
@@ -81,6 +83,9 @@ function_result Am_Ui_Screen_open_0(aobject * const this, int width, int height,
 		}
 	}
 
+	// SA_Pens wants a UWORD array terminated by ~0. The AmLang side
+	// passes a UByte[] (one pen index per DRI role) — we widen each
+	// entry and append the terminator.
 	UWORD pen_array[16];
 	UWORD * pens_ptr = NULL;
 	if (systemPens != NULL) {
@@ -95,6 +100,10 @@ function_result Am_Ui_Screen_open_0(aobject * const this, int width, int height,
 		pens_ptr = pen_array;
 	}
 
+	// Build SA_Colors32 table from a UInt[] of packed 0x00RRGGBB. Format
+	// is: { count<<16 | startIdx, r0_32, g0_32, b0_32, r1_32, ..., 0 }.
+	// 8-bit channels are widened with the 0x01010101 trick so 0xFF maps
+	// to full brightness.
 	ULONG * colors32 = NULL;
 	unsigned int color_count = 0;
 	if (paletteColors != NULL) {
@@ -129,6 +138,14 @@ function_result Am_Ui_Screen_open_0(aobject * const this, int width, int height,
 		printf("\n");
 	}
 
+	// Passing SA_Pens=NULL is NOT the same as omitting the tag — Intuition
+	// interprets a NULL pens pointer as "an empty array", which on V40+
+	// degrades the DrawInfo mapping to only use pens 0 and 1 (you can
+	// see this in the DRI dump after open: every role maps to 0 or 1).
+	// That makes BARBLOCKPEN resolve to pen 1 = black on most palettes,
+	// which is why the title bar showed up black. Use TAG_IGNORE on
+	// optional tags whose values are NULL so Intuition treats them as
+	// "tag not present" and uses its standard defaults.
 	struct TagItem screenTags[] = {
 		SA_Left, 0,
 		SA_Top, 0,
@@ -138,19 +155,16 @@ function_result Am_Ui_Screen_open_0(aobject * const this, int width, int height,
 		SA_DisplayID, displayId,
 		SA_Type, PUBLICSCREEN,
 		SA_ShowTitle, TRUE,
-		// SA_SysFont = 1 picks the user's "Workbench screen" font (same
-		// font Workbench itself uses). Without this Intuition defaults
-		// to Topaz 8 — the bar then ends up shorter than the real WB
-		// bar and chrome that follows the user's font overflows our
-		// reserved area.
+		// SA_SysFont = 1 picks the user's "Workbench screen" font from
+		// Prefs (which is also what Workbench itself uses). Without this
+		// Intuition falls back to Topaz 8 and the bar ends up shorter
+		// than the real Workbench bar — chrome painted by Magic Menu /
+		// other patches that follow the user's font will then overflow
+		// the BarHeight we report to callers.
 		SA_SysFont, 1,
-		// SA_Pens=NULL degrades the DrawInfo mapping on V40+ to use only
-		// pens 0/1; same trap on SA_Colors32. TAG_IGNORE makes Intuition
-		// treat the tag as not present and fall back to its standard
-		// defaults — see the parallel comment in the amigaos Screen.c.
-		title_cstr != NULL ? SA_Title    : TAG_IGNORE, (ULONG) title_cstr,
-		pens_ptr   != NULL ? SA_Pens     : TAG_IGNORE, (ULONG) pens_ptr,
-		colors32   != NULL ? SA_Colors32 : TAG_IGNORE, (ULONG) colors32,
+		title_cstr  != NULL ? SA_Title     : TAG_IGNORE, (ULONG) title_cstr,
+		pens_ptr    != NULL ? SA_Pens      : TAG_IGNORE, (ULONG) pens_ptr,
+		colors32    != NULL ? SA_Colors32  : TAG_IGNORE, (ULONG) colors32,
 		TAG_DONE, TAG_DONE,
 	};
 
@@ -159,6 +173,24 @@ function_result Am_Ui_Screen_open_0(aobject * const this, int width, int height,
 	if ( screen == NULL ) {
 		printf("Unable to open screen\n");
 	} else {
+		// MorphOS defensive: force the palette into the ColorMap with
+		// LoadRGB32 even though SA_Colors32 was passed at open time.
+		// On some RTG drivers (CGX/Picasso) SA_Colors32 is honoured at
+		// open but the first paint can happen before the colormap
+		// commit reaches the display, leaving every pen at its driver
+		// default — visually that's a screen with our chrome's
+		// background pen rendered as black/grey because pens 4-15
+		// haven't been written yet. LoadRGB32 here is a no-op when
+		// the open-time table already landed.
+		if (colors32 != NULL) {
+			LoadRGB32(&screen->ViewPort, colors32);
+			printf("Screen open: LoadRGB32 applied %u colors\n", color_count);
+		}
+
+		// On Picasso96 the bar can be drawn before SA_Colors32 reaches the
+		// display, leaving the screen title with the driver's default RGB
+		// (and effectively invisible against our dark BARBLOCKPEN). Toggle
+		// ShowTitle to force a fresh render with the now-correct palette.
 		ShowTitle(screen, FALSE);
 		ShowTitle(screen, TRUE);
 
@@ -177,6 +209,8 @@ function_result Am_Ui_Screen_open_0(aobject * const this, int width, int height,
 			printf("  Screen DRI: NULL\n");
 		}
 
+		// Log Workbench's BarHeight so we can see whether our screen's
+		// bar font / chrome height matches.
 		struct Screen * wb = LockPubScreen("Workbench");
 		if (wb != NULL) {
 			printf("  WB BarHeight=%d (ours=%d)\n",
@@ -191,6 +225,8 @@ function_result Am_Ui_Screen_open_0(aobject * const this, int width, int height,
 
 exit:
 	if (colors32 != NULL) {
+		// Intuition copies SA_Colors32 into the screen's colour map, so we
+		// can free the staging buffer right after OpenScreenTagList.
 		free(colors32);
 	}
 	if (title != NULL) {
@@ -206,6 +242,59 @@ exit:
 	return __result;
 };
 
+function_result Am_Ui_Screen_close_0(aobject * const this)
+{
+	function_result __result = { .has_return_value = 0 };
+	__increase_reference_count(this);
+
+	Am_Ui_Screen_data * const data = (Am_Ui_Screen_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
+
+	if ( data != NULL && data->screen != NULL ) {
+		CloseScreen(data->screen);
+	}
+
+	free(this->object_properties.class_object_properties.object_data.value.custom_value);
+	this->object_properties.class_object_properties.object_data.value.custom_value = NULL;
+
+exit:
+	__decrease_reference_count(this);
+	return __result;
+};
+
+// Pick a display id matching the requested mode. Tries CGX first (so RTG
+// resolutions like 800x600 actually resolve), then falls back to
+// graphics.library's BestModeID. Returns INVALID_ID (-1 as int) on failure.
+function_result Am_Ui_Screen_bestModeId_0(int width, int height, int depth)
+{
+	function_result __result = { .has_return_value = true };
+	ULONG modeId = INVALID_ID;
+
+	if (CyberGfxBase != NULL) {
+		struct TagItem cgxTags[] = {
+			CYBRBIDTG_NominalWidth,  width,
+			CYBRBIDTG_NominalHeight, height,
+			CYBRBIDTG_Depth,         depth,
+			TAG_DONE,                0,
+		};
+		modeId = BestCModeIDTagList(cgxTags);
+	}
+
+	if (modeId == INVALID_ID) {
+		struct TagItem gfxTags[] = {
+			BIDTAG_NominalWidth,  width,
+			BIDTAG_NominalHeight, height,
+			BIDTAG_Depth,         depth,
+			TAG_DONE,             0,
+		};
+		modeId = BestModeIDA(gfxTags);
+	}
+
+	__result.return_value.value.int_value = (int) modeId;
+	return __result;
+}
+
+// Geometry accessors — read directly off the struct Screen so callers
+// can size a borderless window that sits below the title bar.
 function_result Am_Ui_Screen_getBarHeight_0(aobject * const this)
 {
 	function_result __result = { .has_return_value = true };
@@ -213,6 +302,8 @@ function_result Am_Ui_Screen_getBarHeight_0(aobject * const this)
 	Am_Ui_Screen_data * const data = (Am_Ui_Screen_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
 	unsigned short v = 0;
 	if (data != NULL && data->screen != NULL) {
+		// BarHeight is the index of the bottom row of the bar; +1 makes
+		// it the actual pixel height so window y = barHeight clears it.
 		v = (unsigned short) (data->screen->BarHeight + 1);
 	}
 	__result.return_value.value.ushort_value = v;
@@ -248,44 +339,10 @@ function_result Am_Ui_Screen_getHeight_0(aobject * const this)
 	return __result;
 }
 
-function_result Am_Ui_Screen_close_0(aobject * const this)
-{
-	function_result __result = { .has_return_value = 0 };
-	__increase_reference_count(this);
-
-	Am_Ui_Screen_data * const data = (Am_Ui_Screen_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
-
-	if ( data != NULL && data->screen != NULL ) {
-		CloseScreen(data->screen);
-	}
-
-	free(this->object_properties.class_object_properties.object_data.value.custom_value);
-	this->object_properties.class_object_properties.object_data.value.custom_value = NULL;
-
-exit:
-	__decrease_reference_count(this);
-	return __result;
-};
-
-// On MorphOS graphics.library's BestModeIDA covers RTG resolutions too —
-// CGX is unified with graphics, so we skip the CYBRBIDTG_* tag path that
-// AmigaOS uses (those constants aren't exposed in the MorphOS headers).
-function_result Am_Ui_Screen_bestModeId_0(int width, int height, int depth)
-{
-	function_result __result = { .has_return_value = true };
-
-	struct TagItem gfxTags[] = {
-		BIDTAG_NominalWidth,  width,
-		BIDTAG_NominalHeight, height,
-		BIDTAG_Depth,         depth,
-		TAG_DONE,             0,
-	};
-	ULONG modeId = BestModeIDA(gfxTags);
-
-	__result.return_value.value.int_value = (int) modeId;
-	return __result;
-}
-
+// Populate a caller-provided ScreenMode from the current default public
+// screen (Workbench). Uses LockPubScreen so the screen can't go away
+// while we read its viewport / bitmap. Sets all four ScreenMode props
+// in place; on failure leaves them at whatever the caller initialised.
 function_result Am_Ui_Screen_fillDefaultScreenMode_0(aobject * mode)
 {
 	function_result __result = { .has_return_value = false };
@@ -324,6 +381,9 @@ __exit: ;
 	return __result;
 }
 
+// SetRGB32 wants 32-bit fixed-point channels; multiplying the 8-bit value
+// by 0x01010101 replicates it through all four bytes so 0x00 maps to
+// 0x00000000 and 0xFF maps to 0xFFFFFFFF.
 function_result Am_Ui_Screen_setColor_0(aobject * const this, int index, unsigned char r, unsigned char g, unsigned char b)
 {
 	function_result __result = { .has_return_value = false };
@@ -345,6 +405,9 @@ __exit: ;
 	return __result;
 }
 
+// Read pens 0..count-1 from the host pub screen into `out` as packed
+// 0x00RRGGBB. Returns silently on any failure so AmLang gets a buffer of
+// zeros it can detect and fall back from.
 function_result Am_Ui_Screen_fillHostPaletteColors_0(aobject * out, int count)
 {
 	function_result __result = { .has_return_value = false };
@@ -378,6 +441,12 @@ function_result Am_Ui_Screen_fillHostPaletteColors_0(aobject * out, int count)
 	ULONG channels[32 * 3];
 	GetRGB32(pub->ViewPort.ColorMap, 0, count, channels);
 
+	// Diagnostic: dump the host screen's DrawInfo so we can compare its
+	// pen-role mapping (SA_Pens) against the one our screen ends up with.
+	// If Workbench's DRI maps roles into the same 0/1 register range,
+	// the host itself is on a degraded palette mapping. If WB's DRI uses
+	// pens 2/3 too, then OUR screen needs the same SA_Pens to look like
+	// it.
 	struct DrawInfo * pubDri = GetScreenDrawInfo(pub);
 	if (pubDri != NULL) {
 		printf("Screen fillHostPaletteColors: host DRI version=%u numPens=%u depth=%u ",
@@ -399,6 +468,8 @@ function_result Am_Ui_Screen_fillHostPaletteColors_0(aobject * out, int count)
 
 	int i = 0;
 	while (i < count) {
+		// GetRGB32 returns full 32-bit fixed-point channels (top byte
+		// = 8-bit representation). Repack as 0x00RRGGBB for AmLang.
 		unsigned int r = (channels[i * 3 + 0] >> 24) & 0xFF;
 		unsigned int g = (channels[i * 3 + 1] >> 24) & 0xFF;
 		unsigned int b = (channels[i * 3 + 2] >> 24) & 0xFF;
@@ -415,6 +486,12 @@ __exit: ;
 	return __result;
 }
 
+// Read pens 0..count-1 of the host pub screen's DrawInfo (dri_Pens) into
+// `out` as UByte pen indices. Pair with fillHostPaletteColors to give a
+// new screen the same role → register mapping the user has on Workbench
+// — otherwise Intuition can hand a TrueColor screen a defensive mapping
+// that routes all roles into pens 0 and 1, which makes chrome look very
+// wrong (e.g. BARBLOCKPEN → pen 1 = black title bar).
 function_result Am_Ui_Screen_fillHostDrawInfoPens_0(aobject * out, int count)
 {
 	function_result __result = { .has_return_value = false };
@@ -457,6 +534,8 @@ function_result Am_Ui_Screen_fillHostDrawInfoPens_0(aobject * out, int count)
 
 	int i = 0;
 	while (i < count) {
+		// dri_Pens entries are UWORDs but pen indices fit in a byte
+		// on any normal palette. Clamp at 255 just in case.
 		UWORD pen = dri->dri_Pens[i];
 		if (pen > 255) {
 			pen = 255;
@@ -483,6 +562,8 @@ function_result Am_Ui_Screen_copyHostPens_0(aobject * const this, int count)
 
 	Am_Ui_Screen_data * const data = (Am_Ui_Screen_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
 	if (data == NULL || data->screen == NULL || count <= 0) {
+		printf("Screen copyHostPens: bailing (data=%p screen=%p count=%d)\n",
+			(void *)data, data ? (void *)data->screen : NULL, count);
 		goto __exit;
 	}
 	if (count > 32) {
@@ -493,29 +574,57 @@ function_result Am_Ui_Screen_copyHostPens_0(aobject * const this, int count)
 		IntuitionBase = (struct IntuitionBase *) __ensure_library("intuition.library", 0L);
 	}
 
-	struct Screen * pub = LockPubScreen(NULL);
+	// Lock the Workbench by name first — when our own screen is opened
+	// with SA_Type=PUBLICSCREEN it joins the public-screen list, and
+	// LockPubScreen(NULL) on some configurations returns our own
+	// screen instead of Workbench. Falling back to NULL covers
+	// systems where the default pub screen has a different name.
+	struct Screen * pub = LockPubScreen((STRPTR) "Workbench");
+	if (pub == NULL) {
+		pub = LockPubScreen(NULL);
+	}
 	if (pub == NULL) {
 		printf("Screen copyHostPens: LockPubScreen returned NULL\n");
 		goto __exit;
 	}
 
+	if (pub == data->screen) {
+		// We've ended up locking ourselves — nothing to copy. Log and
+		// bail rather than no-op the SetRGB32 calls below.
+		printf("Screen copyHostPens: pub screen IS our own screen (%p) — skipping\n", (void *)pub);
+		UnlockPubScreen(NULL, pub);
+		goto __exit;
+	}
+
+	printf("Screen copyHostPens: pub=%p our=%p depth=%d count=%d\n",
+		(void *)pub, (void *)data->screen,
+		(int)GetBitMapAttr(pub->RastPort.BitMap, BMA_DEPTH), count);
+
+	// GetRGB32 emits three ULONG channel values per pen; 32 pens = 96
+	// ULONGs = 384 bytes on the stack.
 	ULONG channels[32 * 3];
 	GetRGB32(pub->ViewPort.ColorMap, 0, count, channels);
 	UnlockPubScreen(NULL, pub);
 
 	int i = 0;
 	while (i < count) {
+		printf("  pen %d: r=%08lx g=%08lx b=%08lx\n",
+			i,
+			(unsigned long) channels[i * 3 + 0],
+			(unsigned long) channels[i * 3 + 1],
+			(unsigned long) channels[i * 3 + 2]);
 		SetRGB32(&data->screen->ViewPort, (ULONG) i,
 			channels[i * 3 + 0],
 			channels[i * 3 + 1],
 			channels[i * 3 + 2]);
 		i = i + 1;
 	}
-	printf("Screen copyHostPens: copied %d pens from host pub screen\n", count);
 
-	// Same as on amigaos: chunky/RTG screens don't repaint
-	// already-drawn chrome when the colour map changes, so we have to
-	// trigger a re-render of the title bar explicitly.
+	// On chunky / RTG screens (Picasso96, CGX HiColor, TrueColor) the
+	// title bar pixels are stored as baked RGB, not pen indices — so
+	// the SetRGB32 calls above don't repaint anything already drawn.
+	// Force Intuition to re-render the bar so it picks up the new
+	// pen values for the title text and depth gadget.
 	ShowTitle(data->screen, FALSE);
 	ShowTitle(data->screen, TRUE);
 

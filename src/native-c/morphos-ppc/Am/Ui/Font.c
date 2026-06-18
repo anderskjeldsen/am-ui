@@ -20,17 +20,12 @@
 
 #include <libc/core_inline_functions.h>
 
-/* diskfont.library isn't auto-opened by the MorphOS C startup
- * (only exec / dos / intuition / graphics get that). We route
- * through __ensure_library so the open is tracked in the shared
- * lib_node list and CloseLibrary'd by __release_libraries at
- * process exit. proto/diskfont.h declares DiskfontBase as extern;
- * one definition lives here.
- *
- * Mirrors the amigaos Font.c path — see that file for the why.
- * Without this, OpenDiskFont below jumps through a NULL base
- * pointer and segfaults the first time a disk-resident font
- * (helvetica.font, etc.) is requested. */
+/* diskfont.library isn't auto-opened by m68k-amigaos-gcc's C
+ * startup (only exec / dos / intuition / graphics get that). We
+ * route through __ensure_library so the open is tracked in the
+ * shared lib_node list and CloseLibrary'd by the existing
+ * __release_libraries destructor at process exit. proto/diskfont.h
+ * declares DiskfontBase as extern; one definition lives here. */
 struct Library *DiskfontBase = NULL;
 
 static void am_font_ensure_diskfont(void) {
@@ -70,8 +65,6 @@ function_result Am_Ui_Font__native_init_0(aobject * const this)
         goto __exit;
     }
 
-    printf("[font.native] OpenDiskFont(name=%s, size=%u)\n", sh->string_value, (unsigned)size); fflush(stdout);
-
     /* diskfont.library's OpenDiskFont is a superset of graphics's
      * OpenFont: it checks the in-memory font list first (so ROM
      * fonts like topaz/8 + anything previously loaded come back
@@ -82,12 +75,10 @@ function_result Am_Ui_Font__native_init_0(aobject * const this)
     struct TextFont *font = OpenDiskFont(&textAttr);
 
     if (font == NULL) {
-        printf("[font.native] OpenDiskFont failed (IoErr=%ld)\n", IoErr()); fflush(stdout);
         __throw_simple_exception("Failed to open font", "in Am_Ui_Font__native_init_0", &__result);
 		goto __exit;
     }
 
-    printf("[font.native] opened font %s/%u OK\n", sh->string_value, (unsigned)size); fflush(stdout);
     this->object_properties.class_object_properties.object_data.value.custom_value = font;
 
 __exit: ;
@@ -119,17 +110,20 @@ function_result Am_Ui_Font__native_mark_children_0(aobject * const this)
 	bool __returning = false;
 __exit: ;
 	return __result;
-};
+}
 
 function_result Am_Ui_Font_calculateStringWidth_0(aobject * const this, aobject * text)
 {
-	/* Previously this function never set return_value, so every
-	 * caller received garbage UShort memory — same bug the amigaos
-	 * variant carried until it was fixed. Real measurement on
-	 * MorphOS still requires a RastPort with the font set
-	 * (TextLength takes a RastPort, not a TextFont). Static scratch
-	 * RastPort initialised on first use; re-SetFont only when the
-	 * active font changes. */
+	/* Previously this function was a no-op (no .return_value assignment,
+	 * has_return_value = false), so every caller received garbage memory
+	 * as a UShort. That broke every layout-time width measurement —
+	 * TabView.minWidth, TextEditor.colForPixelX, and the FolderTreeView
+	 * label positioning all silently received unbounded values.
+	 *
+	 * Proper measurement on Amiga requires a RastPort with the font set
+	 * (TextLength() takes a RastPort, not a TextFont). We keep a static
+	 * scratch RastPort initialised on first use; subsequent calls just
+	 * re-SetFont if the font changed. */
 	function_result __result = { .has_return_value = true };
 	bool __returning = false;
 	__result.return_value.value.ushort_value = 0;
@@ -145,8 +139,8 @@ function_result Am_Ui_Font_calculateStringWidth_0(aobject * const this, aobject 
 		goto __exit;
 	}
 
-    struct TextFont *font = this->object_properties.class_object_properties.object_data.value.custom_value;
-    string_holder *sh = text->object_properties.class_object_properties.object_data.value.custom_value;
+	struct TextFont *font = this->object_properties.class_object_properties.object_data.value.custom_value;
+	string_holder *sh = text->object_properties.class_object_properties.object_data.value.custom_value;
 
 	if (font == NULL || sh == NULL || sh->length == 0) {
 		goto __exit;

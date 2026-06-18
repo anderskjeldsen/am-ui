@@ -261,23 +261,16 @@ namespace Am.Ui
                 useColor = false
             }
 
-            if (useColor && bgColor != null) {
-                graphics.setForegroundColor(bgColor as UInt)
-            } else {
-                graphics.setForegroundPen(bgPen)
-            }
+            // amlc drops `nullable != null` checks on the colour path,
+            // so the `as UInt` cast can throw NullCastError at runtime.
+            // Force the pen route until the binder is fixed (same
+            // workaround as Button.paint / Label.paint).
+            graphics.setForegroundPen(bgPen)
             graphics.fillRect(x1, y1, x2, y2)
 
-            // Flat `borderColor` wins over the bevel chrome — see
-            // Button.paint for the same dispatch.
-            if (this.borderColor != null) {
-                var bc: UInt = this.borderColor as UInt
-                graphics.setForegroundColor(bc)
-                graphics.drawLine(x1, y1, x2, y1)
-                graphics.drawLine(x1, y2, x2, y2)
-                graphics.drawLine(x1, y1, x1, y2)
-                graphics.drawLine(x2, y1, x2, y2)
-            } else if (this.drawBorder) {
+            // Same amlc workaround: skip the colour-border branch and
+            // fall straight through to the bevel pens.
+            if (this.drawBorder) {
                 this.paintNativeBorder(graphics, borderPens)
             }
 
@@ -286,15 +279,10 @@ namespace Am.Ui
                 pressDy = this.pressTranslateY
             }
 
-            // Hover overlay: stamped on top of bg + (optional) bevel,
-            // INSIDE the outer rect so dimensions don't change.
-            if (this.hovered && (this.hoverBorderEnabled || this.hoverBorderColor != null)) {
-                if (this.hoverBorderColor != null) {
-                    var hbc: UInt = this.hoverBorderColor as UInt
-                    graphics.setForegroundColor(hbc)
-                } else {
-                    graphics.setForegroundPen(this.hoverBorderPen)
-                }
+            // Hover overlay: pen-only path (the colour branch hits the
+            // same amlc bug as the bg-colour path above).
+            if (this.hovered && this.hoverBorderEnabled) {
+                graphics.setForegroundPen(this.hoverBorderPen)
                 graphics.drawLine(x1, y1, x2, y1)
                 graphics.drawLine(x1, y2, x2, y2)
                 graphics.drawLine(x1, y1, x1, y2)

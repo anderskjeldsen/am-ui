@@ -192,8 +192,12 @@ namespace Am.Ui
             var bgColor: UInt? = this.backgroundColor
             var useColor: Bool = (bgColor != null)
             if (this.hoverEnabled && this.hovered) {
-                if (this.hoverBackgroundColor != null) {
-                    bgColor = this.hoverBackgroundColor
+                // Same workaround as the cast sites below — `field != null`
+                // on a nullable property is compiled as `true` by amlc, so
+                // we copy to a local first and check that.
+                var hbc: UInt? = this.hoverBackgroundColor
+                if (hbc != null) {
+                    bgColor = hbc
                     useColor = true
                 } else {
                     bgPen = this.hoverBackgroundPen
@@ -212,30 +216,21 @@ namespace Am.Ui
             // (e.g. propagated from a Button parent) — without this,
             // a Label sitting alone on a transparent parent would
             // ignore the color override.
+            // amlc drops `nullable != null` checks on the colour path,
+            // making the eventual `as UInt` cast throw NullCastError
+            // when the field happens to be null. Until the binder is
+            // fixed, force the pen route — Labels with explicit colours
+            // will render with the matching pen instead of the rgb
+            // colour (one extra palette lookup), but no crashes.
             if (this.hoverEnabled || useColor) {
                 var x2 = this.width.toShort() - 1S
                 var y2 = this.height.toShort() - 1S
-                if (useColor && bgColor != null) {
-                    graphics.setForegroundColor(bgColor as UInt)
-                } else {
-                    graphics.setForegroundPen(bgPen)
-                }
+                graphics.setForegroundPen(bgPen)
                 graphics.fillRect(0S, 0S, x2, y2)
             }
 
-            // Text bg follows the same color-or-pen choice so glyph
-            // anti-aliasing fringes match the surrounding fill.
-            if (useColor && bgColor != null) {
-                graphics.setBackgroundColor(bgColor as UInt)
-            } else {
-                graphics.setBackgroundPen(bgPen)
-            }
-            if (this.textColor != null) {
-                var tc: UInt = this.textColor as UInt
-                graphics.setForegroundColor(tc)
-            } else {
-                graphics.setForegroundPen(this.textPen)
-            }
+            graphics.setBackgroundPen(bgPen)
+            graphics.setForegroundPen(this.textPen)
             var font = this.getUsedFont()
             if (font != null) {
                 graphics.setFont(font)

@@ -2,7 +2,7 @@
 namespace Am.Ui 
 {
 
-    #implementationPlatforms "libc", "amigaos", "amigaos-sim", "morphos-ppc"
+    #implementationPlatforms "libc", "amigaos", "amigaos-sim", "morphos-ppc", "macos-arm"
     native class Font(private var name: String, private var size: UByte) {
         import Am.Lang
         import Am.Collections

@@ -4,8 +4,11 @@
 #include <libc/core_inline_functions.h>
 
 // On MorphOS CyberGraphX is part of graphics.library and opened
-// implicitly, so we don't have to mirror the amigaos NativeLibraryManager
-// that opens cybergraphics.library manually. The lifecycle hooks still
+// implicitly, so we don't mirror the amigaos NativeLibraryManager
+// that opens cybergraphics.library manually — calling
+// __ensure_library("cybergraphics.library", 40L) on MorphOS throws
+// because the library isn't separately registered, and the IDE
+// startup never reaches `setPalette`. The lifecycle hooks still
 // need to exist so the linker is happy.
 
 function_result Am_Ui_NativeLibraryManager__native_init_0(aobject * const this)
