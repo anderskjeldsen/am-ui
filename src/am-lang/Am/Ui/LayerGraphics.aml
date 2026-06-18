@@ -1,7 +1,7 @@
 namespace Am.Ui
 {
     // Graphics implementation backed by a cached native layer/rastport target.
-    #implementationPlatforms "libc", "amigaos", "amigaos-sim", "morphos-ppc"
+    #implementationPlatforms "libc", "amigaos", "amigaos-sim", "morphos-ppc", "macos-arm"
     native class LayerGraphics : Graphics {
         import Am.Lang
         import Am.Imaging

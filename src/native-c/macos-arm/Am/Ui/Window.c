@@ -1,0 +1,1056 @@
+#ifndef native_aclass_Am_Ui_Window_c
+#define native_aclass_Am_Ui_Window_c
+
+#include <libc/core.h>
+#include <Am/Ui/Window.h>
+#include <Am/Lang/Object.h>
+#include <Am/Ui/Screen.h>
+#include <Am/Ui/RenderableBitmap.h>
+#include <Am/Ui/Bitmap.h>
+#include <Am/Lang/Int.h>
+#include <Am/Lang/Exception.h>
+#include <macos-arm/Am/Ui/Window.h>
+#include <macos-arm/Am/Ui/Screen.h>
+#include <macos-arm/Am/Ui/Bitmap.h>
+
+#include <SDL2/SDL.h>
+#include <stdbool.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+
+#include <libc/core_inline_functions.h>
+
+// Defined in LayerGraphics.c — keep the apply_target cache in sync
+// when we change render targets directly from outside.
+extern void am_ui_macos_arm_lg_target_changed(SDL_Renderer *renderer, SDL_Texture *now);
+
+// Linux Am.Ui.Window — SDL2 backend.
+//
+// One SDL_Window + SDL_Renderer per AmLang Window. The renderer is the
+// resource LayerGraphics borrows during paint; Bitmap.c uploads its
+// surfaces to textures bound to it.
+//
+// Event loop: handleInput() pumps SDL events and dispatches mouse +
+// keyboard + close + resize back into the AmLang side via the
+// `Am_Ui_Window_f_*` callbacks the amigaos backend uses too. The
+// AmLang side then walks the View tree.
+//
+// What's stubbed in this file (logged once per call site, not silent):
+//   - menu strip ops (nativeBeginMenuStrip etc.) — Linux menus will
+//     come later as an in-canvas menu bar via View tree, not a native
+//     widget.
+//   - clipboard (copyToClipboard / pasteFromClipboard) — TODO with
+//     SDL_SetClipboardText / SDL_GetClipboardText, not wired yet.
+//   - getUserPortSigBit / getUserPortTaskPtr — AmigaOS exec.library
+//     concepts that have no equivalent on Linux; return 0.
+//
+// External AmLang callbacks invoked from here (compiled C symbols of
+// the AmLang-side methods):
+//   Am_Ui_Window_f_onMouseEvent_0(this, button, type, x, y)
+//      button: 1=left, 2=middle, 3=right
+//      type:   0=move, 1=up, 2=down
+//   Am_Ui_Window_f_onMouseWheel_0(this, dy, x, y)
+//   Am_Ui_Window_f_onResize_0(this, x, y, w, h)
+//   Am_Ui_Window_f_setBorder_0(this, l, t, r, b)
+//   Am_Ui_Window_f_setRootView_0(this, view)
+
+// The AmLang-side callbacks are already declared in shared/Am/Ui/Window.h
+// (included transitively via Am/Ui/Window.h). Their canonical
+// signatures are:
+//   Am_Ui_Window_f_onMouseEvent_0(this, int type, int button, short x, short y)
+//     type: 0=move, 1=up, 2=down (matches MouseEventType enum)
+//     button: 1=left, 2=middle, 3=right
+//   Am_Ui_Window_f_onMouseWheel_0(this, short deltaY, short x, short y)
+//   Am_Ui_Window_f_onResize_0(this, short x, short y, ushort w, ushort h)
+//   Am_Ui_Window_f_setBorder_0(this, short l, short t, short r, short b)
+//   Am_Ui_Window_f_setRootView_0(this, aobject *view)
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+static Am_Ui_Window_data *win_data(aobject *const this)
+{
+    return (Am_Ui_Window_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+}
+
+// Process-global "most recent renderer" pointer. Window.open_0 updates
+// this so ViewContextGraphics (which can't traverse the
+// AmLang ViewContext interface from native C) has a paint surface.
+static SDL_Renderer *g_primary_renderer = NULL;
+SDL_Renderer *am_ui_linux_primary_renderer(void) { return g_primary_renderer; }
+
+// Map an SDL mouse button to the (1=left, 2=middle, 3=right) convention
+// the AmigaOS path uses. Returns 0 for unknown buttons.
+static unsigned char map_sdl_button(Uint8 b)
+{
+    if (b == SDL_BUTTON_LEFT)   return 1;
+    if (b == SDL_BUTTON_MIDDLE) return 2;
+    if (b == SDL_BUTTON_RIGHT)  return 3;
+    return 0;
+}
+
+// Pull the C string out of an AmLang String aobject. NULL on null.
+static const char *amlang_str(aobject *s)
+{
+    if (s == NULL) return NULL;
+    string_holder *sh = (string_holder *) (s + 1);
+    if (sh == NULL) return NULL;
+    return sh->string_value;
+}
+
+// ---------------------------------------------------------------------------
+// Lifecycle
+// ---------------------------------------------------------------------------
+
+function_result Am_Ui_Window__native_init_0(aobject *const this)
+{
+    function_result __result = { .has_return_value = false };
+    __increase_reference_count(this);
+
+    Am_Ui_Window_data *data = (Am_Ui_Window_data *) calloc(1, sizeof(Am_Ui_Window_data));
+    if (data != NULL) {
+        this->object_properties.class_object_properties.object_data.value.custom_value = data;
+    }
+
+    __decrease_reference_count(this);
+    return __result;
+}
+
+function_result Am_Ui_Window__native_mark_children_0(aobject *const this)
+{
+    function_result __result = { .has_return_value = false };
+    (void) this;
+    return __result;
+}
+
+function_result Am_Ui_Window__native_release_0(aobject *const this)
+{
+    function_result __result = { .has_return_value = false };
+
+    Am_Ui_Window_data *data = win_data(this);
+    if (data != NULL) {
+        if (data->renderer != NULL) { SDL_DestroyRenderer(data->renderer); data->renderer = NULL; }
+        if (data->window != NULL)   { SDL_DestroyWindow(data->window);     data->window = NULL; }
+        free(data);
+        this->object_properties.class_object_properties.object_data.value.custom_value = NULL;
+    }
+
+    return __result;
+}
+
+// ---------------------------------------------------------------------------
+// open / close
+// ---------------------------------------------------------------------------
+
+function_result Am_Ui_Window_open_0(aobject *const this,
+                                    short x, short y, unsigned short width, unsigned short height,
+                                    aobject *screen, aobject *windowManager, struct Am_Ui_WindowProperties *properties)
+{
+    function_result __result = { .has_return_value = false };
+    __increase_reference_count(this);
+    if (screen != NULL)        __increase_reference_count(screen);
+    if (windowManager != NULL) __increase_reference_count(windowManager);
+    (void) properties;
+
+    Am_Ui_Window_data *data = win_data(this);
+    if (data == NULL) goto __exit;
+
+    // Position: AmigaOS uses absolute screen coords; on Linux let the
+    // WM place it unless (x, y) is explicitly non-(-1, -1).
+    int sdl_x = (x <= 0) ? SDL_WINDOWPOS_UNDEFINED : x;
+    int sdl_y = (y <= 0) ? SDL_WINDOWPOS_UNDEFINED : y;
+
+    Uint32 flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI;
+
+    data->window = SDL_CreateWindow(
+        "amStudio",                  // title; setTitleNative overwrites later
+        sdl_x, sdl_y,
+        (int) width, (int) height,
+        flags
+    );
+    if (data->window == NULL) {
+        fprintf(stderr, "[am-ui/linux] SDL_CreateWindow failed: %s\n", SDL_GetError());
+        goto __exit;
+    }
+
+    data->window_id = SDL_GetWindowID(data->window);
+    // SDL's Metal backend (default on Apple Silicon) doesn't synchronise
+    // a render-to-target-texture followed by sample-from-that-target
+    // within the same frame — the second op reads zeros and every blit
+    // through the off-screen RenderableBitmap comes back black. OpenGL
+    // and the software renderer handle the read-after-write correctly,
+    // so hint SDL away from Metal before creating the renderer. Pin to
+    // OpenGL on macOS; let other platforms pick their natural default.
+    SDL_SetHint(SDL_HINT_RENDER_DRIVER, "opengl");
+    // PRESENTVSYNC is nice but we don't want to block paint cycles on
+    // it — the IDE explicitly drives refresh, vsync would force a
+    // wait that conflicts with the dirty-region model.
+    data->renderer = SDL_CreateRenderer(
+        data->window, -1,
+        SDL_RENDERER_ACCELERATED | SDL_RENDERER_TARGETTEXTURE
+    );
+    if (data->renderer == NULL) {
+        fprintf(stderr, "[am-ui/linux] SDL_CreateRenderer (accelerated) failed: %s — falling back to software\n", SDL_GetError());
+        data->renderer = SDL_CreateRenderer(data->window, -1, SDL_RENDERER_SOFTWARE);
+    }
+    if (data->renderer != NULL) {
+        SDL_RendererInfo info;
+        if (SDL_GetRendererInfo(data->renderer, &info) == 0) {
+            fprintf(stderr, "[am-ui/macos-arm] SDL renderer: %s (flags=0x%x)\n", info.name, info.flags);
+        }
+    }
+    if (data->renderer == NULL) {
+        fprintf(stderr, "[am-ui/linux] SDL_CreateRenderer (software) failed: %s\n", SDL_GetError());
+        SDL_DestroyWindow(data->window);
+        data->window = NULL;
+        goto __exit;
+    }
+
+    SDL_GetRendererOutputSize(data->renderer, &data->last_paint_w, &data->last_paint_h);
+
+    // Publish for ViewContextGraphics.
+    g_primary_renderer = data->renderer;
+
+    data->event_pump_owner = true;   // first window claims the pump
+    data->pending_close   = false;
+    data->pending_refresh = true;    // ask for an initial full paint
+    data->pending_resize  = false;
+    data->installed_menu_strip = NULL;
+
+    // Tell the AmLang side how much of the Window the WM consumed for
+    // chrome. The Cocoa menu bar lives at the top of the *screen*, not
+    // inside the window, so no border reservation is needed here.
+    Am_Ui_Window_f_setBorder_0(this, 0, 0, 0, 0);
+    // Trigger the first layout pass at the requested size.
+    Am_Ui_Window_f_onResize_0(this, 0, 0, (unsigned short) data->last_paint_w, (unsigned short) data->last_paint_h);
+
+__exit:
+    if (windowManager != NULL) __decrease_reference_count(windowManager);
+    if (screen != NULL)        __decrease_reference_count(screen);
+    __decrease_reference_count(this);
+    return __result;
+}
+
+function_result Am_Ui_Window_close_0(aobject *const this)
+{
+    function_result __result = { .has_return_value = false };
+    __increase_reference_count(this);
+
+    Am_Ui_Window_data *data = win_data(this);
+    if (data != NULL) {
+        if (g_primary_renderer == data->renderer) g_primary_renderer = NULL;
+        if (data->renderer != NULL) { SDL_DestroyRenderer(data->renderer); data->renderer = NULL; }
+        if (data->window != NULL)   { SDL_DestroyWindow(data->window);     data->window = NULL; }
+        data->pending_close = true;
+        Am_Ui_Window_f_setRootView_0(this, NULL);
+    }
+
+    __decrease_reference_count(this);
+    return __result;
+}
+
+function_result Am_Ui_Window_isOpen_0(aobject *const this)
+{
+    function_result __result = { .has_return_value = true };
+    __increase_reference_count(this);
+    Am_Ui_Window_data *data = win_data(this);
+    bool is_open = (data != NULL) && (data->window != NULL) && !data->pending_close;
+    __result.return_value.value.bool_value = is_open;
+    __decrease_reference_count(this);
+    return __result;
+}
+
+// ---------------------------------------------------------------------------
+// refresh — AmLang side asks for "please repaint soon" (analogous to
+// IDCMP_REFRESHWINDOW). We just flip the pending_refresh flag; the
+// actual Am_Ui_Window_f_paint_0 dispatch + SDL_RenderPresent fires at
+// the end of the next handleInput cycle. This matches the AmigaOS
+// model where the OS owns paint timing, not the AmLang caller.
+// ---------------------------------------------------------------------------
+
+function_result Am_Ui_Window_refresh_0(aobject *const this)
+{
+    function_result __result = { .has_return_value = false };
+    __increase_reference_count(this);
+    Am_Ui_Window_data *data = win_data(this);
+    if (data != NULL) {
+        data->pending_refresh = true;
+    }
+    __decrease_reference_count(this);
+    return __result;
+}
+
+// ---------------------------------------------------------------------------
+// Cocoa NSMenu bridge
+//
+// AmLang's Window.setMenuStrip() stashes a MenuStrip on the Window;
+// every iteration of handleInput we compare it against the strip we
+// last installed and, on change, rebuild NSApp.mainMenu so the user
+// sees real macOS menus at the top of the screen.
+//
+// All Cocoa calls go through the Objective-C runtime so this stays a
+// plain `.c` file (no `.m` / amlc rebuild dance). The runtime header
+// gives us objc_msgSend, sel_registerName, objc_getClass etc.; we
+// cast objc_msgSend to the right signature on each call. Selectors
+// are cached statically — looking them up is cheap but pointless to
+// repeat per item.
+//
+// Menu picks are dispatched to a runtime-allocated AmLangMenuTarget
+// class with a single -menuPicked: method. Each NSMenuItem carries
+// the AmLang MenuItem aobject* as its `tag` (NSInteger fits a 64-bit
+// pointer on arm64) so the handler can call Am_Ui_MenuItem_f_invokeClick_0
+// straight away without a side table. The IDE's MenuItem aobjects
+// live until the strip is rebuilt — we install a fresh NSApp.mainMenu
+// at that point, which drops the stale NSMenuItems and their tags.
+//
+// AmLang MenuItem includes a private `subItems: List<MenuItem>` and
+// some items use it (single level of cascading menus). We render
+// those by recursing into a fresh NSMenu and parenting it under the
+// item via -setSubmenu:; deeper nesting flattens — same caveat the
+// amigaos backend documents.
+//
+// Items with `isSeparator = true` produce +separatorItem entries.
+// Disabled items get -setEnabled:NO. Items with `commKey` non-null
+// produce a Command-<key> shortcut via -setKeyEquivalent:.
+// ---------------------------------------------------------------------------
+
+#include <objc/runtime.h>
+#include <objc/message.h>
+
+// NSInteger is Foundation's signed pointer-sized integer (long on
+// 64-bit Darwin). Defining it locally avoids pulling in Foundation
+// headers — they're Objective-C and would push us into .m territory.
+typedef long NSInteger;
+
+// Property indices used by the bridge. Declared here instead of via
+// the Am/Ui/Menu*.h includes so the bridge stays self-contained — it
+// only needs to *read* the properties, not link to any Menu helpers.
+#define MENU_BRIDGE_P_MenuStrip_menus    0
+#define MENU_BRIDGE_P_Menu_title         0
+#define MENU_BRIDGE_P_Menu_items         1
+#define MENU_BRIDGE_P_MenuItem_label     0
+#define MENU_BRIDGE_P_MenuItem_enabled   2
+#define MENU_BRIDGE_P_MenuItem_commKey   3
+#define MENU_BRIDGE_P_MenuItem_subItems  4
+#define MENU_BRIDGE_P_MenuItem_isSeparator 5
+
+// AmLang collection list `get` / `getSize` symbols. Re-declared here
+// at function-pointer cast sites to avoid a header dependency.
+extern function_result Am_Collections_List_ta_Am_Ui_Menu_f_getSize_0(aobject *const this);
+extern function_result Am_Collections_List_ta_Am_Ui_Menu_f_get_0(aobject *const this, int idx);
+extern function_result Am_Collections_List_ta_Am_Ui_MenuItem_f_getSize_0(aobject *const this);
+extern function_result Am_Collections_List_ta_Am_Lang_String_f_getSize_0(aobject *const this);
+extern function_result Am_Collections_List_ta_Am_Lang_String_f_get_0(aobject *const this, int idx);
+extern function_result Am_Collections_List_ta_Am_Ui_MenuItem_f_get_0(aobject *const this, int idx);
+extern function_result Am_Ui_MenuItem_f_invokeClick_0(aobject *const this);
+
+// Cached Cocoa selectors / classes. Initialised on first install.
+static bool         g_menu_bridge_inited = false;
+static Class        g_NSApplication = NULL;
+static Class        g_NSMenu        = NULL;
+static Class        g_NSMenuItem    = NULL;
+static Class        g_NSString      = NULL;
+static Class        g_AmLangMenuTarget = NULL;
+static id           g_menu_target_instance = NULL;
+static SEL          g_sel_sharedApp;
+static SEL          g_sel_setMainMenu;
+static SEL          g_sel_alloc;
+static SEL          g_sel_init;
+static SEL          g_sel_initWithTitle_action_keyEquivalent;
+static SEL          g_sel_stringWithUTF8String;
+static SEL          g_sel_addItem;
+static SEL          g_sel_setSubmenu;
+static SEL          g_sel_separatorItem;
+static SEL          g_sel_setEnabled;
+static SEL          g_sel_setAction;
+static SEL          g_sel_setAutoenablesItems;
+static SEL          g_sel_setTag;
+static SEL          g_sel_tag;
+static SEL          g_sel_setTarget;
+static SEL          g_sel_menuPicked;
+static SEL          g_sel_validateMenuItem;
+static SEL          g_sel_release;
+
+// Action callback the AmLangMenuTarget class dispatches every NSMenuItem
+// pick to. Recovers the AmLang MenuItem aobject* from the sender's
+// NSInteger tag and fires its clickListener.
+static void am_menu_picked(id self, SEL _cmd, id sender)
+{
+    (void) self; (void) _cmd;
+    fprintf(stderr, "[am-ui/macos-arm] menu picked: sender=%p\n", (void*) sender); fflush(stderr);
+    NSInteger tag = ((NSInteger (*)(id, SEL)) objc_msgSend)(sender, g_sel_tag);
+    aobject *menuItem = (aobject *) (intptr_t) tag;
+    fprintf(stderr, "[am-ui/macos-arm]   tag=%ld -> aobject=%p\n", (long) tag, (void*) menuItem); fflush(stderr);
+    if (menuItem == NULL) return;
+    function_result fr = Am_Ui_MenuItem_f_invokeClick_0(menuItem);
+    if (fr.exception != NULL) {
+        fprintf(stderr, "[am-ui/macos-arm] menu click handler threw\n");
+        __decrease_reference_count(fr.exception);
+    }
+}
+
+static signed char am_validate_menu_item(id self, SEL _cmd, id item)
+{
+    (void) self; (void) _cmd;
+    static int n = 0;
+    if (n < 10) { fprintf(stderr, "[am-ui/macos-arm] validate item=%p\n", (void*) item); fflush(stderr); n++; }
+    return 1;
+}
+
+static void menu_bridge_lazy_init(void)
+{
+    if (g_menu_bridge_inited) return;
+
+    g_NSApplication = objc_getClass("NSApplication");
+    g_NSMenu        = objc_getClass("NSMenu");
+    g_NSMenuItem    = objc_getClass("NSMenuItem");
+    g_NSString      = objc_getClass("NSString");
+
+    g_sel_sharedApp        = sel_registerName("sharedApplication");
+    g_sel_setMainMenu      = sel_registerName("setMainMenu:");
+    g_sel_alloc            = sel_registerName("alloc");
+    g_sel_init             = sel_registerName("init");
+    g_sel_initWithTitle_action_keyEquivalent = sel_registerName("initWithTitle:action:keyEquivalent:");
+    g_sel_stringWithUTF8String = sel_registerName("stringWithUTF8String:");
+    g_sel_addItem          = sel_registerName("addItem:");
+    g_sel_setSubmenu       = sel_registerName("setSubmenu:");
+    g_sel_separatorItem    = sel_registerName("separatorItem");
+    g_sel_setEnabled       = sel_registerName("setEnabled:");
+    g_sel_setAction        = sel_registerName("setAction:");
+    g_sel_setAutoenablesItems = sel_registerName("setAutoenablesItems:");
+    g_sel_setTag           = sel_registerName("setTag:");
+    g_sel_tag              = sel_registerName("tag");
+    g_sel_setTarget        = sel_registerName("setTarget:");
+    g_sel_menuPicked       = sel_registerName("menuPicked:");
+    g_sel_validateMenuItem = sel_registerName("validateMenuItem:");
+    g_sel_release          = sel_registerName("release");
+
+    // Build the AmLangMenuTarget class on the fly. NSObject parent +
+    // -menuPicked: (our action) + -validateMenuItem: (so Cocoa's auto-
+    // enable check doesn't grey out every item the first time the
+    // menu opens).
+    g_AmLangMenuTarget = objc_allocateClassPair(objc_getClass("NSObject"), "AmLangMenuTarget", 0);
+    if (g_AmLangMenuTarget != NULL) {
+        bool ok1 = class_addMethod(g_AmLangMenuTarget, g_sel_menuPicked,       (IMP) am_menu_picked,        "v@:@");
+        bool ok2 = class_addMethod(g_AmLangMenuTarget, g_sel_validateMenuItem, (IMP) am_validate_menu_item, "c@:@");
+        objc_registerClassPair(g_AmLangMenuTarget);
+        id alloc = ((id (*)(Class, SEL)) objc_msgSend)(g_AmLangMenuTarget, g_sel_alloc);
+        g_menu_target_instance = ((id (*)(id, SEL)) objc_msgSend)(alloc, g_sel_init);
+        fprintf(stderr, "[am-ui/macos-arm] menu bridge inited: target=%p addMethod(picked)=%d addMethod(validate)=%d\n",
+            (void*) g_menu_target_instance, ok1, ok2); fflush(stderr);
+    } else {
+        fprintf(stderr, "[am-ui/macos-arm] FAILED to allocate AmLangMenuTarget class\n"); fflush(stderr);
+    }
+
+    g_menu_bridge_inited = true;
+}
+
+static id ns_string(const char *utf8)
+{
+    if (utf8 == NULL) utf8 = "";
+    return ((id (*)(Class, SEL, const char *)) objc_msgSend)(g_NSString, g_sel_stringWithUTF8String, utf8);
+}
+
+static id new_ns_menu(const char *title)
+{
+    id alloc = ((id (*)(Class, SEL)) objc_msgSend)(g_NSMenu, g_sel_alloc);
+    SEL initWithTitle = sel_registerName("initWithTitle:");
+    id menu = ((id (*)(id, SEL, id)) objc_msgSend)(alloc, initWithTitle, ns_string(title));
+    // Disable Cocoa's auto-enable. Cocoa's default polls every item's
+    // target for `validateMenuItem:` (or walks the responder chain
+    // looking for someone who answers the action selector) every time
+    // the menu opens, and disables anything that doesn't answer YES.
+    // Our items already carry the right enabled bit; let -setEnabled:
+    // be the source of truth.
+    ((void (*)(id, SEL, signed char)) objc_msgSend)(menu, g_sel_setAutoenablesItems, 0);
+    return menu;
+}
+
+// Build an NSMenu from an AmLang Menu (or any container with an
+// `items: List<MenuItem>` at the given property index). Recurses into
+// subItems via -setSubmenu:.
+static void build_ns_menu_items(id ns_menu, aobject *items_container, int items_property_index);
+
+static void add_menu_item_to(id ns_menu, aobject *amlang_item)
+{
+    if (amlang_item == NULL) return;
+
+    bool is_sep = amlang_item->object_properties.class_object_properties.properties[MENU_BRIDGE_P_MenuItem_isSeparator].nullable_value.value.bool_value;
+    if (is_sep) {
+        id sep = ((id (*)(Class, SEL)) objc_msgSend)(g_NSMenuItem, g_sel_separatorItem);
+        ((void (*)(id, SEL, id)) objc_msgSend)(ns_menu, g_sel_addItem, sep);
+        return;
+    }
+
+    aobject *label_obj = amlang_item->object_properties.class_object_properties.properties[MENU_BRIDGE_P_MenuItem_label].nullable_value.value.object_value;
+    const char *label = amlang_str(label_obj);
+
+    aobject *commKey_obj = amlang_item->object_properties.class_object_properties.properties[MENU_BRIDGE_P_MenuItem_commKey].nullable_value.value.object_value;
+    const char *commKey = amlang_str(commKey_obj);
+    // commKey is single-char on AmLang; if it's longer, use the first
+    // char. Empty/NULL → no shortcut.
+    char keq_buf[2] = { 0, 0 };
+    if (commKey != NULL && commKey[0] != '\0') {
+        keq_buf[0] = commKey[0];
+    }
+
+    bool enabled = amlang_item->object_properties.class_object_properties.properties[MENU_BRIDGE_P_MenuItem_enabled].nullable_value.value.bool_value;
+
+    // Check whether this item has sub-items; if so we want a parent
+    // item with a submenu (no action) rather than a clickable one.
+    aobject *subs = amlang_item->object_properties.class_object_properties.properties[MENU_BRIDGE_P_MenuItem_subItems].nullable_value.value.object_value;
+    int sub_count = 0;
+    if (subs != NULL) {
+        function_result fr = Am_Collections_List_ta_Am_Ui_MenuItem_f_getSize_0(subs);
+        if (fr.exception != NULL) { __decrease_reference_count(fr.exception); }
+        else sub_count = (int) fr.return_value.value.int_value;
+    }
+
+    id title = ns_string(label ? label : "");
+    id keq = ns_string(keq_buf);
+
+    // Init with no action — set target/action explicitly afterwards so
+    // the SEL value isn't laundered through `id` casts that have bitten
+    // us when passing variadic-ish parameters through objc_msgSend on
+    // arm64.
+    id alloc = ((id (*)(Class, SEL)) objc_msgSend)(g_NSMenuItem, g_sel_alloc);
+    id item  = ((id (*)(id, SEL, id, SEL, id)) objc_msgSend)(alloc, g_sel_initWithTitle_action_keyEquivalent, title, (SEL) NULL, keq);
+
+    if (sub_count > 0) {
+        id submenu = new_ns_menu(label ? label : "");
+        build_ns_menu_items(submenu, amlang_item, MENU_BRIDGE_P_MenuItem_subItems);
+        ((void (*)(id, SEL, id)) objc_msgSend)(item, g_sel_setSubmenu, submenu);
+    } else {
+        // Stash the AmLang aobject* pointer so the click handler can
+        // recover it from the sender's tag.
+        ((void (*)(id, SEL, NSInteger)) objc_msgSend)(item, g_sel_setTag, (NSInteger) (intptr_t) amlang_item);
+        ((void (*)(id, SEL, id)) objc_msgSend)(item, g_sel_setTarget, g_menu_target_instance);
+        ((void (*)(id, SEL, SEL)) objc_msgSend)(item, g_sel_setAction, g_sel_menuPicked);
+    }
+
+    if (!enabled) {
+        ((void (*)(id, SEL, signed char)) objc_msgSend)(item, g_sel_setEnabled, 0);
+    }
+
+    ((void (*)(id, SEL, id)) objc_msgSend)(ns_menu, g_sel_addItem, item);
+}
+
+static void build_ns_menu_items(id ns_menu, aobject *items_container, int items_property_index)
+{
+    aobject *items = items_container->object_properties.class_object_properties.properties[items_property_index].nullable_value.value.object_value;
+    if (items == NULL) return;
+    function_result fr = Am_Collections_List_ta_Am_Ui_MenuItem_f_getSize_0(items);
+    if (fr.exception != NULL) { __decrease_reference_count(fr.exception); return; }
+    int n = (int) fr.return_value.value.int_value;
+    for (int i = 0; i < n; i++) {
+        function_result gr = Am_Collections_List_ta_Am_Ui_MenuItem_f_get_0(items, i);
+        if (gr.exception != NULL) { __decrease_reference_count(gr.exception); continue; }
+        aobject *amlang_item = gr.return_value.value.object_value;
+        add_menu_item_to(ns_menu, amlang_item);
+    }
+}
+
+void am_ui_macos_arm_install_menu_strip(aobject *menuStrip)
+{
+    menu_bridge_lazy_init();
+    if (g_NSApplication == NULL || g_NSMenu == NULL) return;
+
+    id app = ((id (*)(Class, SEL)) objc_msgSend)(g_NSApplication, g_sel_sharedApp);
+    if (app == NULL) return;
+
+    // A bare top-level NSMenu acts as the menu bar; each top-level
+    // NSMenuItem holds its dropdown menu as a submenu. Cocoa convention
+    // is to put the "application" menu first (the bold one that
+    // matches the app name) — for now we just pass through the AmLang
+    // menus in order; the first one becomes the app menu visually.
+    id main_menu = new_ns_menu("");
+    if (menuStrip != NULL) {
+        aobject *menus = menuStrip->object_properties.class_object_properties.properties[MENU_BRIDGE_P_MenuStrip_menus].nullable_value.value.object_value;
+        if (menus != NULL) {
+            function_result fr = Am_Collections_List_ta_Am_Ui_Menu_f_getSize_0(menus);
+            if (fr.exception != NULL) { __decrease_reference_count(fr.exception); }
+            else {
+                int n = (int) fr.return_value.value.int_value;
+                for (int i = 0; i < n; i++) {
+                    function_result gr = Am_Collections_List_ta_Am_Ui_Menu_f_get_0(menus, i);
+                    if (gr.exception != NULL) { __decrease_reference_count(gr.exception); continue; }
+                    aobject *amlang_menu = gr.return_value.value.object_value;
+                    if (amlang_menu == NULL) continue;
+
+                    aobject *title_obj = amlang_menu->object_properties.class_object_properties.properties[MENU_BRIDGE_P_Menu_title].nullable_value.value.object_value;
+                    const char *title = amlang_str(title_obj);
+
+                    // Top-level NSMenuItem hosting the dropdown.
+                    id top_item_alloc = ((id (*)(Class, SEL)) objc_msgSend)(g_NSMenuItem, g_sel_alloc);
+                    id empty_key = ns_string("");
+                    id top_item = ((id (*)(id, SEL, id, SEL, id)) objc_msgSend)(top_item_alloc, g_sel_initWithTitle_action_keyEquivalent, ns_string(title ? title : ""), (SEL) NULL, empty_key);
+
+                    id dropdown = new_ns_menu(title ? title : "");
+                    build_ns_menu_items(dropdown, amlang_menu, MENU_BRIDGE_P_Menu_items);
+                    ((void (*)(id, SEL, id)) objc_msgSend)(top_item, g_sel_setSubmenu, dropdown);
+
+                    ((void (*)(id, SEL, id)) objc_msgSend)(main_menu, g_sel_addItem, top_item);
+                }
+            }
+        }
+    }
+
+    ((void (*)(id, SEL, id)) objc_msgSend)(app, g_sel_setMainMenu, main_menu);
+}
+
+
+// ---------------------------------------------------------------------------
+// handleInput — pump SDL events and dispatch to the AmLang side.
+//
+// This corresponds to the IDCMP event drain in amigaos/Window.c. We
+// run a SDL_PollEvent loop (non-blocking) and for each event call the
+// matching Am_Ui_Window_f_* callback the AmLang side defines. When
+// the user closes the window we flip pending_close so the next
+// isOpen check returns false.
+//
+// Multi-window dispatch: SDL events carry a window_id. We only
+// dispatch events whose window_id matches THIS Window; events for
+// other Windows are re-queued via SDL_PushEvent so the other
+// Window's handleInput picks them up. This means the IDE's
+// "main + dialogs" topology works without a separate event router.
+// ---------------------------------------------------------------------------
+
+function_result Am_Ui_Window_handleInput_0(aobject *const this)
+{
+    function_result __result = { .has_return_value = false };
+    __increase_reference_count(this);
+    Am_Ui_Window_data *data = win_data(this);
+    if (data == NULL || data->window == NULL) goto __exit;
+
+    // Cocoa NSMenu install / refresh. Window.setMenuStrip() is a
+    // plain AmLang setter on a property; we can't intercept it from
+    // native code, so we poll the property here once per input
+    // pump. Comparing the pointer dedupes — we only rebuild when the
+    // strip actually changes (boot, workspace switch, etc.). NULL
+    // strip means "no menus", which is exactly what the splash window
+    // wants — the bridge clears NSApp.mainMenu in that case.
+    aobject *current_strip = this->object_properties.class_object_properties.properties[Am_Ui_Window_P_menuStrip].nullable_value.value.object_value;
+    if ((void *) current_strip != data->installed_menu_strip) {
+        am_ui_macos_arm_install_menu_strip(current_strip);
+        data->installed_menu_strip = (void *) current_strip;
+    }
+
+    SDL_Event ev;
+    while (SDL_PollEvent(&ev)) {
+        // Filter: only dispatch events for this Window's id when the
+        // event carries one. SDL_QUIT has no id and is a "close
+        // everything" signal — treat it as a close on this Window.
+        bool for_us = true;
+        Uint32 evt_window_id = 0;
+        switch (ev.type) {
+        case SDL_WINDOWEVENT:        evt_window_id = ev.window.windowID;  break;
+        case SDL_MOUSEMOTION:        evt_window_id = ev.motion.windowID;  break;
+        case SDL_MOUSEBUTTONDOWN:
+        case SDL_MOUSEBUTTONUP:      evt_window_id = ev.button.windowID;  break;
+        case SDL_MOUSEWHEEL:         evt_window_id = ev.wheel.windowID;   break;
+        case SDL_KEYDOWN:
+        case SDL_KEYUP:              evt_window_id = ev.key.windowID;     break;
+        case SDL_TEXTINPUT:          evt_window_id = ev.text.windowID;    break;
+        default: break;
+        }
+        if (evt_window_id != 0 && evt_window_id != data->window_id) {
+            for_us = false;
+        }
+        if (!for_us) {
+            // Event is for a different Window. Re-push so that Window's
+            // handleInput picks it up — unless the target window is no
+            // longer alive (closed splash, etc.), in which case the
+            // event would re-queue itself forever and this handleInput
+            // would never drain. SDL_GetWindowFromID returns NULL for
+            // a destroyed window id, so we drop those.
+            if (SDL_GetWindowFromID(evt_window_id) != NULL) {
+                SDL_PushEvent(&ev);
+            }
+            continue;
+        }
+
+        switch (ev.type) {
+        case SDL_QUIT:
+            data->pending_close = true;
+            break;
+
+        case SDL_WINDOWEVENT:
+            if (ev.window.event == SDL_WINDOWEVENT_CLOSE) {
+                data->pending_close = true;
+            } else if (ev.window.event == SDL_WINDOWEVENT_RESIZED
+                    || ev.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
+                int w = 0, h = 0;
+                SDL_GetRendererOutputSize(data->renderer, &w, &h);
+                if (w != data->last_paint_w || h != data->last_paint_h) {
+                    data->last_paint_w = w;
+                    data->last_paint_h = h;
+                    Am_Ui_Window_f_onResize_0(this, 0, 0, (unsigned short) w, (unsigned short) h);
+                }
+            } else if (ev.window.event == SDL_WINDOWEVENT_EXPOSED) {
+                data->pending_refresh = true;
+            }
+            break;
+
+        case SDL_MOUSEMOTION: {
+            data->last_mouse_x = (short) ev.motion.x;
+            data->last_mouse_y = (short) ev.motion.y;
+            // MouseEventType.move = 1, MouseButton.none = 0.
+            Am_Ui_Window_f_onMouseEvent_0(this, 1, 0,
+                (short) ev.motion.x, (short) ev.motion.y);
+            break;
+        }
+
+        case SDL_MOUSEBUTTONDOWN: {
+            unsigned char btn = map_sdl_button(ev.button.button);
+            if (btn != 0) {
+                // MouseEventType.down = 3.
+                Am_Ui_Window_f_onMouseEvent_0(this, 3, btn,
+                    (short) ev.button.x, (short) ev.button.y);
+            }
+            break;
+        }
+        case SDL_MOUSEBUTTONUP: {
+            unsigned char btn = map_sdl_button(ev.button.button);
+            if (btn != 0) {
+                // MouseEventType.up = 2.
+                Am_Ui_Window_f_onMouseEvent_0(this, 2, btn,
+                    (short) ev.button.x, (short) ev.button.y);
+            }
+            break;
+        }
+
+        case SDL_MOUSEWHEEL: {
+            // SDL_MOUSEWHEEL has its own x/y (the *scroll* deltas) but
+            // not cursor coords; reuse the last seen cursor pos.
+            Am_Ui_Window_f_onMouseWheel_0(this,
+                (short) ev.wheel.y,
+                data->last_mouse_x, data->last_mouse_y);
+            break;
+        }
+
+        case SDL_KEYDOWN:
+        case SDL_KEYUP: {
+            // Mirror AmigaOS Window.c's IDCMP_RAWKEY mapping: AmIde's
+            // editor / text fields check specific AmigaOS raw key codes
+            // (left=79, right=78, up=76, down=77, backspace=65, delete=70,
+            // tab=66, return=68, escape=69) and ASCII control codes in
+            // keyChar (Shift+arrow=1, Ctrl+letter=ctrl_code, Backspace=8,
+            // Delete=127, Tab=9, Return=13, Escape=27). Cmd-combos are
+            // owned by the Cocoa menu bar; skip them so a menu shortcut
+            // doesn't double-fire into the editor.
+            int type = (ev.type == SDL_KEYDOWN) ? 1 : 2;  // 1=down, 2=up
+            SDL_Keycode sym = ev.key.keysym.sym;
+            Uint16 mod = ev.key.keysym.mod;
+            if (mod & KMOD_GUI) break;
+            bool shift = (mod & KMOD_SHIFT) != 0;
+            bool ctrl  = (mod & KMOD_CTRL)  != 0;
+
+            int amiga_code = 0;
+            int amiga_char = 0;
+            switch (sym) {
+                case SDLK_BACKSPACE: amiga_code = 65; amiga_char = 8;   break;
+                case SDLK_DELETE:    amiga_code = 70; amiga_char = 127; break;
+                case SDLK_LEFT:      amiga_code = 79; amiga_char = shift ? 1 : 0; break;
+                case SDLK_RIGHT:     amiga_code = 78; amiga_char = shift ? 1 : 0; break;
+                case SDLK_UP:        amiga_code = 76; amiga_char = shift ? 1 : 0; break;
+                case SDLK_DOWN:      amiga_code = 77; amiga_char = shift ? 1 : 0; break;
+                case SDLK_TAB:       amiga_code = 66; amiga_char = 9;   break;
+                case SDLK_RETURN:    amiga_code = 68; amiga_char = 13;  break;
+                case SDLK_KP_ENTER:  amiga_code = 68; amiga_char = 13;  break;
+                case SDLK_ESCAPE:    amiga_code = 69; amiga_char = 27;  break;
+                default:
+                    // Ctrl+letter → ASCII control code (Ctrl+A=1 .. Ctrl+Z=26).
+                    // Printable keys without Ctrl get handled by SDL_TEXTINPUT
+                    // so the Shift / IME-applied character makes it through;
+                    // dispatching here too would double-fire.
+                    if (ctrl && sym >= SDLK_a && sym <= SDLK_z) {
+                        amiga_code = (int) sym;
+                        amiga_char = (int) (sym - SDLK_a + 1);
+                    }
+                    break;
+            }
+            if (amiga_code != 0 || amiga_char != 0) {
+                Am_Ui_Window_f_onKeyboardEvent_0(this, type,
+                    (unsigned short) amiga_code, (unsigned short) amiga_char);
+            }
+            break;
+        }
+
+        case SDL_TEXTINPUT: {
+            // Carries the post-modifier character (e.g. uppercase from
+            // Shift, language layout from IME). Skip if a Ctrl/Cmd combo
+            // is held — those are routed through SDL_KEYDOWN (for Ctrl)
+            // or the Cocoa menu (for Cmd). Multi-byte UTF-8 chars are
+            // truncated to their first byte for now; AmIde's text path
+            // uses ASCII-range keyChar today, broader Unicode is TODO.
+            Uint16 mod = SDL_GetModState();
+            if (mod & (KMOD_CTRL | KMOD_GUI)) break;
+            unsigned char ch = (unsigned char) ev.text.text[0];
+            if (ch >= 32 && ch <= 126) {
+                Am_Ui_Window_f_onKeyboardEvent_0(this, 1, 0, (unsigned short) ch);
+            }
+            break;
+        }
+
+        default:
+            break;
+        }
+    }
+
+    // End-of-cycle paint dispatch. Mirrors the amigaos backend's
+    // pending_refresh / pending_full_refresh check at the tail of
+    // handleInput: if AmLang flipped the flag (via refresh() from
+    // requestRepaint), call back into Window.paint() which walks the
+    // View tree, lets each view draw into the off-screen LayerGraphics,
+    // and flushes the dirty bounds back into this renderer. Then
+    // SDL_RenderPresent makes the result visible. Without this dispatch
+    // the SDL renderer fills with whatever black clear color SDL gives
+    // a fresh window and stays there — no AmLang view ever paints.
+    if (data->pending_refresh) {
+        data->pending_refresh = false;
+        function_result paint_res = Am_Ui_Window_f_paint_0(this);
+        if (paint_res.exception != NULL) {
+            // Log paint exceptions so we don't silently swallow View-tree
+            // bugs and stare at a blank window. The message lives at the
+            // canonical Am.Lang.Exception property layout — pull it out
+            // safely so the print itself doesn't strlen NULL.
+            aobject *msg_obj = paint_res.exception->object_properties.class_object_properties.properties[Am_Lang_Exception_P_message].nullable_value.value.object_value;
+            const char *msg = "(no msg)";
+            if (msg_obj != NULL) {
+                string_holder *sh = (string_holder *) (msg_obj + 1);
+                if (sh != NULL && sh->string_value != NULL) msg = sh->string_value;
+            }
+            // Only print once per session — paint exceptions can fire
+            // many times a second once one widget's paint() is broken,
+            // and that floods the terminal AND drowns out the click
+            // log that we used to diagnose menu routing.
+            static int paint_throw_n = 0;
+            if (paint_throw_n < 1) {
+                fprintf(stderr, "[am-ui/macos-arm] f_paint_0 threw for win_id=%u: %s\n", (unsigned) data->window_id, msg);
+                // Walk the stack trace list (Am.Lang.Exception holds it
+                // as List<String>, not a String — casting the List
+                // straight to string_holder is what segfaulted my last
+                // attempt to print it). Pull each frame via the typed
+                // List accessor.
+                aobject *st_list = paint_res.exception->object_properties.class_object_properties.properties[Am_Lang_Exception_P_stackTrace].nullable_value.value.object_value;
+                if (st_list != NULL) {
+                    function_result n_fr = Am_Collections_List_ta_Am_Lang_String_f_getSize_0(st_list);
+                    if (n_fr.exception == NULL) {
+                        int n = (int) n_fr.return_value.value.int_value;
+                        for (int i = 0; i < n && i < 30; i++) {
+                            function_result f_fr = Am_Collections_List_ta_Am_Lang_String_f_get_0(st_list, i);
+                            if (f_fr.exception != NULL) { __decrease_reference_count(f_fr.exception); continue; }
+                            aobject *frame = f_fr.return_value.value.object_value;
+                            const char *fs = "(null frame)";
+                            if (frame != NULL) {
+                                string_holder *fh = (string_holder *) (frame + 1);
+                                if (fh != NULL && fh->string_value != NULL) fs = fh->string_value;
+                            }
+                            fprintf(stderr, "[am-ui/macos-arm]   #%d %s\n", i, fs);
+                        }
+                    } else {
+                        __decrease_reference_count(n_fr.exception);
+                    }
+                }
+                paint_throw_n++;
+            }
+            __decrease_reference_count(paint_res.exception);
+        }
+        if (data->renderer != NULL) {
+            // SDL flips the window's back buffer on every RenderPresent
+            // and the new back buffer's contents are undefined. The
+            // AmLang side only blits the dirty regions of the off-screen
+            // RenderableBitmap onto the window, so a partial repaint
+            // (e.g. clicking a tab) leaves the rest as garbage / black.
+            // Fix: copy the WHOLE off-screen texture onto the window
+            // here, every frame, then present. The off-screen itself is
+            // persistent so cross-frame content survives; we just have
+            // to re-stamp it onto the back buffer every flip.
+            SDL_SetRenderTarget(data->renderer, NULL);
+            // LayerGraphics caches the last bound render target per
+            // renderer to skip redundant SetRenderTarget calls. Since
+            // we just bypassed that cache, tell it about the change so
+            // the next off-screen apply_target won't think the GPU is
+            // still bound there and skip its real switch.
+            am_ui_macos_arm_lg_target_changed(data->renderer, NULL);
+            SDL_RenderSetClipRect(data->renderer, NULL);
+            aobject *off_rb = this->object_properties.class_object_properties.properties[Am_Ui_Window_P_offscreen].nullable_value.value.object_value;
+            if (off_rb != NULL) {
+                aobject *off_bm = off_rb->object_properties.class_object_properties.properties[Am_Ui_RenderableBitmap_P_bitmap].nullable_value.value.object_value;
+                if (off_bm != NULL) {
+                    Am_Ui_Bitmap_data *bd = (Am_Ui_Bitmap_data *) off_bm->object_properties.class_object_properties.object_data.value.custom_value;
+                    if (bd != NULL && bd->texture != NULL) {
+                        int win_w = 0, win_h = 0;
+                        SDL_GetWindowSize(data->window, &win_w, &win_h);
+                        SDL_Rect src = { 0, 0, win_w, win_h };
+                        SDL_Rect dst = { 0, 0, win_w, win_h };
+                        SDL_RenderCopy(data->renderer, bd->texture, &src, &dst);
+                    }
+                }
+            }
+            SDL_RenderPresent(data->renderer);
+        }
+    }
+
+__exit:
+    __decrease_reference_count(this);
+    return __result;
+}
+
+// ---------------------------------------------------------------------------
+// Geometry queries against the host display.
+// ---------------------------------------------------------------------------
+
+function_result Am_Ui_Window_getHostScreenWidth_0(aobject *const this)
+{
+    function_result __result = { .has_return_value = true };
+    __increase_reference_count(this);
+    SDL_Rect bounds = { 0, 0, 0, 0 };
+    SDL_GetDisplayBounds(0, &bounds);
+    __result.return_value.value.ushort_value = (unsigned short) bounds.w;
+    __decrease_reference_count(this);
+    return __result;
+}
+
+function_result Am_Ui_Window_getHostScreenHeight_0(aobject *const this)
+{
+    function_result __result = { .has_return_value = true };
+    __increase_reference_count(this);
+    SDL_Rect bounds = { 0, 0, 0, 0 };
+    SDL_GetDisplayBounds(0, &bounds);
+    __result.return_value.value.ushort_value = (unsigned short) bounds.h;
+    __decrease_reference_count(this);
+    return __result;
+}
+
+// ---------------------------------------------------------------------------
+// AmigaOS exec.library signal mailbox — no Linux equivalent.
+// Callers (the IDE's TaskScheduler) treat 0 / NULL as "no async signal
+// surface available" and fall back to polling via handleInput.
+// ---------------------------------------------------------------------------
+
+function_result Am_Ui_Window_getUserPortSigBit_0(aobject *const this)
+{
+    function_result __result = { .has_return_value = true };
+    (void) this;
+    __result.return_value.value.int_value = 0;
+    return __result;
+}
+
+function_result Am_Ui_Window_getUserPortTaskPtr_0(aobject *const this)
+{
+    function_result __result = { .has_return_value = true };
+    (void) this;
+    __result.return_value.value.long_value = 0;
+    return __result;
+}
+
+// ---------------------------------------------------------------------------
+// Title — SDL_SetWindowTitle.
+// ---------------------------------------------------------------------------
+
+function_result Am_Ui_Window_setTitleNative_0(aobject *const this, aobject *windowTitle, aobject *screenTitle)
+{
+    function_result __result = { .has_return_value = false };
+    __increase_reference_count(this);
+    if (windowTitle != NULL) __increase_reference_count(windowTitle);
+    if (screenTitle != NULL) __increase_reference_count(screenTitle);
+
+    Am_Ui_Window_data *data = win_data(this);
+    const char *title = amlang_str(windowTitle);
+    if (data != NULL && data->window != NULL && title != NULL) {
+        SDL_SetWindowTitle(data->window, title);
+    }
+    // screenTitle is a no-op on Linux; on AmigaOS it's the title bar
+    // for the host screen the window sits in.
+    (void) screenTitle;
+
+    if (screenTitle != NULL) __decrease_reference_count(screenTitle);
+    if (windowTitle != NULL) __decrease_reference_count(windowTitle);
+    __decrease_reference_count(this);
+    return __result;
+}
+
+// ---------------------------------------------------------------------------
+// Clipboard — SDL2 has native primitives but pasteFromClipboard needs
+// to allocate an AmLang String aobject which is more boilerplate than
+// this stub session has room for. TODO(linux).
+// ---------------------------------------------------------------------------
+
+function_result Am_Ui_Window_copyToClipboard_0(aobject *const this, aobject *text)
+{
+    function_result __result = { .has_return_value = false };
+    __increase_reference_count(this);
+    if (text != NULL) __increase_reference_count(text);
+    const char *t = amlang_str(text);
+    if (t != NULL) {
+        SDL_SetClipboardText(t);
+    }
+    if (text != NULL) __decrease_reference_count(text);
+    __decrease_reference_count(this);
+    return __result;
+}
+
+function_result Am_Ui_Window_pasteFromClipboard_0(aobject *const this)
+{
+    function_result __result = { .has_return_value = true };
+    __increase_reference_count(this);
+    // TODO(linux): build an AmLang String from SDL_GetClipboardText().
+    // Returning NULL for now — callers treat null as "nothing to paste".
+    __result.return_value.value.object_value = NULL;
+    __decrease_reference_count(this);
+    return __result;
+}
+
+// ---------------------------------------------------------------------------
+// Menu strip — Linux uses an in-canvas menu bar (drawn by the AmLang
+// View tree) rather than a native widget. All five menu ops are
+// no-ops; the AmLang side already gates them behind menuStrip != null
+// guards that we never trip.
+// ---------------------------------------------------------------------------
+
+function_result Am_Ui_Window_nativeBeginMenuStrip_0(aobject *const this)
+{
+    function_result __result = { .has_return_value = false };
+    (void) this;
+    return __result;
+}
+
+function_result Am_Ui_Window_nativeAddMenu_0(aobject *const this, aobject *title)
+{
+    function_result __result = { .has_return_value = false };
+    (void) this; (void) title;
+    return __result;
+}
+
+function_result Am_Ui_Window_nativeAddMenuItem_0(aobject *const this, int menuIndex, aobject *item, aobject *label, aobject *commKey)
+{
+    function_result __result = { .has_return_value = false };
+    (void) this; (void) menuIndex; (void) item; (void) label; (void) commKey;
+    return __result;
+}
+
+function_result Am_Ui_Window_nativeAddMenuSubItem_0(aobject *const this, int menuIndex, aobject *item, aobject *label, aobject *commKey)
+{
+    function_result __result = { .has_return_value = false };
+    (void) this; (void) menuIndex; (void) item; (void) label; (void) commKey;
+    return __result;
+}
+
+function_result Am_Ui_Window_nativeFinalizeMenuStrip_0(aobject *const this)
+{
+    function_result __result = { .has_return_value = false };
+    (void) this;
+    return __result;
+}
+
+function_result Am_Ui_Window_nativeClearMenuStrip_0(aobject *const this)
+{
+    function_result __result = { .has_return_value = false };
+    (void) this;
+    return __result;
+}
+
+#endif

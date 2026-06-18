@@ -11,7 +11,7 @@ namespace Am.Ui
     // On AmigaOS/CyberGraphX: WritePixelArray is called directly on the
     // window RastPort during paint() — no intermediate BitMap needed.
     // On other platforms: no-op stubs.
-    #implementationPlatforms "libc", "amigaos", "amigaos-sim", "morphos-ppc"
+    #implementationPlatforms "libc", "amigaos", "amigaos-sim", "morphos-ppc", "macos-arm"
     native class PixelBufferView : View {
         import Am.Lang
 

@@ -1,6 +1,6 @@
 namespace Am.Ui
 {
-    #implementationPlatforms "libc", "amigaos", "amigaos-sim", "morphos-ppc"
+    #implementationPlatforms "libc", "amigaos", "amigaos-sim", "morphos-ppc", "macos-arm"
     native class FolderRequester {
         import Am.Lang
 

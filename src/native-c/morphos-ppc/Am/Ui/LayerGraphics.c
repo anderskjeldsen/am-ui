@@ -13,12 +13,11 @@
 #include <libc/Am/Lang/String.h>
 
 #include <string.h>
-
 #include <exec/types.h>
 #include <graphics/gfx.h>
-#include <graphics/rpattr.h>
 #include <graphics/layers.h>
 #include <graphics/rastport.h>
+#include <graphics/rpattr.h>
 #include <graphics/scale.h>
 #include <graphics/text.h>
 #include <cybergraphx/cybergraphics.h>
@@ -29,10 +28,6 @@
 #include <proto/cybergraphics.h>
 
 #include <libc/core_inline_functions.h>
-
-// MorphOS port of LayerGraphics. The Intuition / graphics / layers /
-// cybergraphx APIs are shared with AmigaOS, so this is a near-verbatim
-// copy of the amigaos implementation with morphos-ppc include paths.
 
 short lg_translated_x(aobject *g, short x) {
     short tx = g->object_properties.class_object_properties.properties[Am_Ui_Graphics_P_xOffset].nullable_value.value.short_value;
@@ -134,6 +129,7 @@ static void apply_clip_rect(aobject *this, struct Am_Ui_ClipRect *clipRect)
     InstallClipRegion(layer, NULL);
     ClearRegion(gData->clip_region);
 
+    // ClipRect is now a struct (value type) — read fields directly.
     struct Rectangle rect;
     rect.MinX = clipRect->x;
     rect.MinY = clipRect->y;
@@ -215,11 +211,59 @@ __exit: ;
     return __result;
 }
 
-// Direct 24-bit drawing via the cached fg_color / bg_color +
-// CGFX FillPixelArray (see fillRect / eraseRect below). The
-// pen colormap is bypassed entirely — required on RTG TrueColor
-// screens where the colormap doesn't extend beyond the system
-// pens.
+// The pen-vs-colour split: setForegroundPen / setBackgroundPen
+// take the classic AmigaOS path (SetAPen / SetBPen, drawing
+// uses the colormap index). setForegroundColor /
+// setBackgroundColor stash a direct 24-bit ARGB on the
+// graphics instance instead — fillRect / eraseRect check the
+// fg_color_active / bg_color_active flag and route through
+// CGFX's FillPixelArray when set, which takes the ARGB direct
+// and skips the colormap entirely. That's how an extension can
+// pick from more than the IDE's 16 reserved palette pens.
+//
+// Pen setters clear the matching colour flag so a caller
+// switching back to a pen actually goes back to the pen path
+// instead of inheriting whatever colour the previous
+// setForegroundColor stashed.
+function_result Am_Ui_LayerGraphics_setForegroundPen_0(aobject * const this, unsigned char pen)
+{
+    function_result __result = { .has_return_value = false };
+    bool __returning = false;
+    Am_Ui_LayerGraphics_data *data = get_layer_graphics_data(this);
+    struct RastPort *rp = get_rp(this);
+    if (data != NULL) data->fg_color_active = FALSE;
+    if (rp != NULL) SetAPen(rp, pen);
+__exit: ;
+    return __result;
+}
+
+function_result Am_Ui_LayerGraphics_setBackgroundPen_0(aobject * const this, unsigned char pen)
+{
+    function_result __result = { .has_return_value = false };
+    bool __returning = false;
+    Am_Ui_LayerGraphics_data *data = get_layer_graphics_data(this);
+    struct RastPort *rp = get_rp(this);
+    if (data != NULL) data->bg_color_active = FALSE;
+    if (rp != NULL) SetBPen(rp, pen);
+__exit: ;
+    return __result;
+}
+
+// Stash a direct 24-bit ARGB on the graphics instance and flag
+// "colour mode" — subsequent fillRect / eraseRect calls notice
+// the flag and route through CGFX's FillPixelArray, which
+// takes the ARGB straight and skips the screen's colormap.
+// This is how we pick from more than the IDE's 16 reserved
+// palette pens (the colormap on a TrueColor RTG screen doesn't
+// extend past the system-pens table, so SetRGB32 + SetAPen
+// with an index like 255 just aliases to whatever pen sits at
+// the colormap's end — the "all my colours come out the same"
+// symptom). drawLine / drawString aren't routed here; callers
+// that need a coloured line currently still go through pens.
+//
+// Alpha is dropped — the AmigaOS palette has no alpha
+// channel — and the value is masked to 24 bits so a 0xFFRRGGBB
+// passed from JS doesn't sign-extend.
 function_result Am_Ui_LayerGraphics_setForegroundColor_0(aobject * const this, unsigned int argb)
 {
     function_result __result = { .has_return_value = false };
@@ -246,41 +290,14 @@ __exit: ;
     return __result;
 }
 
-// See the amigaos sibling — pen setters clear the colour-mode
-// flag so a follow-up fillRect / eraseRect goes back to the
-// pen path instead of inheriting a stale colour.
-function_result Am_Ui_LayerGraphics_setForegroundPen_0(aobject * const this, unsigned char pen)
-{
-    function_result __result = { .has_return_value = false };
-    bool __returning = false;
-    Am_Ui_LayerGraphics_data *data = get_layer_graphics_data(this);
-    struct RastPort *rp = get_rp(this);
-    if (data != NULL) data->fg_color_active = FALSE;
-    if (rp != NULL) SetAPen(rp, pen);
-__exit: ;
-    return __result;
-}
-
-function_result Am_Ui_LayerGraphics_setBackgroundPen_0(aobject * const this, unsigned char pen)
-{
-    function_result __result = { .has_return_value = false };
-    bool __returning = false;
-    Am_Ui_LayerGraphics_data *data = get_layer_graphics_data(this);
-    struct RastPort *rp = get_rp(this);
-    if (data != NULL) data->bg_color_active = FALSE;
-    if (rp != NULL) SetBPen(rp, pen);
-__exit: ;
-    return __result;
-}
-
 function_result Am_Ui_LayerGraphics_drawLine_0(aobject * const this, short x, short y, short x2, short y2)
 {
     function_result __result = { .has_return_value = false };
     bool __returning = false;
     struct RastPort *rp = get_rp(this);
-    if (rp == NULL) goto __exit;
     short tx1 = lg_translated_x(this, x), ty1 = lg_translated_y(this, y);
     short tx2 = lg_translated_x(this, x2), ty2 = lg_translated_y(this, y2);
+    if (rp == NULL) goto __exit;
     Move(rp, tx1, ty1);
     Draw(rp, tx2, ty2);
 __exit: ;
@@ -293,9 +310,14 @@ function_result Am_Ui_LayerGraphics_fillRect_0(aobject * const this, short x, sh
     bool __returning = false;
     Am_Ui_LayerGraphics_data *data = get_layer_graphics_data(this);
     struct RastPort *rp = get_rp(this);
-    if (rp == NULL) goto __exit;
     short tx1 = lg_translated_x(this, x), ty1 = lg_translated_y(this, y);
     short tx2 = lg_translated_x(this, x2), ty2 = lg_translated_y(this, y2);
+    if (rp == NULL) goto __exit;
+    // Colour-mode fill — CGFX's FillPixelArray paints the
+    // rectangle with the stashed 24-bit ARGB without touching
+    // the colormap, which is what makes the multi-colour
+    // sprite palette work. Falls back to RectFill (pen path)
+    // when no setForegroundColor preceded this call.
     if (data != NULL && data->fg_color_active) {
         UWORD w = (UWORD)(tx2 - tx1 + 1);
         UWORD h = (UWORD)(ty2 - ty1 + 1);
@@ -313,9 +335,12 @@ function_result Am_Ui_LayerGraphics_eraseRect_0(aobject * const this, short x, s
     bool __returning = false;
     Am_Ui_LayerGraphics_data *data = get_layer_graphics_data(this);
     struct RastPort *rp = get_rp(this);
-    if (rp == NULL) goto __exit;
     short tx1 = lg_translated_x(this, x), ty1 = lg_translated_y(this, y);
     short tx2 = lg_translated_x(this, x2), ty2 = lg_translated_y(this, y2);
+    if (rp == NULL) goto __exit;
+    // Same colour-mode short-circuit, but for the background
+    // colour. EraseRect normally paints with BPen; in colour
+    // mode we substitute the cached bg_color via FillPixelArray.
     if (data != NULL && data->bg_color_active) {
         UWORD w = (UWORD)(tx2 - tx1 + 1);
         UWORD h = (UWORD)(ty2 - ty1 + 1);
@@ -340,8 +365,10 @@ function_result Am_Ui_LayerGraphics_drawString_0(aobject * const this, aobject *
         string_holder *sh = text->object_properties.class_object_properties.object_data.value.custom_value;
         struct TextFont *tf = rp->Font;
         short baseline = tf ? tf->tf_Baseline : 0;
+        short ysize = tf ? tf->tf_YSize : 0;
         short tx = lg_translated_x(this, x);
         short ty = lg_translated_y(this, y + baseline);
+        (void)ysize;
         Move(rp, tx, ty);
         Text(rp, sh->string_value, sh->length);
     }
@@ -457,8 +484,9 @@ function_result Am_Ui_LayerGraphics_blitBitmapRect_0(aobject * const this, aobje
         short tx = lg_translated_x(this, dstX);
         short ty = lg_translated_y(this, dstY);
 
-        /* Mask-aware: BltMaskBitMapRastPort + minterm 0xE0 when a
-         * transparency mask is present, vanilla 0xC0 otherwise. */
+        /* Mask-aware: when present, use BltMaskBitMapRastPort + 0xE0
+         * so transparent pixels leave the destination intact.
+         * Otherwise the original 0xC0 plain-copy. */
         if (bitmapData->mask != NULL) {
             BltMaskBitMapRastPort(bitmapData->bitmap, srcX, srcY,
                                   rp, tx, ty, srcW, srcH, 0xE0,
@@ -532,6 +560,12 @@ __exit: ;
     return __result;
 }
 
+// ScrollRaster's sign convention is opposite to ours: in ScrollRaster
+// positive dx/dy moves pixels toward (0,0) — i.e. left/up. We flip the
+// sign so callers can use the more intuitive "positive dy scrolls
+// content down" convention. The exposed strip is filled with `fillPen`
+// (via temporarily setting the rastport's APen + BPen + JAM2 mode so
+// either fill style ScrollRaster uses lands on the right colour).
 function_result Am_Ui_LayerGraphics_scrollRect_0(aobject * const this,
                                                    short x, short y,
                                                    unsigned short w, unsigned short h,
@@ -571,7 +605,10 @@ function_result Am_Ui_LayerGraphics_setClipRect_0(aobject * const this, struct A
 {
     function_result __result = { .has_return_value = false };
     bool __returning = false;
+
+    // clipRect is a struct value-type (not ARC-tracked); no ref count adjustments needed.
     apply_clip_rect(this, clipRect);
+
 __exit: ;
     return __result;
 }
@@ -580,10 +617,12 @@ function_result Am_Ui_LayerGraphics_clearClipRect_0(aobject * const this)
 {
     function_result __result = { .has_return_value = false };
     bool __returning = false;
+
     struct Layer *layer = get_layer(this);
     if (layer != NULL) {
         InstallClipRegion(layer, NULL);
     }
+
 __exit: ;
     return __result;
 }
@@ -592,7 +631,10 @@ function_result Am_Ui_LayerGraphics_beginPainting_0(aobject * const this, struct
 {
     function_result __result = { .has_return_value = false };
     bool __returning = false;
+
+    // clipRect is a struct value-type (not ARC-tracked); no ref count adjustments needed.
     apply_clip_rect(this, clipRect);
+
 __exit: ;
     return __result;
 }
@@ -601,10 +643,12 @@ function_result Am_Ui_LayerGraphics_endPainting_0(aobject * const this)
 {
     function_result __result = { .has_return_value = false };
     bool __returning = false;
+
     struct Layer *layer = get_layer(this);
     if (layer != NULL) {
         InstallClipRegion(layer, NULL);
     }
+
 __exit: ;
     return __result;
 }
