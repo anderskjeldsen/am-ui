@@ -3,7 +3,7 @@ namespace Am.Ui
 {
 
 
-    #implementationPlatforms "libc", "amigaos", "amigaos-sim", "morphos-ppc", "macos-arm"
+    #implementationPlatforms "libc", "amigaos", "amigaos-sim", "morphos-ppc", "macos-arm", "linux-x64"
     native class GadToolsButton : GadToolsBase {
         import Am.Lang
 
