@@ -53,6 +53,23 @@ struct _Am_Ui_Window_data {
     // do on a strip change, so this acts as the dedupe key. NULL means
     // we've never installed one. See MenuBridge.c (Cocoa side).
     void         *installed_menu_strip;
+
+    // GTK shell (AM_UI_LINUX_GTK build). The SDL renderer paints into
+    // gtk_draw_area's X11 window; gtk_menubar is a real GtkMenuBar
+    // populated by the nativeAddMenu* funcs. Stored as void* so this
+    // header doesn't pull in <gtk/gtk.h>. gtk_menus[i] is the GtkMenu
+    // (dropdown) for top-level menu index i; gtk_last_item[i] is the
+    // most recent GtkMenuItem in it (the sub-item parent).
+    void         *gtk_window;
+    void         *gtk_menubar;
+    void         *gtk_draw_area;
+    void         *gtk_menus[32];
+    void         *gtk_last_item[32];
+    int           gtk_menu_count;
+
+    // GTK HiDPI integer scale factor (physical = logical * ui_scale).
+    // The SDL render surface is physical; GTK widget coords are logical.
+    int           ui_scale;
 };
 
 // Last opened SDL_Renderer, published so ViewContextGraphics can find

@@ -11,6 +11,10 @@
 #include <objc/message.h>
 #endif
 
+#ifdef AM_UI_LINUX_GTK
+#include <gtk/gtk.h>
+#endif
+
 // FolderRequester — NSOpenPanel pop-up. Configured to allow only a
 // single directory pick (no files), returns the chosen path as an
 // AmLang String, NULL on cancel. AmLang flow: AmIde calls
@@ -103,10 +107,56 @@ function_result Am_Ui_FolderRequester_requestFolder_0(aobject *title, aobject *i
     return __result;
 }
 
-#else  /* !__APPLE__ — linux/SDL: no native folder requester yet */
+#elif defined(AM_UI_LINUX_GTK)   /* GTK native folder chooser */
 
-// TODO: wire up a GTK/portal folder chooser. For now return null
-// (treated as "cancelled" by the AmLang side).
+static const char *amlang_string_to_c(aobject *s)
+{
+    if (s == NULL) return NULL;
+    string_holder *sh = (string_holder *) (s + 1);
+    if (sh == NULL) return NULL;
+    return sh->string_value;
+}
+
+function_result Am_Ui_FolderRequester_requestFolder_0(aobject *title, aobject *initialPath, aobject *parent)
+{
+    function_result __result = { .has_return_value = true };
+    __result.return_value.value.object_value = NULL;
+    (void) parent;
+
+    if (!gtk_init_check(NULL, NULL)) return __result;   // no display / GTK down
+
+    const char *title_c = amlang_string_to_c(title);
+    GtkWidget *dlg = gtk_file_chooser_dialog_new(
+        title_c ? title_c : "Select Folder",
+        NULL,                                  // no parent GtkWindow handle here
+        GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER,
+        "_Cancel", GTK_RESPONSE_CANCEL,
+        "_Open",   GTK_RESPONSE_ACCEPT,
+        NULL);
+
+    const char *initial_c = amlang_string_to_c(initialPath);
+    if (initial_c != NULL && initial_c[0] != '\0') {
+        gtk_file_chooser_set_current_folder(GTK_FILE_CHOOSER(dlg), initial_c);
+    }
+
+    // gtk_dialog_run spins a nested GTK main loop until the user responds.
+    // Safe to nest inside the Window's per-frame gtk_main_iteration pump.
+    if (gtk_dialog_run(GTK_DIALOG(dlg)) == GTK_RESPONSE_ACCEPT) {
+        char *path = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dlg));
+        if (path != NULL) {
+            __result.return_value.value.object_value = __create_string(path, &Am_Lang_String);
+            g_free(path);
+        }
+    }
+    gtk_widget_destroy(dlg);
+    // Let the destroyed dialog actually disappear before we hand control back.
+    while (gtk_events_pending()) gtk_main_iteration_do(FALSE);
+    return __result;
+}
+
+#else  /* !__APPLE__ && !GTK — no native folder requester */
+
+// Returns null (treated as "cancelled" by the AmLang side).
 function_result Am_Ui_FolderRequester_requestFolder_0(aobject *title, aobject *initialPath, aobject *parent)
 {
     function_result __result = { .has_return_value = true };

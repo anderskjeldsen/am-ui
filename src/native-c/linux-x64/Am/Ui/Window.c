@@ -19,6 +19,12 @@
 #include <stdio.h>
 #include <string.h>
 
+#ifdef AM_UI_LINUX_GTK
+#include <gtk/gtk.h>
+#include <gdk/gdkx.h>          // gdk_x11_window_get_xid
+#include <gdk/gdkkeysyms.h>    // GDK_KEY_*
+#endif
+
 #include <libc/core_inline_functions.h>
 
 // Defined in LayerGraphics.c — keep the apply_target cache in sync
@@ -100,6 +106,371 @@ static const char *amlang_str(aobject *s)
     return sh->string_value;
 }
 
+#ifdef AM_UI_LINUX_GTK
+// ===========================================================================
+// GTK shell — a GtkWindow with a GtkMenuBar on top and a GtkDrawingArea
+// below. SDL renders into the drawing area's X11 window; GTK owns the
+// event loop, input, and the native menu bar. handleInput() pumps GTK
+// and these signal handlers translate input into the same
+// Am_Ui_Window_f_* callbacks the pure-SDL path used.
+// ===========================================================================
+
+extern function_result Am_Ui_MenuItem_f_invokeClick_0(aobject *const this);
+
+// MenuItem property indices (mirror the Cocoa bridge's hardcoding so we
+// don't take a header dependency just to read enabled / isSeparator).
+#define AMUI_MENUITEM_P_enabled     2
+#define AMUI_MENUITEM_P_isSeparator 5
+
+static int g_gtk_inited = 0;
+
+static bool item_bool(aobject *item, int idx, bool dflt) {
+    if (item == NULL) return dflt;
+    return item->object_properties.class_object_properties.properties[idx].nullable_value.value.bool_value;
+}
+
+static unsigned char map_gdk_button(guint b) {
+    if (b == 1) return 1;   // left
+    if (b == 2) return 2;   // middle
+    if (b == 3) return 3;   // right
+    return 0;
+}
+
+// GTK runs at 1:1 so event coords are PHYSICAL; the IDE/View tree works
+// in LOGICAL pixels. Divide by the scale to convert.
+static int win_ui_scale(Am_Ui_Window_data *data) {
+    return (data != NULL && data->ui_scale > 0) ? data->ui_scale : 1;
+}
+
+static gboolean gtk_on_button(GtkWidget *w, GdkEventButton *e, gpointer user) {
+    aobject *this = (aobject *) user;
+    Am_Ui_Window_data *data = win_data(this);
+    if (data == NULL) return TRUE;
+    unsigned char btn = map_gdk_button(e->button);
+    if (btn == 0) return TRUE;
+    int s = win_ui_scale(data);
+    short px = (short) ((int) e->x / s);
+    short py = (short) ((int) e->y / s);
+    data->last_mouse_x = px;
+    data->last_mouse_y = py;
+    if (e->type == GDK_BUTTON_PRESS) gtk_widget_grab_focus(w);
+    int type = (e->type == GDK_BUTTON_PRESS) ? 3 : 2;   // down=3, up=2
+    Am_Ui_Window_f_onMouseEvent_0(this, type, btn, px, py);
+    return TRUE;
+}
+
+static gboolean gtk_on_motion(GtkWidget *w, GdkEventMotion *e, gpointer user) {
+    (void) w;
+    aobject *this = (aobject *) user;
+    Am_Ui_Window_data *data = win_data(this);
+    if (data == NULL) return TRUE;
+    int s = win_ui_scale(data);
+    short px = (short) ((int) e->x / s);
+    short py = (short) ((int) e->y / s);
+    data->last_mouse_x = px;
+    data->last_mouse_y = py;
+    Am_Ui_Window_f_onMouseEvent_0(this, 1, 0, px, py);  // move
+    return TRUE;
+}
+
+static gboolean gtk_on_scroll(GtkWidget *w, GdkEventScroll *e, gpointer user) {
+    (void) w;
+    aobject *this = (aobject *) user;
+    Am_Ui_Window_data *data = win_data(this);
+    if (data == NULL) return TRUE;
+    short dy = 0;
+    if (e->direction == GDK_SCROLL_UP)        dy = 1;
+    else if (e->direction == GDK_SCROLL_DOWN) dy = -1;
+    else if (e->direction == GDK_SCROLL_SMOOTH) dy = (e->delta_y < 0) ? 1 : (e->delta_y > 0 ? -1 : 0);
+    if (dy != 0) Am_Ui_Window_f_onMouseWheel_0(this, dy, data->last_mouse_x, data->last_mouse_y);
+    return TRUE;
+}
+
+static gboolean gtk_on_key(GtkWidget *w, GdkEventKey *e, gpointer user) {
+    (void) w;
+    aobject *this = (aobject *) user;
+    int type = (e->type == GDK_KEY_PRESS) ? 1 : 2;   // down=1, up=2
+    guint sym = e->keyval;
+    gboolean shift = (e->state & GDK_SHIFT_MASK) != 0;
+    gboolean ctrl  = (e->state & GDK_CONTROL_MASK) != 0;
+    int amiga_code = 0, amiga_char = 0;
+    switch (sym) {
+        case GDK_KEY_BackSpace: amiga_code = 65; amiga_char = 8;   break;
+        case GDK_KEY_Delete:    amiga_code = 70; amiga_char = 127; break;
+        case GDK_KEY_Left:      amiga_code = 79; amiga_char = shift ? 1 : 0; break;
+        case GDK_KEY_Right:     amiga_code = 78; amiga_char = shift ? 1 : 0; break;
+        case GDK_KEY_Up:        amiga_code = 76; amiga_char = shift ? 1 : 0; break;
+        case GDK_KEY_Down:      amiga_code = 77; amiga_char = shift ? 1 : 0; break;
+        case GDK_KEY_Tab:       amiga_code = 66; amiga_char = 9;   break;
+        case GDK_KEY_Return:
+        case GDK_KEY_KP_Enter:  amiga_code = 68; amiga_char = 13;  break;
+        case GDK_KEY_Escape:    amiga_code = 69; amiga_char = 27;  break;
+        default:
+            if (ctrl && sym >= GDK_KEY_a && sym <= GDK_KEY_z) {
+                amiga_code = (int) sym;
+                amiga_char = (int) (sym - GDK_KEY_a + 1);   // Ctrl+A=1 .. Ctrl+Z=26
+            } else if (!ctrl && e->type == GDK_KEY_PRESS) {
+                // Printable: mirror the SDL_TEXTINPUT path (code 0, char = unicode).
+                guint32 uni = gdk_keyval_to_unicode(sym);
+                if (uni >= 32 && uni <= 126) {
+                    Am_Ui_Window_f_onKeyboardEvent_0(this, 1, 0, (unsigned short) uni);
+                    return TRUE;
+                }
+            }
+            break;
+    }
+    if (amiga_code != 0 || amiga_char != 0) {
+        Am_Ui_Window_f_onKeyboardEvent_0(this, type, (unsigned short) amiga_code, (unsigned short) amiga_char);
+    }
+    return TRUE;
+}
+
+static gboolean gtk_on_configure(GtkWidget *w, GdkEventConfigure *e, gpointer user) {
+    (void) w;
+    aobject *this = (aobject *) user;
+    Am_Ui_Window_data *data = win_data(this);
+    if (data == NULL || data->renderer == NULL) return FALSE;
+    int s = win_ui_scale(data);
+    int lw = e->width / s, lh = e->height / s;   // physical -> logical
+    if (lw != data->last_paint_w || lh != data->last_paint_h) {
+        data->last_paint_w = lw;
+        data->last_paint_h = lh;
+        Am_Ui_Window_f_onResize_0(this, 0, 0, (unsigned short) lw, (unsigned short) lh);
+        data->pending_refresh = true;
+    }
+    return FALSE;
+}
+
+static gboolean gtk_on_draw(GtkWidget *w, cairo_t *cr, gpointer user) {
+    // SDL owns the drawing area's X window; tell GTK we painted (TRUE)
+    // so it doesn't clear over SDL, and ask for an SDL repaint.
+    (void) w; (void) cr;
+    aobject *this = (aobject *) user;
+    Am_Ui_Window_data *data = win_data(this);
+    if (data != NULL) data->pending_refresh = true;
+    return TRUE;
+}
+
+static gboolean gtk_on_delete(GtkWidget *w, GdkEvent *e, gpointer user) {
+    (void) w; (void) e;
+    aobject *this = (aobject *) user;
+    Am_Ui_Window_data *data = win_data(this);
+    if (data != NULL) data->pending_close = true;
+    return TRUE;   // teardown happens via close_0; don't let GTK destroy now
+}
+
+// GtkMenuItem "activate" → MenuItem.invokeClick(). The MenuItem aobject*
+// is stashed on the widget by nativeAddMenuItem.
+static void gtk_on_menu_activate(GtkMenuItem *mi, gpointer user) {
+    (void) user;
+    aobject *item = (aobject *) g_object_get_data(G_OBJECT(mi), "amlang_item");
+    fprintf(stderr, "[am-ui/linux-gtk] menu activate: item=%p\n", (void *) item);
+    if (item == NULL) return;
+    function_result fr = Am_Ui_MenuItem_f_invokeClick_0(item);
+    if (fr.exception != NULL) {
+        aobject *msg_obj = fr.exception->object_properties.class_object_properties.properties[Am_Lang_Exception_P_message].nullable_value.value.object_value;
+        const char *msg = "(no msg)";
+        if (msg_obj != NULL) {
+            string_holder *sh = (string_holder *) (msg_obj + 1);
+            if (sh != NULL && sh->string_value != NULL) msg = sh->string_value;
+        }
+        fprintf(stderr, "[am-ui/linux-gtk] menu click threw: %s\n", msg);
+        aobject *st = fr.exception->object_properties.class_object_properties.properties[Am_Lang_Exception_P_stackTrace].nullable_value.value.object_value;
+        if (st != NULL) {
+            function_result n = Am_Collections_List_ta_Am_Lang_String_f_getSize_0(st);
+            if (n.exception == NULL) {
+                int cnt = (int) n.return_value.value.int_value;
+                for (int i = 0; i < cnt && i < 20; i++) {
+                    function_result f = Am_Collections_List_ta_Am_Lang_String_f_get_0(st, i);
+                    if (f.exception != NULL) { __decrease_reference_count(f.exception); continue; }
+                    aobject *frame = f.return_value.value.object_value;
+                    const char *fs = "(null)";
+                    if (frame != NULL) { string_holder *fh = (string_holder *)(frame + 1); if (fh && fh->string_value) fs = fh->string_value; }
+                    fprintf(stderr, "[am-ui/linux-gtk]   #%d %s\n", i, fs);
+                }
+            } else { __decrease_reference_count(n.exception); }
+        }
+        __decrease_reference_count(fr.exception);
+    }
+    // A menu pick almost always changes the UI (opens an app, a dialog,
+    // toggles state) — ask the Window to repaint on the next pump.
+    {
+        aobject *win_this = (aobject *) g_object_get_data(G_OBJECT(mi), "amlang_window");
+        if (win_this != NULL) {
+            Am_Ui_Window_data *d = win_data(win_this);
+            if (d != NULL) d->pending_refresh = true;
+        }
+    }
+}
+
+// Strip GTK/GIO/pixbuf module env vars that point into a foreign snap
+// sandbox (most commonly VS Code's snap, whose integrated terminal
+// exports GTK_PATH=/snap/code/.../gtk-3.0, GIO_MODULE_DIR=~/snap/code/…,
+// GDK_PIXBUF_MODULEDIR=/snap/code/…). If left set, gtk_init loads those
+// snap GTK modules, which drag /snap/core20's libpthread (glibc 2.31)
+// into our process alongside the system glibc and crash with
+// "undefined symbol: __libc_pthread_init, version GLIBC_PRIVATE".
+// Unsetting them makes GTK fall back to the system module paths. Only
+// vars whose value smells of snap are touched, so a normal launch is
+// left alone.
+static void am_ui_gtk_sanitize_env(void) {
+    static const char *vars[] = {
+        "GTK_PATH", "GTK_EXE_PREFIX", "GIO_MODULE_DIR",
+        "GDK_PIXBUF_MODULEDIR", "GDK_PIXBUF_MODULE_FILE",
+        "GTK_IM_MODULE_FILE", "LOCPATH", NULL
+    };
+    for (int i = 0; vars[i] != NULL; i++) {
+        const char *v = getenv(vars[i]);
+        if (v != NULL && strstr(v, "snap") != NULL) {
+            fprintf(stderr, "[am-ui/linux-gtk] unsetting snap-tainted %s\n", vars[i]);
+            unsetenv(vars[i]);
+        }
+    }
+    // Pin GTK to 1:1. We do HiDPI scaling MANUALLY (window x scale,
+    // content offscreen stretched x scale) because GTK's own auto-scale
+    // is applied inconsistently here — gdk_monitor_get_scale_factor isn't
+    // settled when getHostScreenWidth runs, so window/content sizes
+    // disagreed. With GDK_SCALE=1, GTK logical == physical and everything
+    // is predictable; the scale comes from am_ui_gtk_scale_factor().
+    setenv("GDK_SCALE", "1", 1);
+}
+
+// The desired UI scale, derived from the font DPI. 96 dpi -> 1, 192 -> 2.
+// Read from GtkSettings' gtk-xft-dpi (1024ths of a point), which reflects
+// the desktop's Xft.dpi and is populated at gtk_init — so it's stable
+// from the very first call (getHostScreenWidth runs before any window).
+// gdk_screen_get_resolution() was unreliable here: it returned -1 early,
+// giving scale 1 in getHostScreen but 2 later, so the window came out
+// the wrong size. Cached so every caller agrees.
+static int g_ui_scale_cached = 0;
+static int am_ui_gtk_scale_factor(void) {
+    if (g_ui_scale_cached > 0) return g_ui_scale_cached;
+    if (!g_gtk_inited) {
+        am_ui_gtk_sanitize_env();
+        if (!gtk_init_check(NULL, NULL)) return 1;
+        g_gtk_inited = 1;
+    }
+    int s = 1;
+    GtkSettings *st = gtk_settings_get_default();
+    if (st != NULL) {
+        int dpi1024 = 0;
+        g_object_get(st, "gtk-xft-dpi", &dpi1024, NULL);
+        if (dpi1024 > 0) {
+            double dpi = dpi1024 / 1024.0;
+            s = (int) ((dpi / 96.0) + 0.5);
+        }
+    }
+    if (s < 1) s = 1;
+    g_ui_scale_cached = s;
+    return s;
+}
+
+// Build the GTK window + menubar + drawing area. Returns the drawing
+// area's X11 window id for SDL_CreateWindowFrom, or 0 on failure.
+static unsigned long am_ui_gtk_build_shell(aobject *this, Am_Ui_Window_data *data,
+                                           const char *title, int x, int y, int w, int h) {
+    if (!g_gtk_inited) {
+        am_ui_gtk_sanitize_env();
+        if (!gtk_init_check(NULL, NULL)) {
+            fprintf(stderr, "[am-ui/linux-gtk] gtk_init_check failed (no display?)\n");
+            return 0;
+        }
+        g_gtk_inited = 1;
+    }
+
+    // HiDPI model: the AmLang side works entirely in LOGICAL pixels
+    // (getHostScreenWidth/Height already return logical), so `w`/`h` here
+    // are logical. GTK widget sizes are logical too, so pass them straight
+    // through; GTK makes the backing X window physical = logical * scale.
+    // SDL then renders at that physical size and the paint tail stretches
+    // the logical-sized offscreen up to it — giving 2x-density content +
+    // menu while the window stays screen-sized.
+    // `w`/`h` are LOGICAL (getHostScreen already divided by the scale).
+    // GTK runs at 1:1, so to make the physical window screen-sized we
+    // multiply back up. The SDL render surface is this physical size; the
+    // logical-sized offscreen is stretched onto it in the paint tail, and
+    // the menu bar font is scaled up via CSS — so both content and chrome
+    // come out at the chosen density on a screen-sized window.
+    data->ui_scale = am_ui_gtk_scale_factor();
+    int lw = w * data->ui_scale;
+    int lh = h * data->ui_scale;
+
+    // GDK_SCALE=1 makes GTK render its chrome at 1x (tiny menu on 4K).
+    // Bring the menu/font density back up to match the scaled content by
+    // setting the font DPI to scale*96 (gtk-xft-dpi is in 1024ths of a
+    // point). scale 2 -> 192 dpi -> 2x menu text.
+    GtkSettings *settings = gtk_settings_get_default();
+    if (settings != NULL) {
+        g_object_set(settings, "gtk-xft-dpi", data->ui_scale * 96 * 1024, NULL);
+    }
+
+    GtkWidget *win     = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    gtk_window_set_title(GTK_WINDOW(win), title ? title : "amStudio");
+    gtk_window_set_default_size(GTK_WINDOW(win), lw, lh);
+
+    GtkWidget *vbox    = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    GtkWidget *menubar = gtk_menu_bar_new();
+    GtkWidget *da      = gtk_drawing_area_new();
+    // Request the drawing area at the logical size so it's already at its
+    // full physical size (logical * scale) when SDL grabs its XID below —
+    // SDL_CreateWindowFrom snapshots the window size and never tracks GTK
+    // resizes, so the area must be sized *before* the grab or SDL ends up
+    // rendering into a tiny corner.
+    gtk_widget_set_size_request(da, lw, lh);
+    gtk_widget_set_can_focus(da, TRUE);
+    gtk_widget_set_double_buffered(da, FALSE);   // SDL owns this surface
+    gtk_widget_add_events(da, GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK
+        | GDK_POINTER_MOTION_MASK | GDK_SCROLL_MASK | GDK_STRUCTURE_MASK
+        | GDK_EXPOSURE_MASK);
+
+    gtk_box_pack_start(GTK_BOX(vbox), menubar, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(vbox), da,      TRUE,  TRUE,  0);
+    gtk_container_add(GTK_CONTAINER(win), vbox);
+
+    g_signal_connect(da,  "button-press-event",   G_CALLBACK(gtk_on_button),    this);
+    g_signal_connect(da,  "button-release-event", G_CALLBACK(gtk_on_button),    this);
+    g_signal_connect(da,  "motion-notify-event",  G_CALLBACK(gtk_on_motion),    this);
+    g_signal_connect(da,  "scroll-event",         G_CALLBACK(gtk_on_scroll),    this);
+    g_signal_connect(win, "key-press-event",      G_CALLBACK(gtk_on_key),       this);
+    g_signal_connect(win, "key-release-event",    G_CALLBACK(gtk_on_key),       this);
+    g_signal_connect(da,  "configure-event",      G_CALLBACK(gtk_on_configure), this);
+    g_signal_connect(da,  "draw",                 G_CALLBACK(gtk_on_draw),      this);
+    g_signal_connect(win, "delete-event",         G_CALLBACK(gtk_on_delete),    this);
+
+    gtk_widget_show_all(win);
+    // Position the window at the requested logical coords (×scale = physical).
+    // gtk_window_move uses root-window (screen) coords; call after show_all so
+    // the window is realized and the WM hint takes effect.
+    if (x > 0 || y > 0) {
+        gtk_window_move(GTK_WINDOW(win), x * data->ui_scale, y * data->ui_scale);
+    }
+    gtk_widget_grab_focus(da);
+    // SDL_CreateWindowFrom snapshots the X window size and never tracks
+    // later GTK resizes, so the drawing area must already be at its full
+    // requested size before we grab its XID — otherwise SDL renders into
+    // a stale, too-small viewport (content stuck in a corner). Pump the
+    // GTK loop until the allocated width catches up to the request, with
+    // a bounded wait so we never hang.
+    for (int i = 0; i < 400; i++) {
+        while (gtk_events_pending()) gtk_main_iteration_do(FALSE);
+        if (gtk_widget_get_allocated_width(da) >= lw - 8) break;
+        g_usleep(5000);
+    }
+
+    GdkWindow *gw = gtk_widget_get_window(da);
+    if (gw == NULL) { fprintf(stderr, "[am-ui/linux-gtk] drawing area not realized\n"); return 0; }
+    unsigned long xid = (unsigned long) gdk_x11_window_get_xid(gw);
+    fprintf(stderr, "[am-ui/linux-gtk] shell: req=%dx%d logical, da alloc=%dx%d logical, scale=%d\n",
+            lw, lh, gtk_widget_get_allocated_width(da), gtk_widget_get_allocated_height(da), data->ui_scale);
+
+    data->gtk_window    = win;
+    data->gtk_menubar   = menubar;
+    data->gtk_draw_area = da;
+    data->gtk_menu_count = 0;
+    return xid;
+}
+#endif // AM_UI_LINUX_GTK
+
 // ---------------------------------------------------------------------------
 // Lifecycle
 // ---------------------------------------------------------------------------
@@ -133,6 +504,9 @@ function_result Am_Ui_Window__native_release_0(aobject *const this)
     if (data != NULL) {
         if (data->renderer != NULL) { SDL_DestroyRenderer(data->renderer); data->renderer = NULL; }
         if (data->window != NULL)   { SDL_DestroyWindow(data->window);     data->window = NULL; }
+#ifdef AM_UI_LINUX_GTK
+        if (data->gtk_window != NULL) { gtk_widget_destroy(GTK_WIDGET(data->gtk_window)); data->gtk_window = NULL; data->gtk_menubar = NULL; data->gtk_draw_area = NULL; }
+#endif
         free(data);
         this->object_properties.class_object_properties.object_data.value.custom_value = NULL;
     }
@@ -157,6 +531,23 @@ function_result Am_Ui_Window_open_0(aobject *const this,
     Am_Ui_Window_data *data = win_data(this);
     if (data == NULL) goto __exit;
 
+#ifdef AM_UI_LINUX_GTK
+    // GTK shell owns the top-level window (frame + menu bar); SDL renders
+    // into the embedded GtkDrawingArea's X11 window.
+    {
+        // SDL_CreateWindowFrom needs the video subsystem up. The pure-SDL
+        // path got that via SDL_CreateWindow's implicit init; here we ask
+        // explicitly (idempotent if Startup already did it).
+        if (!SDL_WasInit(SDL_INIT_VIDEO)) {
+            if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) {
+                fprintf(stderr, "[am-ui/linux-gtk] SDL video init failed: %s\n", SDL_GetError());
+            }
+        }
+        unsigned long xid = am_ui_gtk_build_shell(this, data, "amStudio", (int) x, (int) y, (int) width, (int) height);
+        if (xid == 0) goto __exit;
+        data->window = SDL_CreateWindowFrom((const void *) xid);
+    }
+#else
     // Position: AmigaOS uses absolute screen coords; on Linux let the
     // WM place it unless (x, y) is explicitly non-(-1, -1).
     int sdl_x = (x <= 0) ? SDL_WINDOWPOS_UNDEFINED : x;
@@ -170,8 +561,9 @@ function_result Am_Ui_Window_open_0(aobject *const this,
         (int) width, (int) height,
         flags
     );
+#endif
     if (data->window == NULL) {
-        fprintf(stderr, "[am-ui/linux] SDL_CreateWindow failed: %s\n", SDL_GetError());
+        fprintf(stderr, "[am-ui/linux] window create failed: %s\n", SDL_GetError());
         goto __exit;
     }
 
@@ -209,6 +601,15 @@ function_result Am_Ui_Window_open_0(aobject *const this,
     }
 
     SDL_GetRendererOutputSize(data->renderer, &data->last_paint_w, &data->last_paint_h);
+    // Report the size to the AmLang side in LOGICAL pixels (physical /
+    // HiDPI scale), so the View tree + offscreen are laid out at the same
+    // scale GTK uses for its chrome and for input coordinates. The paint
+    // tail stretches that offscreen back up to the physical window.
+    {
+        int s = (data->ui_scale > 0) ? data->ui_scale : 1;
+        data->last_paint_w /= s;
+        data->last_paint_h /= s;
+    }
 
     // Publish for ViewContextGraphics.
     g_primary_renderer = data->renderer;
@@ -243,6 +644,9 @@ function_result Am_Ui_Window_close_0(aobject *const this)
         if (g_primary_renderer == data->renderer) g_primary_renderer = NULL;
         if (data->renderer != NULL) { SDL_DestroyRenderer(data->renderer); data->renderer = NULL; }
         if (data->window != NULL)   { SDL_DestroyWindow(data->window);     data->window = NULL; }
+#ifdef AM_UI_LINUX_GTK
+        if (data->gtk_window != NULL) { gtk_widget_destroy(GTK_WIDGET(data->gtk_window)); data->gtk_window = NULL; data->gtk_menubar = NULL; data->gtk_draw_area = NULL; }
+#endif
         data->pending_close = true;
         Am_Ui_Window_f_setRootView_0(this, NULL);
     }
@@ -646,12 +1050,24 @@ function_result Am_Ui_Window_handleInput_0(aobject *const this)
     // strip actually changes (boot, workspace switch, etc.). NULL
     // strip means "no menus", which is exactly what the splash window
     // wants — the bridge clears NSApp.mainMenu in that case.
+#ifndef AM_UI_LINUX_GTK
+    // (pure-SDL / Cocoa path) Poll the menuStrip property and rebuild the
+    // native menu on change. The GTK build instead populates a real
+    // GtkMenuBar directly from setMenuStrip's nativeAddMenu* calls.
     aobject *current_strip = this->object_properties.class_object_properties.properties[Am_Ui_Window_P_menuStrip].nullable_value.value.object_value;
     if ((void *) current_strip != data->installed_menu_strip) {
         am_ui_macos_arm_install_menu_strip(current_strip);
         data->installed_menu_strip = (void *) current_strip;
     }
+#endif
 
+#ifdef AM_UI_LINUX_GTK
+    // GTK owns the event loop: pump it non-blocking. The signal handlers
+    // dispatch input into the Am_Ui_Window_f_* callbacks, and menu picks
+    // run here too. SDL_PollEvent is NOT used — SDL doesn't own the
+    // (foreign, GTK-created) window so its event queue stays empty.
+    while (gtk_events_pending()) gtk_main_iteration_do(FALSE);
+#else
     SDL_Event ev;
     while (SDL_PollEvent(&ev)) {
         // Filter: only dispatch events for this Window's id when the
@@ -813,6 +1229,7 @@ function_result Am_Ui_Window_handleInput_0(aobject *const this)
             break;
         }
     }
+#endif // !AM_UI_LINUX_GTK (SDL event loop)
 
     // End-of-cycle paint dispatch. Mirrors the amigaos backend's
     // pending_refresh / pending_full_refresh check at the tail of
@@ -897,10 +1314,29 @@ function_result Am_Ui_Window_handleInput_0(aobject *const this)
                 if (off_bm != NULL) {
                     Am_Ui_Bitmap_data *bd = (Am_Ui_Bitmap_data *) off_bm->object_properties.class_object_properties.object_data.value.custom_value;
                     if (bd != NULL && bd->texture != NULL) {
+                        // Source = the offscreen's real (logical) pixel size;
+                        // destination = the physical window. On HiDPI these
+                        // differ (offscreen 1920 -> window 3840), so the copy
+                        // upscales by the GTK scale factor. On a 1:1 display
+                        // they're equal and it's a straight blit.
                         int win_w = 0, win_h = 0;
                         SDL_GetWindowSize(data->window, &win_w, &win_h);
-                        SDL_Rect src = { 0, 0, win_w, win_h };
-                        SDL_Rect dst = { 0, 0, win_w, win_h };
+                        int out_w = 0, out_h = 0;
+                        SDL_GetRendererOutputSize(data->renderer, &out_w, &out_h);
+                        int tex_w = win_w, tex_h = win_h;
+                        SDL_QueryTexture(bd->texture, NULL, NULL, &tex_w, &tex_h);
+                        // The offscreen is sized to the host screen (getHostScreenWidth/Height),
+                        // but this window may be smaller (e.g. a splash window). Only the
+                        // top-left (out_w/scale × out_h/scale) logical pixels contain this
+                        // window's rendered content; stretch just that region to the full
+                        // physical output for a clean N× HiDPI blit. On scale=1 both
+                        // dimensions match tex_w/tex_h so the path is unchanged.
+                        int src_w = (data->ui_scale > 1) ? (out_w / data->ui_scale) : tex_w;
+                        int src_h = (data->ui_scale > 1) ? (out_h / data->ui_scale) : tex_h;
+                        static int dbg_n = 0;
+                        if (dbg_n < 3) { fprintf(stderr, "[am-ui/linux-gtk] present: win=%dx%d out=%dx%d tex=%dx%d src=%dx%d scale=%d\n", win_w, win_h, out_w, out_h, tex_w, tex_h, src_w, src_h, data->ui_scale); dbg_n++; }
+                        SDL_Rect src = { 0, 0, src_w, src_h };
+                        SDL_Rect dst = { 0, 0, out_w, out_h };
                         SDL_RenderCopy(data->renderer, bd->texture, &src, &dst);
                     }
                 }
@@ -924,7 +1360,11 @@ function_result Am_Ui_Window_getHostScreenWidth_0(aobject *const this)
     __increase_reference_count(this);
     SDL_Rect bounds = { 0, 0, 0, 0 };
     SDL_GetDisplayBounds(0, &bounds);
-    __result.return_value.value.ushort_value = (unsigned short) bounds.w;
+    int wv = bounds.w;
+#ifdef AM_UI_LINUX_GTK
+    wv /= am_ui_gtk_scale_factor();   // report logical pixels (GTK scales up)
+#endif
+    __result.return_value.value.ushort_value = (unsigned short) wv;
     __decrease_reference_count(this);
     return __result;
 }
@@ -935,7 +1375,11 @@ function_result Am_Ui_Window_getHostScreenHeight_0(aobject *const this)
     __increase_reference_count(this);
     SDL_Rect bounds = { 0, 0, 0, 0 };
     SDL_GetDisplayBounds(0, &bounds);
-    __result.return_value.value.ushort_value = (unsigned short) bounds.h;
+    int hv = bounds.h;
+#ifdef AM_UI_LINUX_GTK
+    hv /= am_ui_gtk_scale_factor();   // report logical pixels (GTK scales up)
+#endif
+    __result.return_value.value.ushort_value = (unsigned short) hv;
     __decrease_reference_count(this);
     return __result;
 }
@@ -975,8 +1419,12 @@ function_result Am_Ui_Window_setTitleNative_0(aobject *const this, aobject *wind
 
     Am_Ui_Window_data *data = win_data(this);
     const char *title = amlang_str(windowTitle);
-    if (data != NULL && data->window != NULL && title != NULL) {
-        SDL_SetWindowTitle(data->window, title);
+    if (data != NULL && title != NULL) {
+#ifdef AM_UI_LINUX_GTK
+        if (data->gtk_window != NULL) gtk_window_set_title(GTK_WINDOW(data->gtk_window), title);
+#else
+        if (data->window != NULL) SDL_SetWindowTitle(data->window, title);
+#endif
     }
     // screenTitle is a no-op on Linux; on AmigaOS it's the title bar
     // for the host screen the window sits in.
@@ -1020,52 +1468,123 @@ function_result Am_Ui_Window_pasteFromClipboard_0(aobject *const this)
 }
 
 // ---------------------------------------------------------------------------
-// Menu strip — Linux uses an in-canvas menu bar (drawn by the AmLang
-// View tree) rather than a native widget. All five menu ops are
-// no-ops; the AmLang side already gates them behind menuStrip != null
-// guards that we never trip.
+// Menu strip. On the GTK build these populate the real GtkMenuBar from
+// Window.setMenuStrip's nativeAddMenu* calls (item activate →
+// MenuItem.invokeClick). On the pure-SDL build they're no-ops (no native
+// menu bar — an in-canvas bar would be drawn by the AmLang View tree).
 // ---------------------------------------------------------------------------
+
+#ifdef AM_UI_LINUX_GTK
+
+static GtkWidget *gtk_make_leaf(aobject *win_this, aobject *item, aobject *label)
+{
+    if (item_bool(item, AMUI_MENUITEM_P_isSeparator, false)) {
+        return gtk_separator_menu_item_new();
+    }
+    const char *lbl = amlang_str(label);
+    GtkWidget *mi = gtk_menu_item_new_with_label(lbl ? lbl : "");
+    g_object_set_data(G_OBJECT(mi), "amlang_item", item);
+    g_object_set_data(G_OBJECT(mi), "amlang_window", win_this);
+    g_signal_connect(mi, "activate", G_CALLBACK(gtk_on_menu_activate), NULL);
+    gtk_widget_set_sensitive(mi, item_bool(item, AMUI_MENUITEM_P_enabled, true));
+    return mi;
+}
+
+static void gtk_clear_menubar(Am_Ui_Window_data *data)
+{
+    if (data == NULL || data->gtk_menubar == NULL) return;
+    GList *kids = gtk_container_get_children(GTK_CONTAINER(data->gtk_menubar));
+    for (GList *l = kids; l != NULL; l = l->next) gtk_widget_destroy(GTK_WIDGET(l->data));
+    g_list_free(kids);
+    data->gtk_menu_count = 0;
+}
 
 function_result Am_Ui_Window_nativeBeginMenuStrip_0(aobject *const this)
 {
     function_result __result = { .has_return_value = false };
-    (void) this;
+    gtk_clear_menubar(win_data(this));
     return __result;
 }
 
 function_result Am_Ui_Window_nativeAddMenu_0(aobject *const this, aobject *title)
 {
     function_result __result = { .has_return_value = false };
-    (void) this; (void) title;
+    Am_Ui_Window_data *data = win_data(this);
+    if (data == NULL || data->gtk_menubar == NULL || data->gtk_menu_count >= 32) return __result;
+    const char *t = amlang_str(title);
+    GtkWidget *top  = gtk_menu_item_new_with_label(t ? t : "");
+    GtkWidget *menu = gtk_menu_new();
+    gtk_menu_item_set_submenu(GTK_MENU_ITEM(top), menu);
+    gtk_menu_shell_append(GTK_MENU_SHELL(data->gtk_menubar), top);
+    int idx = data->gtk_menu_count++;
+    data->gtk_menus[idx]     = menu;
+    data->gtk_last_item[idx] = NULL;
     return __result;
 }
 
 function_result Am_Ui_Window_nativeAddMenuItem_0(aobject *const this, int menuIndex, aobject *item, aobject *label, aobject *commKey)
 {
     function_result __result = { .has_return_value = false };
-    (void) this; (void) menuIndex; (void) item; (void) label; (void) commKey;
+    (void) commKey;   // TODO: Ctrl+key accelerators via a GtkAccelGroup
+    Am_Ui_Window_data *data = win_data(this);
+    if (data == NULL || menuIndex < 0 || menuIndex >= data->gtk_menu_count) return __result;
+    GtkWidget *menu = (GtkWidget *) data->gtk_menus[menuIndex];
+    if (menu == NULL) return __result;
+    GtkWidget *mi = gtk_make_leaf(this, item, label);
+    gtk_menu_shell_append(GTK_MENU_SHELL(menu), mi);
+    data->gtk_last_item[menuIndex] = mi;
     return __result;
 }
 
 function_result Am_Ui_Window_nativeAddMenuSubItem_0(aobject *const this, int menuIndex, aobject *item, aobject *label, aobject *commKey)
 {
     function_result __result = { .has_return_value = false };
-    (void) this; (void) menuIndex; (void) item; (void) label; (void) commKey;
+    (void) commKey;
+    Am_Ui_Window_data *data = win_data(this);
+    if (data == NULL || menuIndex < 0 || menuIndex >= data->gtk_menu_count) return __result;
+    GtkWidget *parent = (GtkWidget *) data->gtk_last_item[menuIndex];
+    if (parent == NULL) return __result;
+    // Lazily give the parent item a submenu the first time a sub-item lands.
+    GtkWidget *submenu = gtk_menu_item_get_submenu(GTK_MENU_ITEM(parent));
+    if (submenu == NULL) {
+        submenu = gtk_menu_new();
+        gtk_menu_item_set_submenu(GTK_MENU_ITEM(parent), submenu);
+    }
+    GtkWidget *mi = gtk_make_leaf(this, item, label);
+    gtk_menu_shell_append(GTK_MENU_SHELL(submenu), mi);
     return __result;
 }
 
 function_result Am_Ui_Window_nativeFinalizeMenuStrip_0(aobject *const this)
 {
     function_result __result = { .has_return_value = false };
-    (void) this;
+    Am_Ui_Window_data *data = win_data(this);
+    if (data != NULL && data->gtk_menubar != NULL) gtk_widget_show_all(GTK_WIDGET(data->gtk_menubar));
     return __result;
 }
 
 function_result Am_Ui_Window_nativeClearMenuStrip_0(aobject *const this)
 {
     function_result __result = { .has_return_value = false };
-    (void) this;
+    gtk_clear_menubar(win_data(this));
     return __result;
 }
+
+#else  // pure-SDL: no native menu bar
+
+function_result Am_Ui_Window_nativeBeginMenuStrip_0(aobject *const this)
+{ function_result r = { .has_return_value = false }; (void) this; return r; }
+function_result Am_Ui_Window_nativeAddMenu_0(aobject *const this, aobject *title)
+{ function_result r = { .has_return_value = false }; (void) this; (void) title; return r; }
+function_result Am_Ui_Window_nativeAddMenuItem_0(aobject *const this, int menuIndex, aobject *item, aobject *label, aobject *commKey)
+{ function_result r = { .has_return_value = false }; (void) this; (void) menuIndex; (void) item; (void) label; (void) commKey; return r; }
+function_result Am_Ui_Window_nativeAddMenuSubItem_0(aobject *const this, int menuIndex, aobject *item, aobject *label, aobject *commKey)
+{ function_result r = { .has_return_value = false }; (void) this; (void) menuIndex; (void) item; (void) label; (void) commKey; return r; }
+function_result Am_Ui_Window_nativeFinalizeMenuStrip_0(aobject *const this)
+{ function_result r = { .has_return_value = false }; (void) this; return r; }
+function_result Am_Ui_Window_nativeClearMenuStrip_0(aobject *const this)
+{ function_result r = { .has_return_value = false }; (void) this; return r; }
+
+#endif // AM_UI_LINUX_GTK (menu strip)
 
 #endif
