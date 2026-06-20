@@ -90,15 +90,54 @@ platforms:
     gccCommand: gcc -O2
     gccAdditionalOptions:
       - -DAM_UI_LINUX_SDL_TTF
+      # AM_UI_LINUX_GTK switches Window.c to a GTK shell (real
+      # GtkMenuBar) hosting the SDL renderer in a GtkDrawingArea.
+      # Remove this one define to fall back to the pure-SDL window
+      # (no menu bar). The -I list below is `pkg-config --cflags
+      # gtk+-3.0` inlined (amlc YAML can't run pkg-config itself).
+      - -DAM_UI_LINUX_GTK
+      - -I/usr/include/gtk-3.0
+      - -I/usr/include/pango-1.0
+      - -I/usr/include/glib-2.0
+      - -I/usr/lib/x86_64-linux-gnu/glib-2.0/include
+      - -I/usr/include/harfbuzz
+      - -I/usr/include/freetype2
+      - -I/usr/include/libpng16
+      - -I/usr/include/libmount
+      - -I/usr/include/blkid
+      - -I/usr/include/fribidi
+      - -I/usr/include/cairo
+      - -I/usr/include/pixman-1
+      - -I/usr/include/gdk-pixbuf-2.0
+      - -I/usr/include/x86_64-linux-gnu
+      - -I/usr/include/webp
+      - -I/usr/include/gio-unix-2.0
+      - -I/usr/include/atk-1.0
+      - -I/usr/include/at-spi2-atk/2.0
+      - -I/usr/include/at-spi-2.0
+      - -I/usr/include/dbus-1.0
+      - -I/usr/lib/x86_64-linux-gnu/dbus-1.0/include
     # Use gccAdditionalLibraries (not additionalLinkerFlags) so amlc
-    # places -lSDL2/-lSDL2_ttf AFTER the object files. GNU ld is
-    # link-order sensitive — libs before the objects that reference
-    # them get dropped (macOS's ld64 isn't, which is why macos-arm can
-    # use additionalLinkerFlags). Matches how am-ssl/am-png declare
-    # their libs.
+    # places the -l flags AFTER the object files. GNU ld is link-order
+    # sensitive — libs before the objects that reference them get
+    # dropped (macOS's ld64 isn't, which is why macos-arm can use
+    # additionalLinkerFlags). Matches how am-ssl/am-png declare libs.
+    # GTK libs are `pkg-config --libs gtk+-3.0` inlined.
     gccAdditionalLibraries:
       - SDL2
       - SDL2_ttf
+      - gtk-3
+      - gdk-3
+      - pangocairo-1.0
+      - pango-1.0
+      - harfbuzz
+      - atk-1.0
+      - cairo-gobject
+      - cairo
+      - gdk_pixbuf-2.0
+      - gio-2.0
+      - gobject-2.0
+      - glib-2.0
 
 
 buildTargets:

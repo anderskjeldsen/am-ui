@@ -10,6 +10,11 @@
 #include <Am/Lang/Int.h>
 
 #include <SDL2/SDL.h>
+#include <stdlib.h>
+#include <string.h>
+#ifdef AM_UI_LINUX_GTK
+#include <gtk/gtk.h>
+#endif
 #include <libc/core_inline_functions.h>
 
 // Linux Am.Ui.Screen
@@ -69,6 +74,33 @@ static int          g_palette_count = AM_UI_LINUX_SCREEN_PALETTE_SIZE;
 
 const Uint32 *am_ui_linux_screen_palette(void)        { return g_palette; }
 int           am_ui_linux_screen_palette_count(void)  { return g_palette_count; }
+
+#ifdef AM_UI_LINUX_GTK
+// Keep Screen-mode geometry in the same logical coordinate system as
+// Window.c's manual HiDPI path (GDK_SCALE=1 + manual scale factor).
+static int am_ui_linux_screen_scale_factor(void) {
+    static int cached = 0;
+    if (cached > 0) return cached;
+
+    setenv("GDK_SCALE", "1", 1);
+    int s = 1;
+    if (gtk_init_check(NULL, NULL)) {
+        GtkSettings *st = gtk_settings_get_default();
+        if (st != NULL) {
+            int dpi1024 = 0;
+            g_object_get(st, "gtk-xft-dpi", &dpi1024, NULL);
+            if (dpi1024 > 0) {
+                double dpi = dpi1024 / 1024.0;
+                s = (int) ((dpi / 96.0) + 0.5);
+            }
+        }
+    }
+
+    if (s < 1) s = 1;
+    cached = s;
+    return s;
+}
+#endif
 
 // ---------------------------------------------------------------------------
 // Lifecycle
@@ -151,6 +183,11 @@ function_result Am_Ui_Screen_open_0(aobject *const this,
         bounds.w = (width  > 0) ? width  : 1280;
         bounds.h = (height > 0) ? height : 720;
     }
+#ifdef AM_UI_LINUX_GTK
+    int s = am_ui_linux_screen_scale_factor();
+    bounds.w /= s;
+    bounds.h /= s;
+#endif
     data->display_w = bounds.w;
     data->display_h = bounds.h;
     (void) depth;
@@ -257,6 +294,12 @@ function_result Am_Ui_Screen_fillDefaultScreenMode_0(aobject *mode)
 
     SDL_Rect bounds = { 0, 0, 1280, 720 };
     SDL_GetDisplayBounds(0, &bounds);
+
+#ifdef AM_UI_LINUX_GTK
+    int s = am_ui_linux_screen_scale_factor();
+    bounds.w /= s;
+    bounds.h /= s;
+#endif
 
     if (mode != NULL) {
         mode->object_properties.class_object_properties.properties[Am_Ui_ScreenMode_P_width].nullable_value.value.int_value     = bounds.w;
