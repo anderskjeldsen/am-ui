@@ -261,16 +261,20 @@ namespace Am.Ui
                 useColor = false
             }
 
-            // amlc drops `nullable != null` checks on the colour path,
-            // so the `as UInt` cast can throw NullCastError at runtime.
-            // Force the pen route until the binder is fixed (same
-            // workaround as Button.paint / Label.paint).
-            graphics.setForegroundPen(bgPen)
+            if (useColor) {
+                graphics.setForegroundColor(bgColor as UInt)
+            } else {
+                graphics.setForegroundPen(bgPen)
+            }
             graphics.fillRect(x1, y1, x2, y2)
 
-            // Same amlc workaround: skip the colour-border branch and
-            // fall straight through to the bevel pens.
-            if (this.drawBorder) {
+            if (this.borderColor != null) {
+                graphics.setForegroundColor(this.borderColor as UInt)
+                graphics.drawLine(x1, y1, x2, y1)
+                graphics.drawLine(x1, y2, x2, y2)
+                graphics.drawLine(x1, y1, x1, y2)
+                graphics.drawLine(x2, y1, x2, y2)
+            } else if (this.drawBorder) {
                 this.paintNativeBorder(graphics, borderPens)
             }
 
@@ -279,10 +283,13 @@ namespace Am.Ui
                 pressDy = this.pressTranslateY
             }
 
-            // Hover overlay: pen-only path (the colour branch hits the
-            // same amlc bug as the bg-colour path above).
+            // Hover overlay border.
             if (this.hovered && this.hoverBorderEnabled) {
-                graphics.setForegroundPen(this.hoverBorderPen)
+                if (this.hoverBorderColor != null) {
+                    graphics.setForegroundColor(this.hoverBorderColor as UInt)
+                } else {
+                    graphics.setForegroundPen(this.hoverBorderPen)
+                }
                 graphics.drawLine(x1, y1, x2, y1)
                 graphics.drawLine(x1, y2, x2, y2)
                 graphics.drawLine(x1, y1, x1, y2)

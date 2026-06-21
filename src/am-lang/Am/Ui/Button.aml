@@ -164,12 +164,11 @@ namespace Am.Ui
             }
 
             // Background bl,bt - w-br,h-bb
-            // amlc drops `nullable != null` checks on the colour path,
-            // making the eventual `as UInt` cast throw NullCastError at
-            // run-time. Until the binder is fixed, force the pen route
-            // — Buttons that themed via explicit colours render with
-            // the matching palette pen, but no crash.
-            graphics.setForegroundPen(bgPen)
+            if (useColor) {
+                graphics.setForegroundColor(bgColor as UInt)
+            } else {
+                graphics.setForegroundPen(bgPen)
+            }
             graphics.fillRect(x1, y1, x2, y2)
 
             // Border priority:
@@ -177,9 +176,13 @@ namespace Am.Ui
             //      that want a single-colour rectangle never want the
             //      4-pen bevel underneath bleeding through.
             //   2. Else bevel via existing pens (unless drawBorder=false).
-            // Same amlc workaround as the bg path above — skip the
-            // colour branch.
-            if (this.drawBorder) {
+            if (this.borderColor != null) {
+                graphics.setForegroundColor(this.borderColor as UInt)
+                graphics.drawLine(x1, y1, x2, y1)
+                graphics.drawLine(x1, y2, x2, y2)
+                graphics.drawLine(x1, y1, x1, y2)
+                graphics.drawLine(x2, y1, x2, y2)
+            } else if (this.drawBorder) {
                 this.paintNativeBorder(graphics, borderPens)
             }
 
@@ -204,10 +207,12 @@ namespace Am.Ui
             // y2+1 — one pixel OUTSIDE the bg-fill area — and on
             // release that stray pixel wasn't overdrawn, leaving a
             // ghost line at the original bottom edge.
-            // Same amlc binder workaround as the bg/border branches
-            // above: skip the colour cast, use the pen.
             if (this.hovered && this.hoverBorderEnabled) {
-                graphics.setForegroundPen(this.hoverBorderPen)
+                if (this.hoverBorderColor != null) {
+                    graphics.setForegroundColor(this.hoverBorderColor as UInt)
+                } else {
+                    graphics.setForegroundPen(this.hoverBorderPen)
+                }
                 graphics.drawLine(x1, y1, x2, y1)
                 graphics.drawLine(x1, y2, x2, y2)
                 graphics.drawLine(x1, y1, x1, y2)

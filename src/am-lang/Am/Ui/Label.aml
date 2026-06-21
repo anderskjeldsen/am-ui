@@ -192,9 +192,6 @@ namespace Am.Ui
             var bgColor: UInt? = this.backgroundColor
             var useColor: Bool = (bgColor != null)
             if (this.hoverEnabled && this.hovered) {
-                // Same workaround as the cast sites below — `field != null`
-                // on a nullable property is compiled as `true` by amlc, so
-                // we copy to a local first and check that.
                 var hbc: UInt? = this.hoverBackgroundColor
                 if (hbc != null) {
                     bgColor = hbc
@@ -216,16 +213,14 @@ namespace Am.Ui
             // (e.g. propagated from a Button parent) — without this,
             // a Label sitting alone on a transparent parent would
             // ignore the color override.
-            // amlc drops `nullable != null` checks on the colour path,
-            // making the eventual `as UInt` cast throw NullCastError
-            // when the field happens to be null. Until the binder is
-            // fixed, force the pen route — Labels with explicit colours
-            // will render with the matching pen instead of the rgb
-            // colour (one extra palette lookup), but no crashes.
             if (this.hoverEnabled || useColor) {
                 var x2 = this.width.toShort() - 1S
                 var y2 = this.height.toShort() - 1S
-                graphics.setForegroundPen(bgPen)
+                if (useColor) {
+                    graphics.setForegroundColor(bgColor as UInt)
+                } else {
+                    graphics.setForegroundPen(bgPen)
+                }
                 graphics.fillRect(0S, 0S, x2, y2)
             }
 
