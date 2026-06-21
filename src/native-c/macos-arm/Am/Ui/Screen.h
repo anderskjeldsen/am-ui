@@ -6,7 +6,15 @@
 
 #include <SDL2/SDL.h>
 
-#define AM_UI_LINUX_SCREEN_PALETTE_SIZE 32
+// Sized at 64 entries to cover the same address space as a
+// 6-bitplane AmigaOS screen (the maximum AGA pen range). Consuming
+// apps decide what each slot means and what to write into it.
+//
+// LayerGraphics.setForegroundPen does `(pen < palette_count) ? pal[pen]
+// : 0xFFFFFFFFu` for the bounds check — anything past this limit
+// renders as solid white. Apps that need pens past 63 should bump
+// this constant in lockstep with their own buildPalette logic.
+#define AM_UI_LINUX_SCREEN_PALETTE_SIZE 64
 
 // Native data for Am.Ui.Screen on Linux.
 //
@@ -17,7 +25,7 @@
 // the same instance (the global pointer at file scope inside
 // Screen.c).
 //
-// `palette` is the 32-entry ARGB lookup table that pen-based
+// `palette` is the 64-entry ARGB lookup table that pen-based
 // drawing resolves against. setColor / setPalette write to it;
 // LayerGraphics reads it at paint time. AmigaOS pushes this to
 // SetRGB32; on Linux there is no hardware register to push it

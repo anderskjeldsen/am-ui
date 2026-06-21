@@ -192,18 +192,11 @@ namespace Am.Ui
             var bgColor: UInt? = this.backgroundColor
             var useColor: Bool = (bgColor != null)
             if (this.hoverEnabled && this.hovered) {
-                // Choose the hover pen FIRST when one is set. The bg fill
-                // below always goes through `bgPen` (the colour route is
-                // disabled by the amlc-NullCast workaround), so the hover
-                // *pen* is what actually shows. Relying on the nullable
-                // `hoverBackgroundColor != null` check to pick between pen
-                // and colour is unreliable (amlc miscompiles it to `true`
-                // even when null — that's the bug that left the AppPanel
-                // minimize/close hover invisible: it took the colour branch
-                // and never updated bgPen, so the fill used the resting bg).
-                // hoverBackgroundPen defaults to 0 (unset), so a non-zero
-                // value means "use this pen".
-                if (this.hoverBackgroundPen != 0UB) {
+                var hbc: UInt? = this.hoverBackgroundColor
+                if (hbc != null) {
+                    bgColor = hbc
+                    useColor = true
+                } else {
                     bgPen = this.hoverBackgroundPen
                     useColor = false
                 } else {
@@ -226,16 +219,14 @@ namespace Am.Ui
             // (e.g. propagated from a Button parent) — without this,
             // a Label sitting alone on a transparent parent would
             // ignore the color override.
-            // amlc drops `nullable != null` checks on the colour path,
-            // making the eventual `as UInt` cast throw NullCastError
-            // when the field happens to be null. Until the binder is
-            // fixed, force the pen route — Labels with explicit colours
-            // will render with the matching pen instead of the rgb
-            // colour (one extra palette lookup), but no crashes.
             if (this.hoverEnabled || useColor) {
                 var x2 = this.width.toShort() - 1S
                 var y2 = this.height.toShort() - 1S
-                graphics.setForegroundPen(bgPen)
+                if (useColor) {
+                    graphics.setForegroundColor(bgColor as UInt)
+                } else {
+                    graphics.setForegroundPen(bgPen)
+                }
                 graphics.fillRect(0S, 0S, x2, y2)
             }
 
