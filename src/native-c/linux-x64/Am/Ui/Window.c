@@ -365,6 +365,11 @@ static int am_ui_gtk_scale_factor(void) {
     return s;
 }
 
+// Cross-file accessor for the HiDPI scale (LayerGraphics needs it to blit the
+// logical-sized offscreen onto the physical window at the right size — SDL on
+// Linux with GDK_SCALE=1 does no auto-scaling, unlike macOS ALLOW_HIGHDPI).
+int am_ui_linux_ui_scale(void) { return am_ui_gtk_scale_factor(); }
+
 // Build the GTK window + menubar + drawing area. Returns the drawing
 // area's X11 window id for SDL_CreateWindowFrom, or 0 on failure.
 static unsigned long am_ui_gtk_build_shell(aobject *this, Am_Ui_Window_data *data,
@@ -408,15 +413,52 @@ static unsigned long am_ui_gtk_build_shell(aobject *this, Am_Ui_Window_data *dat
     gtk_window_set_title(GTK_WINDOW(win), title ? title : "amStudio");
     gtk_window_set_default_size(GTK_WINDOW(win), lw, lh);
 
+    // Decide whether this is a "fill the screen" window (the IDE main
+    // window, requested at roughly the monitor size) or a small one (the
+    // splash). A main window sized at the full screen height plus a menu
+    // bar plus the WM title bar overflows the display — the bottom scrolls
+    // off. Maximizing instead hands sizing to the window manager, which
+    // fits decorations + menu + drawing area into the work area, so the
+    // bottom stays visible (and the window remains user-resizable). Small
+    // windows open at their requested size.
+    int should_maximize = 0;
+    GdkMonitor *fit_mon = NULL;
+    GdkRectangle fit_workarea = {0, 0, 0, 0};
+    {
+        GdkDisplay *disp = gdk_display_get_default();
+        GdkMonitor *mon  = disp ? gdk_display_get_primary_monitor(disp) : NULL;
+        if (!mon && disp) mon = gdk_display_get_monitor(disp, 0);
+        GdkRectangle geo = {0, 0, 0, 0};
+        if (mon) { gdk_monitor_get_geometry(mon, &geo); gdk_monitor_get_workarea(mon, &fit_workarea); }
+        // geo is physical pixels (we force GDK_SCALE=1); lw/lh are physical
+        // too. Treat "≥ 85% of the monitor in either axis" as fullscreen.
+        if (geo.height > 0 && geo.width > 0 &&
+            (lh >= geo.height * 85 / 100 || lw >= geo.width * 85 / 100)) {
+            should_maximize = 1;
+            fit_mon = mon;
+        }
+    }
+
     GtkWidget *vbox    = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
     GtkWidget *menubar = gtk_menu_bar_new();
     GtkWidget *da      = gtk_drawing_area_new();
-    // Request the drawing area at the logical size so it's already at its
-    // full physical size (logical * scale) when SDL grabs its XID below —
-    // SDL_CreateWindowFrom snapshots the window size and never tracks GTK
-    // resizes, so the area must be sized *before* the grab or SDL ends up
-    // rendering into a tiny corner.
-    gtk_widget_set_size_request(da, lw, lh);
+    // The menu items are populated later by the AmLang side (nativeAddMenu*),
+    // so the bar is empty here — and an empty GtkMenuBar requests only ~1px of
+    // height. If we sized/grabbed the drawing area now, it would sit at y=0
+    // (full height) and the menu bar, once populated, would grow downward and
+    // overdraw the top line of the SDL content ("welcome tab too far up").
+    // Add a throwaway item so the bar realizes at its true height; we pin that
+    // height and drop the probe before grabbing the XID, so the drawing area
+    // is positioned below the real menu bar from the start.
+    GtkWidget *menu_probe = gtk_menu_item_new_with_label("Xj");
+    gtk_menu_shell_append(GTK_MENU_SHELL(menubar), menu_probe);
+    // Only a small *minimum* so the window stays resizable and the
+    // window+menubar+titlebar don't overflow the screen (a size_request
+    // at the full size both pinned the window non-resizable and made it
+    // taller than the display once the menu/title bar were added). The
+    // drawing area gets its real size by filling the window (box expand),
+    // and we wait for that allocation before grabbing the SDL XID below.
+    gtk_widget_set_size_request(da, 200, 150);
     gtk_widget_set_can_focus(da, TRUE);
     gtk_widget_set_double_buffered(da, FALSE);   // SDL owns this surface
     gtk_widget_add_events(da, GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK
@@ -437,31 +479,69 @@ static unsigned long am_ui_gtk_build_shell(aobject *this, Am_Ui_Window_data *dat
     g_signal_connect(da,  "draw",                 G_CALLBACK(gtk_on_draw),      this);
     g_signal_connect(win, "delete-event",         G_CALLBACK(gtk_on_delete),    this);
 
+    // Maximize a fullscreen-class window so the WM fits title bar + menu +
+    // drawing area into the work area (bottom stays visible, window stays
+    // resizable). Let the WM own placement — manually moving the window
+    // pushed the title bar off the top of the screen and rode the content too
+    // high. (void) the unused work-area we gathered for the decision above.
+    (void) fit_mon; (void) fit_workarea;
+    if (should_maximize) gtk_window_maximize(GTK_WINDOW(win));
+
     gtk_widget_show_all(win);
     // Position the window at the requested logical coords (×scale = physical).
     // gtk_window_move uses root-window (screen) coords; call after show_all so
     // the window is realized and the WM hint takes effect.
-    if (x > 0 || y > 0) {
+    if (!should_maximize && (x > 0 || y > 0)) {
         gtk_window_move(GTK_WINDOW(win), x * data->ui_scale, y * data->ui_scale);
     }
+
     gtk_widget_grab_focus(da);
-    // SDL_CreateWindowFrom snapshots the X window size and never tracks
-    // later GTK resizes, so the drawing area must already be at its full
-    // requested size before we grab its XID — otherwise SDL renders into
-    // a stale, too-small viewport (content stuck in a corner). Pump the
-    // GTK loop until the allocated width catches up to the request, with
-    // a bounded wait so we never hang.
-    for (int i = 0; i < 400; i++) {
+
+    // GTK3 uses *client-side* (non-native) windows by default: most widgets
+    // share the toplevel's single X11 window and are only drawn into it. So
+    // gtk_widget_get_window(da) would hand back the TOPLEVEL's window — whose
+    // origin sits at the title bar, behind the menu bar — and SDL would then
+    // render from there, hiding the top of the content under the menu. Force
+    // the drawing area to get its own real X11 child window, correctly
+    // positioned below the menu bar, so SDL_CreateWindowFrom wraps exactly
+    // the drawing area's rectangle.
+    {
+        GdkWindow *daw = gtk_widget_get_window(da);
+        if (daw != NULL) gdk_window_ensure_native(daw);
         while (gtk_events_pending()) gtk_main_iteration_do(FALSE);
-        if (gtk_widget_get_allocated_width(da) >= lw - 8) break;
+    }
+
+    // SDL_CreateWindowFrom snapshots the X window size and never tracks later
+    // GTK resizes, so the drawing area must already be at its final size before
+    // we grab its XID — otherwise SDL renders into a stale viewport (content in
+    // a corner, or spilling off the bottom). The resize-to-fit above is applied
+    // asynchronously by the WM, so pump the loop until the allocation settles
+    // (holds steady on both axes for a few readings).
+    int floor_w = should_maximize ? 300 : (lw - 8);
+    int prev_w = -1, prev_h = -1, stable = 0;
+    for (int i = 0; i < 600; i++) {
+        while (gtk_events_pending()) gtk_main_iteration_do(FALSE);
+        int aw = gtk_widget_get_allocated_width(da);
+        int ah = gtk_widget_get_allocated_height(da);
+        if (aw >= floor_w) {
+            if (aw == prev_w && ah == prev_h) { if (++stable >= 3) break; }
+            else { stable = 0; prev_w = aw; prev_h = ah; }
+        }
         g_usleep(5000);
+    }
+
+    // Lock in the menu bar's realized height, then drop the probe item so the
+    // drawing area's position/size stays put when the real menus are installed.
+    {
+        int mbh = gtk_widget_get_allocated_height(menubar);
+        if (mbh > 1) gtk_widget_set_size_request(menubar, -1, mbh);
+        gtk_widget_destroy(menu_probe);
+        while (gtk_events_pending()) gtk_main_iteration_do(FALSE);
     }
 
     GdkWindow *gw = gtk_widget_get_window(da);
     if (gw == NULL) { fprintf(stderr, "[am-ui/linux-gtk] drawing area not realized\n"); return 0; }
     unsigned long xid = (unsigned long) gdk_x11_window_get_xid(gw);
-    fprintf(stderr, "[am-ui/linux-gtk] shell: req=%dx%d logical, da alloc=%dx%d logical, scale=%d\n",
-            lw, lh, gtk_widget_get_allocated_width(da), gtk_widget_get_allocated_height(da), data->ui_scale);
 
     data->gtk_window    = win;
     data->gtk_menubar   = menubar;
@@ -1331,12 +1411,47 @@ function_result Am_Ui_Window_handleInput_0(aobject *const this)
                         // window's rendered content; stretch just that region to the full
                         // physical output for a clean N× HiDPI blit. On scale=1 both
                         // dimensions match tex_w/tex_h so the path is unchanged.
-                        int src_w = (data->ui_scale > 1) ? (out_w / data->ui_scale) : tex_w;
-                        int src_h = (data->ui_scale > 1) ? (out_h / data->ui_scale) : tex_h;
-                        static int dbg_n = 0;
-                        if (dbg_n < 3) { fprintf(stderr, "[am-ui/linux-gtk] present: win=%dx%d out=%dx%d tex=%dx%d src=%dx%d scale=%d\n", win_w, win_h, out_w, out_h, tex_w, tex_h, src_w, src_h, data->ui_scale); dbg_n++; }
+                        // Where the drawing area actually sits inside the SDL
+                        // surface. SDL_CreateWindowFrom wraps an X window that
+                        // (after GTK realizes the native child + WM decorates)
+                        // spans the whole window frame — its origin is the frame
+                        // top, ABOVE the title bar + menu bar — while input
+                        // coordinates are relative to the drawing area's visible
+                        // top. Blitting from (0,0) therefore rode the content up
+                        // under the chrome. Offset the destination by the gap
+                        // between the drawing area's screen origin and the SDL
+                        // window's screen origin so content lands exactly in the
+                        // drawing-area rectangle, aligned with input.
+                        int off_x = 0, off_y = 0;
+#ifdef AM_UI_LINUX_GTK
+                        if (data->gtk_draw_area != NULL) {
+                            int sx = 0, sy = 0;
+                            SDL_GetWindowPosition(data->window, &sx, &sy);
+                            GdkWindow *dgw = gtk_widget_get_window((GtkWidget *) data->gtk_draw_area);
+                            if (dgw != NULL) {
+                                int dox = 0, doy = 0;
+                                gdk_window_get_origin(dgw, &dox, &doy);
+                                off_x = dox - sx;
+                                off_y = doy - sy;
+                            }
+                            if (off_x < 0) off_x = 0;
+                            if (off_y < 0) off_y = 0;
+                        }
+#endif
+                        int avail_w = out_w - off_x;
+                        int avail_h = out_h - off_y;
+                        int src_w = (data->ui_scale > 1) ? (avail_w / data->ui_scale) : tex_w;
+                        int src_h = (data->ui_scale > 1) ? (avail_h / data->ui_scale) : tex_h;
                         SDL_Rect src = { 0, 0, src_w, src_h };
-                        SDL_Rect dst = { 0, 0, out_w, out_h };
+                        SDL_Rect dst = { off_x, off_y, avail_w, avail_h };
+                        // Clear the strip above the drawing area (the chrome
+                        // region of the SDL surface) so stale back-buffer pixels
+                        // don't flash through before GTK paints the menu bar.
+                        if (off_y > 0) {
+                            SDL_SetRenderDrawColor(data->renderer, 0, 0, 0, 255);
+                            SDL_Rect top = { 0, 0, out_w, off_y };
+                            SDL_RenderFillRect(data->renderer, &top);
+                        }
                         SDL_RenderCopy(data->renderer, bd->texture, &src, &dst);
                     }
                 }
