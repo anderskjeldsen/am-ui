@@ -241,13 +241,61 @@ static gboolean gtk_on_configure(GtkWidget *w, GdkEventConfigure *e, gpointer us
     return FALSE;
 }
 
+// Display the SDL offscreen through Cairo. Views render into the SDL
+// offscreen TARGET texture exactly as on macOS/amigaos; here we read those
+// pixels back and paint them into the GtkDrawingArea's Cairo context. GTK
+// hands us a `cr` already translated to the drawing area's visible top-left
+// (below the menu bar) and at the right HiDPI device scale, so content lands
+// exactly where input expects it — no offset / no manual scaling juggling
+// against a foreign SDL X window.
 static gboolean gtk_on_draw(GtkWidget *w, cairo_t *cr, gpointer user) {
-    // SDL owns the drawing area's X window; tell GTK we painted (TRUE)
-    // so it doesn't clear over SDL, and ask for an SDL repaint.
-    (void) w; (void) cr;
+    (void) w;
     aobject *this = (aobject *) user;
     Am_Ui_Window_data *data = win_data(this);
-    if (data != NULL) data->pending_refresh = true;
+    if (data == NULL || data->renderer == NULL) return TRUE;
+
+    aobject *off_rb = this->object_properties.class_object_properties.properties[Am_Ui_Window_P_offscreen].nullable_value.value.object_value;
+    if (off_rb == NULL) return TRUE;
+    aobject *off_bm = off_rb->object_properties.class_object_properties.properties[Am_Ui_RenderableBitmap_P_bitmap].nullable_value.value.object_value;
+    if (off_bm == NULL) return TRUE;
+    Am_Ui_Bitmap_data *bd = (Am_Ui_Bitmap_data *) off_bm->object_properties.class_object_properties.object_data.value.custom_value;
+    if (bd == NULL || bd->texture == NULL) return TRUE;
+
+    int tw = 0, th = 0;
+    SDL_QueryTexture(bd->texture, NULL, NULL, &tw, &th);
+    if (tw <= 0 || th <= 0) return TRUE;
+
+    int stride = cairo_format_stride_for_width(CAIRO_FORMAT_RGB24, tw);
+    size_t need = (size_t) stride * th;
+    if (data->cairo_buf == NULL || data->cairo_buf_sz < need) {
+        free(data->cairo_buf);
+        data->cairo_buf = (unsigned char *) malloc(need);
+        data->cairo_buf_sz = data->cairo_buf ? need : 0;
+    }
+    if (data->cairo_buf == NULL) return TRUE;
+
+    // Read the offscreen texture into the CPU buffer. SDL ARGB8888 is, on
+    // little-endian, byte order B,G,R,A — identical to Cairo's RGB24/ARGB32
+    // memory layout, so no swizzle is needed.
+    SDL_SetRenderTarget(data->renderer, bd->texture);
+    am_ui_macos_arm_lg_target_changed(data->renderer, bd->texture);
+    int rc = SDL_RenderReadPixels(data->renderer, NULL, SDL_PIXELFORMAT_ARGB8888, data->cairo_buf, stride);
+    SDL_SetRenderTarget(data->renderer, NULL);
+    am_ui_macos_arm_lg_target_changed(data->renderer, NULL);
+    if (rc != 0) return TRUE;
+
+    cairo_surface_t *surf = cairo_image_surface_create_for_data(
+        data->cairo_buf, CAIRO_FORMAT_RGB24, tw, th, stride);
+    if (cairo_surface_status(surf) != CAIRO_STATUS_SUCCESS) { cairo_surface_destroy(surf); return TRUE; }
+
+    int s = win_ui_scale(data);
+    cairo_save(cr);
+    cairo_scale(cr, s, s);                       // offscreen is logical; da cr is physical
+    cairo_set_source_surface(cr, surf, 0, 0);
+    cairo_pattern_set_filter(cairo_get_source(cr), CAIRO_FILTER_NEAREST);
+    cairo_paint(cr);
+    cairo_restore(cr);
+    cairo_surface_destroy(surf);
     return TRUE;
 }
 
@@ -364,11 +412,6 @@ static int am_ui_gtk_scale_factor(void) {
     g_ui_scale_cached = s;
     return s;
 }
-
-// Cross-file accessor for the HiDPI scale (LayerGraphics needs it to blit the
-// logical-sized offscreen onto the physical window at the right size — SDL on
-// Linux with GDK_SCALE=1 does no auto-scaling, unlike macOS ALLOW_HIGHDPI).
-int am_ui_linux_ui_scale(void) { return am_ui_gtk_scale_factor(); }
 
 // Build the GTK window + menubar + drawing area. Returns the drawing
 // area's X11 window id for SDL_CreateWindowFrom, or 0 on failure.
@@ -1371,21 +1414,21 @@ function_result Am_Ui_Window_handleInput_0(aobject *const this)
             __decrease_reference_count(paint_res.exception);
         }
         if (data->renderer != NULL) {
-            // SDL flips the window's back buffer on every RenderPresent
-            // and the new back buffer's contents are undefined. The
-            // AmLang side only blits the dirty regions of the off-screen
-            // RenderableBitmap onto the window, so a partial repaint
-            // (e.g. clicking a tab) leaves the rest as garbage / black.
-            // Fix: copy the WHOLE off-screen texture onto the window
-            // here, every frame, then present. The off-screen itself is
-            // persistent so cross-frame content survives; we just have
-            // to re-stamp it onto the back buffer every flip.
+#ifdef AM_UI_LINUX_GTK
+            // Cairo-present path: the View tree has just rendered into the SDL
+            // offscreen texture. Don't blit/Present to the SDL window (that
+            // foreign X window spans the whole frame and rode content under the
+            // chrome). Instead ask GTK to redraw the drawing area — gtk_on_draw
+            // reads the offscreen back and paints it through Cairo, so GTK owns
+            // placement + HiDPI scale and content lines up with input.
+            if (data->gtk_draw_area != NULL) {
+                gtk_widget_queue_draw(GTK_WIDGET(data->gtk_draw_area));
+                while (gtk_events_pending()) gtk_main_iteration_do(FALSE);
+            }
+#else
+            // Pure-SDL path: re-stamp the whole offscreen onto the window back
+            // buffer (it's persistent; the back buffer isn't) and present.
             SDL_SetRenderTarget(data->renderer, NULL);
-            // LayerGraphics caches the last bound render target per
-            // renderer to skip redundant SetRenderTarget calls. Since
-            // we just bypassed that cache, tell it about the change so
-            // the next off-screen apply_target won't think the GPU is
-            // still bound there and skip its real switch.
             am_ui_macos_arm_lg_target_changed(data->renderer, NULL);
             SDL_RenderSetClipRect(data->renderer, NULL);
             aobject *off_rb = this->object_properties.class_object_properties.properties[Am_Ui_Window_P_offscreen].nullable_value.value.object_value;
@@ -1394,69 +1437,20 @@ function_result Am_Ui_Window_handleInput_0(aobject *const this)
                 if (off_bm != NULL) {
                     Am_Ui_Bitmap_data *bd = (Am_Ui_Bitmap_data *) off_bm->object_properties.class_object_properties.object_data.value.custom_value;
                     if (bd != NULL && bd->texture != NULL) {
-                        // Source = the offscreen's real (logical) pixel size;
-                        // destination = the physical window. On HiDPI these
-                        // differ (offscreen 1920 -> window 3840), so the copy
-                        // upscales by the GTK scale factor. On a 1:1 display
-                        // they're equal and it's a straight blit.
-                        int win_w = 0, win_h = 0;
-                        SDL_GetWindowSize(data->window, &win_w, &win_h);
                         int out_w = 0, out_h = 0;
                         SDL_GetRendererOutputSize(data->renderer, &out_w, &out_h);
-                        int tex_w = win_w, tex_h = win_h;
+                        int tex_w = out_w, tex_h = out_h;
                         SDL_QueryTexture(bd->texture, NULL, NULL, &tex_w, &tex_h);
-                        // The offscreen is sized to the host screen (getHostScreenWidth/Height),
-                        // but this window may be smaller (e.g. a splash window). Only the
-                        // top-left (out_w/scale × out_h/scale) logical pixels contain this
-                        // window's rendered content; stretch just that region to the full
-                        // physical output for a clean N× HiDPI blit. On scale=1 both
-                        // dimensions match tex_w/tex_h so the path is unchanged.
-                        // Where the drawing area actually sits inside the SDL
-                        // surface. SDL_CreateWindowFrom wraps an X window that
-                        // (after GTK realizes the native child + WM decorates)
-                        // spans the whole window frame — its origin is the frame
-                        // top, ABOVE the title bar + menu bar — while input
-                        // coordinates are relative to the drawing area's visible
-                        // top. Blitting from (0,0) therefore rode the content up
-                        // under the chrome. Offset the destination by the gap
-                        // between the drawing area's screen origin and the SDL
-                        // window's screen origin so content lands exactly in the
-                        // drawing-area rectangle, aligned with input.
-                        int off_x = 0, off_y = 0;
-#ifdef AM_UI_LINUX_GTK
-                        if (data->gtk_draw_area != NULL) {
-                            int sx = 0, sy = 0;
-                            SDL_GetWindowPosition(data->window, &sx, &sy);
-                            GdkWindow *dgw = gtk_widget_get_window((GtkWidget *) data->gtk_draw_area);
-                            if (dgw != NULL) {
-                                int dox = 0, doy = 0;
-                                gdk_window_get_origin(dgw, &dox, &doy);
-                                off_x = dox - sx;
-                                off_y = doy - sy;
-                            }
-                            if (off_x < 0) off_x = 0;
-                            if (off_y < 0) off_y = 0;
-                        }
-#endif
-                        int avail_w = out_w - off_x;
-                        int avail_h = out_h - off_y;
-                        int src_w = (data->ui_scale > 1) ? (avail_w / data->ui_scale) : tex_w;
-                        int src_h = (data->ui_scale > 1) ? (avail_h / data->ui_scale) : tex_h;
+                        int src_w = (data->ui_scale > 1) ? (out_w / data->ui_scale) : tex_w;
+                        int src_h = (data->ui_scale > 1) ? (out_h / data->ui_scale) : tex_h;
                         SDL_Rect src = { 0, 0, src_w, src_h };
-                        SDL_Rect dst = { off_x, off_y, avail_w, avail_h };
-                        // Clear the strip above the drawing area (the chrome
-                        // region of the SDL surface) so stale back-buffer pixels
-                        // don't flash through before GTK paints the menu bar.
-                        if (off_y > 0) {
-                            SDL_SetRenderDrawColor(data->renderer, 0, 0, 0, 255);
-                            SDL_Rect top = { 0, 0, out_w, off_y };
-                            SDL_RenderFillRect(data->renderer, &top);
-                        }
+                        SDL_Rect dst = { 0, 0, out_w, out_h };
                         SDL_RenderCopy(data->renderer, bd->texture, &src, &dst);
                     }
                 }
             }
             SDL_RenderPresent(data->renderer);
+#endif
         }
     }
 
