@@ -39,25 +39,24 @@
 // dark editor bg, pen 1 = light text, pen 7 = a cyan-ish
 // "selection" so the IDE chrome isn't all monochrome before the
 // real palette pushes in.
+// am-ui is a library — it doesn't own a palette layout. Every slot
+// is the consuming app's to fill via Screen.setColor / setPalette.
+// The default seed is middle-grey so an uninitialised slot stays
+// neutrally visible (not black, not white) before the app writes
+// its own values.
 static const Uint32 default_palette[AM_UI_LINUX_SCREEN_PALETTE_SIZE] = {
-    0xFF1E1E1E, // 0  editorBg
-    0xFFD4D4D4, // 1  text
-    0xFFFFFFFF, // 2  textBright
-    0xFF4C909C, // 3  selection
-    0xFF1E1E1E, // 4  editorBg (alias)
-    0xFFD4D4D4, // 5  text (alias)
-    0xFFFFFFFF, // 6  textBright (alias)
-    0xFF4C909C, // 7  selection (alias)
-    0xFF252526, // 8  sidebarBg
-    0xFF007ACC, // 9  accent
-    0xFF2D2D30, // 10 statusBg
-    0xFF858585, // 11 muted
-    0xFF3F3F46, // 12 border
-    0xFFCCCCCC, // 13 textDim
-    0xFF4EC95A, // 14 gitGreen
-    0xFFE68A1A, // 15 linkOrange
-    // Pens 16-31 left as middle-gray so a sprite that doesn't set
-    // a colour at this index doesn't render as solid black.
+    0xFF606060, 0xFF606060, 0xFF606060, 0xFF606060,
+    0xFF606060, 0xFF606060, 0xFF606060, 0xFF606060,
+    0xFF606060, 0xFF606060, 0xFF606060, 0xFF606060,
+    0xFF606060, 0xFF606060, 0xFF606060, 0xFF606060,
+    0xFF606060, 0xFF606060, 0xFF606060, 0xFF606060,
+    0xFF606060, 0xFF606060, 0xFF606060, 0xFF606060,
+    0xFF606060, 0xFF606060, 0xFF606060, 0xFF606060,
+    0xFF606060, 0xFF606060, 0xFF606060, 0xFF606060,
+    0xFF606060, 0xFF606060, 0xFF606060, 0xFF606060,
+    0xFF606060, 0xFF606060, 0xFF606060, 0xFF606060,
+    0xFF606060, 0xFF606060, 0xFF606060, 0xFF606060,
+    0xFF606060, 0xFF606060, 0xFF606060, 0xFF606060,
     0xFF606060, 0xFF606060, 0xFF606060, 0xFF606060,
     0xFF606060, 0xFF606060, 0xFF606060, 0xFF606060,
     0xFF606060, 0xFF606060, 0xFF606060, 0xFF606060,
