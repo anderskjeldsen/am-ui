@@ -507,12 +507,68 @@ function_result Am_Ui_LayerGraphics_scrollRect_0(aobject *const this, short x, s
 {
     function_result __result = { .has_return_value = false };
     __increase_reference_count(this);
-    // TODO(linux): scrollRect is the AmigaOS ScrollRaster path used by
-    // the TextEditor for fast scrolled redraws. On SDL the equivalent
-    // is SDL_RenderCopy from a renderer-readback texture; non-trivial
-    // and not blocking for the initial bring-up — TextEditor will
-    // fall back to a full repaint.
-    (void) this; (void) x; (void) y; (void) w; (void) h; (void) dx; (void) dy; (void) fillPen;
+    // AmigaOS ScrollRaster equivalent: shift a rectangle of the current
+    // render target by (dx, dy) and clear the vacated strip to fillPen.
+    // The TextEditor uses this for fast scrolled redraws — without it the
+    // lines below an insertion never move and look overwritten/deleted.
+    //
+    // SDL can't blit a texture onto itself with overlap, so bounce the
+    // region through a scratch target texture: copy source -> scratch,
+    // then scratch -> target at the shifted position.
+    Am_Ui_LayerGraphics_data *d = lg_data(this);
+    if (d == NULL || d->renderer == NULL || w == 0 || h == 0) goto __exit;
+    apply_target(d);
+    SDL_Texture *cur = d->target_texture;   // editor renders into the offscreen
+    if (cur == NULL) goto __exit;            // scrolling the window directly isn't supported
+
+    int ax = tx_of(this, x);
+    int ay = ty_of(this, y);
+
+    SDL_Texture *scratch = SDL_CreateTexture(d->renderer, SDL_PIXELFORMAT_ARGB8888,
+                                             SDL_TEXTUREACCESS_TARGET, w, h);
+    if (scratch == NULL) goto __exit;
+    SDL_SetTextureBlendMode(scratch, SDL_BLENDMODE_NONE);
+
+    SDL_Rect whole = { 0, 0, w, h };
+    SDL_Rect srcRect = { ax, ay, w, h };
+    // source region -> scratch (straight copy)
+    SDL_SetRenderTarget(d->renderer, scratch);
+    SDL_RenderSetClipRect(d->renderer, NULL);
+    SDL_RenderCopy(d->renderer, cur, &srcRect, &whole);
+
+    // back to the offscreen; scratch -> shifted destination (overwrite)
+    SDL_SetRenderTarget(d->renderer, cur);
+    am_ui_macos_arm_lg_target_changed(d->renderer, cur);
+    SDL_RenderSetClipRect(d->renderer, NULL);
+    SDL_Rect dstRect = { ax + dx, ay + dy, w, h };
+    SDL_RenderCopy(d->renderer, scratch, &whole, &dstRect);
+    SDL_DestroyTexture(scratch);
+
+    // Clear the strip the scroll exposed (bg fill) so stale pixels don't
+    // peek through before the dirty lines re-render over it.
+    const Uint32 *pal = d->pen_palette ? d->pen_palette : am_ui_linux_screen_palette();
+    int n = d->pen_palette_count > 0 ? d->pen_palette_count : am_ui_linux_screen_palette_count();
+    Uint32 argb = ((int) fillPen < n) ? pal[fillPen] : 0xFF000000u;
+    SDL_Color fc = argb_to_sdl(argb);
+    SDL_SetRenderDrawColor(d->renderer, fc.r, fc.g, fc.b, fc.a);
+    if (dy > 0) {
+        SDL_Rect v = { ax, ay, w, dy };
+        SDL_RenderFillRect(d->renderer, &v);
+    } else if (dy < 0) {
+        SDL_Rect v = { ax, ay + (int) h + dy, w, -dy };
+        SDL_RenderFillRect(d->renderer, &v);
+    }
+    if (dx > 0) {
+        SDL_Rect v = { ax, ay, dx, h };
+        SDL_RenderFillRect(d->renderer, &v);
+    } else if (dx < 0) {
+        SDL_Rect v = { ax + (int) w + dx, ay, -dx, h };
+        SDL_RenderFillRect(d->renderer, &v);
+    }
+    restamp_clip(d);
+    apply_foreground(d);
+
+__exit:
     __decrease_reference_count(this);
     return __result;
 }

@@ -189,8 +189,8 @@ namespace Am.Ui
             // re-assigning null on the hover-pen branch — amlc
             // rejects `local = null` on a nullable-primitive local —
             // so the pen branch flips a useColor flag instead.
-            var bgColor: UInt? = this.backgroundColor
-            var useColor: Bool = (bgColor != null)
+            var bgColor = this.backgroundColor
+            var useColor = bgColor != null
             if (this.hoverEnabled && this.hovered) {
                 var hbc: UInt? = this.hoverBackgroundColor
                 if (hbc != null) {
@@ -200,7 +200,7 @@ namespace Am.Ui
                     bgPen = this.hoverBackgroundPen
                     useColor = false
                 } else {
-                    var hbc: UInt? = this.hoverBackgroundColor
+                    var hbc = this.hoverBackgroundColor
                     if (hbc != null) {
                         bgColor = hbc
                         useColor = true
@@ -222,7 +222,8 @@ namespace Am.Ui
             if (this.hoverEnabled || useColor) {
                 var x2 = this.width.toShort() - 1S
                 var y2 = this.height.toShort() - 1S
-                if (useColor) {
+                if (useColor && bgColor != null) {
+
                     graphics.setForegroundColor(bgColor as UInt)
                 } else {
                     graphics.setForegroundPen(bgPen)
@@ -252,7 +253,14 @@ namespace Am.Ui
             if (this.leadingBitmap != null) {
                 var lbw = this.leadingBitmap.width.toShort()
                 var lbh = this.leadingBitmap.height.toShort()
-                graphics.drawBitmap(this.leadingBitmap, textX, textY, lbw, lbh)
+                // Centre the icon vertically in the row's content box rather
+                // than top-aligning it with the text — a small (8/12 px) icon
+                // top-aligned in a taller row reads as floating high. Centre
+                // within (height - margins - borders) so it sits on the row's
+                // visual middle next to the text.
+                var contentH = this.height.toShort() - this.margin.top - this.margin.bottom - this.borderWidths.top - this.borderWidths.bottom
+                var iconY = this.margin.top + this.borderWidths.top + (contentH - lbh) / 2S
+                graphics.drawBitmap(this.leadingBitmap, textX, iconY, lbw, lbh)
                 textX = textX + lbw + this.leadingGap
             }
 
@@ -291,12 +299,15 @@ namespace Am.Ui
                 var btx = this.trailingGlyphX(graphics)
                 var bw = this.trailingBitmap.width.toShort()
                 var bh = this.trailingBitmap.height.toShort()
+                // Centre vertically in the row, same as the leading bitmap.
+                var tContentH = this.height.toShort() - this.margin.top - this.margin.bottom - this.borderWidths.top - this.borderWidths.bottom
+                var btY = this.margin.top + this.borderWidths.top + (tContentH - bh) / 2S
                 if (this.trailingHovered && this.trailingHoverBackgroundPen != 0UB) {
                     var pad = this.trailingHoverBackgroundPad
                     graphics.setForegroundPen(this.trailingHoverBackgroundPen)
-                    graphics.fillRect(btx - pad, textY - pad, btx + bw - 1S + pad, textY + bh - 1S + pad)
+                    graphics.fillRect(btx - pad, btY - pad, btx + bw - 1S + pad, btY + bh - 1S + pad)
                 }
-                graphics.drawBitmap(this.trailingBitmap, btx, textY, bw, bh)
+                graphics.drawBitmap(this.trailingBitmap, btx, btY, bw, bh)
             } else if (this.hovered && this.trailingGlyph != null) {
                 var tx = this.trailingGlyphX(graphics)
                 if (this.trailingHovered && this.trailingHoverBackgroundPen != 0UB) {
