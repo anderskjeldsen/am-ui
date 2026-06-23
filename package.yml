@@ -138,6 +138,35 @@ platforms:
       - gio-2.0
       - gobject-2.0
       - glib-2.0
+  # Linux on PowerPC 32-bit. Same SDL2 native impl as linux-x64
+  # (src/native-c/linux-ppc32/ is a copy of linux-x64 + the
+  # macos-arm port). Targets Adélie Linux on PowerMac G5 in
+  # 32-bit user-mode, cross-compiled via adelie-ppc-gcc:latest
+  # (am-lang-compiler/docker/adelie-ppc/Dockerfile.gcc). Inside that
+  # image `powerpc-linux-gnu-gcc` is a wrapper around
+  # `zig cc -target powerpc-linux-musl --sysroot=/sysroot`.
+  #
+  # GTK is intentionally NOT linked — the IDE's GTK menu-bar
+  # bridge is only on linux-x64 (and a fresh G5 install often
+  # doesn't have gtk-3-dev anyway). The pure-SDL window path
+  # works without it.
+  - id: linux-ppc32
+    extends: libc
+    gccCommand: powerpc-linux-gnu-gcc -O2
+    gccAdditionalOptions:
+      - -DAM_UI_LINUX_SDL_TTF
+    # See linux-x64 — GNU ld wants -l flags AFTER the objects, so
+    # libraries go in gccAdditionalLibraries.
+    gccAdditionalLibraries:
+      - SDL2
+      - SDL2_ttf
+  # PowerPC 64-bit BE musl (Adélie ppc64 on G5 / Talos II).
+  # Same SDL2/freetype/SDL_ttf stack; the docker image
+  # (adelie-ppc64-gcc:latest) aliases `powerpc-linux-gnu-gcc` to a
+  # zig wrapper that targets powerpc64-linux-musl with -mabi=elfv2.
+  - id: linux-ppc64
+    extends: linux-ppc32
+    gccCommand: powerpc-linux-gnu-gcc -O2
 
 
 buildTargets:
@@ -159,5 +188,8 @@ buildTargets:
     features: ["floatingPoint"]
   - id: linux-x64
     platform: linux-x64
+    features: ["floatingPoint"]
+  - id: linux-ppc32
+    platform: linux-ppc32
     features: ["floatingPoint"]
 

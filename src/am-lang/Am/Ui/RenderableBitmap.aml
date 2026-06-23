@@ -2,7 +2,7 @@ namespace Am.Ui
 {
     // Off-screen render target that owns a native BitMap + Layer pair.
     // Use createGraphics() to draw through LayerGraphics.
-    #implementationPlatforms "libc", "amigaos", "amigaos-sim", "morphos-ppc", "macos-arm", "linux-x64"
+    #implementationPlatforms "libc", "amigaos", "amigaos-sim", "morphos-ppc", "macos-arm", "linux-x64", "linux-ppc32"
     native class RenderableBitmap {
         import Am.Lang
         import Am.Imaging

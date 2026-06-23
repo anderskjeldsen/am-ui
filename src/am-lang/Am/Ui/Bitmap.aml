@@ -2,7 +2,7 @@ namespace Am.Ui
 {
     // A hardware bitmap backed by a native AmigaOS struct BitMap (CyberGraphX true color).
     // Create via the static factory methods rather than constructing directly.
-    #implementationPlatforms "libc", "amigaos", "amigaos-sim", "morphos-ppc", "macos-arm", "linux-x64"
+    #implementationPlatforms "libc", "amigaos", "amigaos-sim", "morphos-ppc", "macos-arm", "linux-x64", "linux-ppc32"
     native class Bitmap {
         import Am.Lang
         import Am.Imaging
