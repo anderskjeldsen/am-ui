@@ -198,7 +198,23 @@ namespace Am.Ui
 
                 viewClipRect = currentClip.createInnerClipRect(ix, iy, viewWidth.toUShort(), viewHeight.toUShort())
 
-                graphics.pushClipRect(viewClipRect)
+                // Sub-rect clip narrowing — when the view was invalidated via
+                // requestRepaint(x,y,w,h) (e.g. by LayeredPane.propagateDirty's
+                // invalidateOverlapping cascade), restrict the actual paint
+                // clip to the union of dirty sub-rects instead of the full
+                // view box. Without this, a subclass paint() that fills its
+                // full bg (Panel, etc.) wipes the offscreen pixels of every
+                // child in this view, but only children whose own flags
+                // overlap the sub-rect re-paint — leaving "holes" of bare bg
+                // where the other children should still be visible.
+                // shouldRepaintAll honours the always-full-repaint global.
+                var paintClipRect: ClipRect = viewClipRect
+                if (!b1 && this.hasDirtyRects()) {
+                    var union = this.dirtyRectUnion()
+                    paintClipRect = viewClipRect.createInnerClipRect(union.x, union.y, union.width, union.height)
+                }
+
+                graphics.pushClipRect(paintClipRect)
 
                 graphics.translate(ix, iy)
                 this.beginPaintCycle()
@@ -209,6 +225,49 @@ namespace Am.Ui
 
                 graphics.popClipRect()
             }
+        }
+
+        // True when this view has at least one recorded dirty sub-rect.
+        // Helper for paintAll clip narrowing.
+        fun hasDirtyRects(): Bool {
+            if (this.dirtyRects == null) {
+                return false
+            }
+            return this.dirtyRects.getSize() > 0
+        }
+
+        // Bounding-box union of all recorded dirty sub-rects, in view-
+        // local coords. Caller must have checked hasDirtyRects() first.
+        // Returned as a Rectangle so it composes with createInnerClipRect.
+        fun dirtyRectUnion(): Rectangle {
+            var n = this.dirtyRects.getSize()
+            var first = this.dirtyRects.get(0)
+            var minX: Short = first.x
+            var minY: Short = first.y
+            var maxX: Short = first.x + first.width.toShort()
+            var maxY: Short = first.y + first.height.toShort()
+            var i: Int = 1
+            while (i < n) {
+                var r = this.dirtyRects.get(i)
+                if (r.x < minX) {
+                    minX = r.x
+                }
+                if (r.y < minY) {
+                    minY = r.y
+                }
+                var rX2 = r.x + r.width.toShort()
+                var rY2 = r.y + r.height.toShort()
+                if (rX2 > maxX) {
+                    maxX = rX2
+                }
+                if (rY2 > maxY) {
+                    maxY = rY2
+                }
+                i = i + 1
+            }
+            var w: Short = maxX - minX
+            var h: Short = maxY - minY
+            return new Rectangle(minX, minY, w.toUShort(), h.toUShort())
         }
 
         // Hook called from every paintAll variant (this one + the

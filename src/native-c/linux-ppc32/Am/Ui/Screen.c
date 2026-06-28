@@ -286,7 +286,6 @@ function_result Am_Ui_Screen_bestModeId_0(int width, int height, int depth)
     __result.return_value.value.int_value = 0;
     return __result;
 }
-
 function_result Am_Ui_Screen_fillDefaultScreenMode_0(aobject *mode)
 {
     function_result __result = { .has_return_value = false };

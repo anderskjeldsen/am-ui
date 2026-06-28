@@ -145,7 +145,19 @@ namespace Am.Ui
 
             var currentClip = graphics.getCurrentClipRect()
             var viewClipRect: ClipRect = currentClip.createInnerClipRect(ix, iy, viewWidth.toUShort(), viewHeight.toUShort())
-            graphics.pushClipRect(viewClipRect)
+
+            // Sub-rect clip narrowing — see View.paintAll for rationale.
+            // When this group was invalidated only in a sub-region (e.g.
+            // by LayeredPane.propagateDirty cross-layer cascade), restrict
+            // the self-paint clip to that union instead of the full view
+            // box. Stops paint()'s full-bg fill from wiping unflagged
+            // children's offscreen pixels.
+            var paintClipRect: ClipRect = viewClipRect
+            if (!b1 && this.hasDirtyRects()) {
+                var union = this.dirtyRectUnion()
+                paintClipRect = viewClipRect.createInnerClipRect(union.x, union.y, union.width, union.height)
+            }
+            graphics.pushClipRect(paintClipRect)
 
             if (b1 || b2) {
                 graphics.translate(ix, iy)

@@ -2,14 +2,20 @@ namespace Am.Ui
 {
     // Tiny wrapper around a focus-changed callback so the listener
     // list can be typed as `List<FocusChangedListener>` instead of
-    // `List<(oldFocus: View, newFocus: View) => Bool>` — the binder
+    // `List<(oldFocus: View?, newFocus: View?) => Bool>` — the binder
     // currently NPEs on function types inside collection generics
     // (see am-lang-compiler-code/KNOWN_BUGS.md).
+    //
+    // Both arguments are nullable: `oldFocus` is null on the very
+    // first setKeyboardFocus call, and `newFocus` is null when
+    // clearKeyboardFocus / assignFocus(null) clears focus (which
+    // happens during e.g. AppPanel close). Listeners must handle
+    // null on both sides.
     //
     // Window.addFocusChangedListener accepts a bare function and
     // wraps it here behind the scenes, so call sites still look
     // like a plain lambda registration.
-    class FocusChangedListener(var fn: (oldFocus: View, newFocus: View) => Bool) {
+    class FocusChangedListener(var fn: (oldFocus: View?, newFocus: View?) => Bool) {
         import Am.Lang
     }
 }

@@ -278,7 +278,6 @@ function_result Am_Ui_Screen_bestModeId_0(int width, int height, int depth)
 	__result.return_value.value.int_value = (int) modeId;
 	return __result;
 }
-
 // Geometry accessors — read directly off the struct Screen so callers
 // can size a borderless window that sits below the title bar.
 function_result Am_Ui_Screen_getBarHeight_0(aobject * const this)

@@ -59,8 +59,17 @@ function_result Am_Ui_Bitmap__native_release_0(aobject *const this)
     function_result __result = { .has_return_value = false };
     Am_Ui_Bitmap_data *d = bm_data(this);
     if (d != NULL) {
-        if (d->texture != NULL) { SDL_DestroyTexture(d->texture); d->texture = NULL; }
-        if (d->surface != NULL) { SDL_FreeSurface(d->surface);     d->surface = NULL; }
+        // Intentionally don't SDL_DestroyTexture here. The bound SDL_Renderer
+        // is owned by the Window, which AmLang's ARC may destroy before this
+        // Bitmap is released — SDL_DestroyRenderer internally frees all of
+        // its textures, leaving this->texture as a stale pointer. Calling
+        // SDL_DestroyTexture on a stale pointer crashes hard on ppc64 (and
+        // is undefined behaviour everywhere). The renderer-teardown sweep
+        // already covers reclamation in this case; for the mid-program case
+        // where the bitmap dies before its renderer we leak one texture
+        // until bound_renderer becomes a strong ARC reference.
+        d->texture = NULL;
+        if (d->surface != NULL) { SDL_FreeSurface(d->surface); d->surface = NULL; }
         free(d);
         this->object_properties.class_object_properties.object_data.value.custom_value = NULL;
     }

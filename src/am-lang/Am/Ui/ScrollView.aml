@@ -353,7 +353,21 @@ namespace Am.Ui
 
             var currentClip = graphics.getCurrentClipRect()
             var viewClipRect: ClipRect = currentClip.createInnerClipRect(ix, iy, viewWidth.toUShort(), viewHeight.toUShort())
-            graphics.pushClipRect(viewClipRect)
+
+            // Sub-rect clip narrowing — see View.paintAll for rationale.
+            // ScrollView.paint() does a full-inner bg fillRect; without
+            // narrowing it wipes the offscreen pixels of every child
+            // (especially the inner resultStack rows / labels) when this
+            // view was invalidated only in a sub-region by the cross-
+            // layer dirty cascade. The flagged children re-paint inside
+            // the sub-rect, but children outside get cleared and never
+            // repainted → blank rows / missing content.
+            var paintClipRect: ClipRect = viewClipRect
+            if (!b1 && this.hasDirtyRects()) {
+                var union = this.dirtyRectUnion()
+                paintClipRect = viewClipRect.createInnerClipRect(union.x, union.y, union.width, union.height)
+            }
+            graphics.pushClipRect(paintClipRect)
 
             if (b1 || b2) {
                 graphics.translate(ix, iy)

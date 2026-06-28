@@ -392,6 +392,15 @@ function_result Am_Ui_LayerGraphics_setForegroundPen_0(aobject *const this, unsi
         Uint32 argb = (pen < n) ? pal[pen] : 0xFFFFFFFFu;
         d->foreground = argb_to_sdl(argb);
         if (d->renderer != NULL) apply_foreground(d);
+        static int dbg_n = 0;
+        if (dbg_n < 8) {
+            fprintf(stderr, "[am-ui/pen] setFgPen(%u) -> argb=0x%08x -> sdl(r=%u g=%u b=%u a=%u) pal=%p n=%d\n",
+                (unsigned) pen, (unsigned) argb,
+                (unsigned) d->foreground.r, (unsigned) d->foreground.g,
+                (unsigned) d->foreground.b, (unsigned) d->foreground.a,
+                (void *) pal, n);
+            dbg_n++;
+        }
     }
     __decrease_reference_count(this);
     return __result;
@@ -420,6 +429,14 @@ function_result Am_Ui_LayerGraphics_setForegroundColor_0(aobject *const this, un
     if (d != NULL) {
         d->foreground = argb_to_sdl(argb);
         if (d->renderer != NULL) apply_foreground(d);
+        static int dbg_n = 0;
+        if (dbg_n < 12) {
+            fprintf(stderr, "[am-ui/color] setFgColor(0x%08x) r=%p lg=%p -> sdl(r=%u g=%u b=%u a=%u)\n",
+                (unsigned) argb, (void *) d->renderer, (void *) d,
+                (unsigned) d->foreground.r, (unsigned) d->foreground.g,
+                (unsigned) d->foreground.b, (unsigned) d->foreground.a);
+            dbg_n++;
+        }
     }
     __decrease_reference_count(this);
     return __result;
@@ -456,7 +473,30 @@ function_result Am_Ui_LayerGraphics_fillRect_0(aobject *const this, short x, sho
         r.w = (x2 - x) + 1;
         r.h = (y2 - y) + 1;
         if (r.w > 0 && r.h > 0) {
-            SDL_RenderFillRect(d->renderer, &r);
+            Uint8 sr=0, sg=0, sb=0, sa=0;
+            SDL_GetRenderDrawColor(d->renderer, &sr, &sg, &sb, &sa);
+            int rfr = SDL_RenderFillRect(d->renderer, &r);
+            // Per-renderer log so the splash doesn't burn the whole budget.
+            // Each distinct SDL_Renderer* gets its own slot; first 8 calls
+            // per renderer are logged, then every 50th up to 200 total.
+            static struct { void *r; int n; } per[8];
+            int slot = -1;
+            for (int k = 0; k < 8; k++) {
+                if (per[k].r == d->renderer) { slot = k; break; }
+                if (per[k].r == NULL && slot < 0) slot = k;
+            }
+            if (slot >= 0 && per[slot].r == NULL) per[slot].r = d->renderer;
+            if (slot >= 0) {
+                int n = per[slot].n;
+                if (n < 8 || (n % 50 == 0 && n < 200)) {
+                    fprintf(stderr, "[am-ui/fillRect r=%p n=%d] tgt=%p rect=%dx%d at (%d,%d) fg(%u,%u,%u) SDL_fg(%u,%u,%u,%u) clip=%d rc=%d\n",
+                        d->renderer, n, (void*) d->target_texture, r.w, r.h, r.x, r.y,
+                        (unsigned) d->foreground.r, (unsigned) d->foreground.g, (unsigned) d->foreground.b,
+                        (unsigned) sr, (unsigned) sg, (unsigned) sb, (unsigned) sa,
+                        (int) d->clip_active, rfr);
+                }
+                per[slot].n++;
+            }
             if (clip_log_on()) {
                 fprintf(stderr, "[fillRect] tgt=%p x=%d y=%d w=%d h=%d clip(x=%d y=%d w=%d h=%d active=%d)\n",
                     (void*) d->target_texture, r.x, r.y, r.w, r.h,
@@ -755,7 +795,17 @@ function_result Am_Ui_LayerGraphics_getCurrentFontSize_0(aobject *const this)
     function_result __result = { .has_return_value = true };
     __increase_reference_count(this);
     Am_Ui_LayerGraphics_data *d = lg_data(this);
-    __result.return_value.value.ushort_value = (unsigned short) ((d != NULL) ? d->current_font_height : 0);
+    // AmLang signature returns UByte — must write into uchar_value, not
+    // ushort_value. The function_result.return_value.value union shares
+    // the same memory for every field, but the AmLang caller reads from
+    // the field that matches the declared return type. Writing the
+    // wider ushort and reading the narrower uchar takes the low byte on
+    // little-endian (so x64/macOS "worked" by accident) and the *high*
+    // byte (always zero for fonts ≤ 255) on big-endian PPC — which
+    // collapsed every CheckBox/TextField height to fontHeight=0.
+    unsigned char fh = (unsigned char) ((d != NULL && d->current_font_height > 0)
+        ? (d->current_font_height > 255 ? 255 : d->current_font_height) : 0);
+    __result.return_value.value.uchar_value = fh;
     __decrease_reference_count(this);
     return __result;
 }

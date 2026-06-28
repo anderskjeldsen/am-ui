@@ -745,7 +745,11 @@ function_result Am_Ui_Window_handleInput_0(aobject *const this)
             Uint16 mod = ev.key.keysym.mod;
             if (mod & KMOD_GUI) break;
             bool shift = (mod & KMOD_SHIFT) != 0;
-            bool ctrl  = (mod & KMOD_CTRL)  != 0;
+            // On macOS, Option (Alt) doubles as the Ctrl-style modifier
+            // for AmIde shortcuts (Option+C/V copy/paste, etc.). Ctrl is
+            // rare in everyday macOS muscle memory, so accept either.
+            // Cmd is owned by the Cocoa menu bar and skipped above.
+            bool ctrl  = (mod & (KMOD_CTRL | KMOD_ALT)) != 0;
 
             int amiga_code = 0;
             int amiga_char = 0;
@@ -786,7 +790,12 @@ function_result Am_Ui_Window_handleInput_0(aobject *const this)
             // truncated to their first byte for now; AmIde's text path
             // uses ASCII-range keyChar today, broader Unicode is TODO.
             Uint16 mod = SDL_GetModState();
-            if (mod & (KMOD_CTRL | KMOD_GUI)) break;
+            // Skip text-input duplicates of modifier combos. Option is
+            // treated as a Ctrl-equivalent on macOS (see SDL_KEYDOWN
+            // branch); SDL would otherwise also deliver Option+C as the
+            // dead-key-composed character "ç" via TEXTINPUT, double-
+            // firing the shortcut into the editor.
+            if (mod & (KMOD_CTRL | KMOD_GUI | KMOD_ALT)) break;
             unsigned char ch = (unsigned char) ev.text.text[0];
             if (ch >= 32 && ch <= 126) {
                 Am_Ui_Window_f_onKeyboardEvent_0(this, 1, 0, (unsigned short) ch);
@@ -997,9 +1006,14 @@ function_result Am_Ui_Window_pasteFromClipboard_0(aobject *const this)
 {
     function_result __result = { .has_return_value = true };
     __increase_reference_count(this);
-    // TODO(linux): build an AmLang String from SDL_GetClipboardText().
-    // Returning NULL for now — callers treat null as "nothing to paste".
     __result.return_value.value.object_value = NULL;
+    if (SDL_HasClipboardText()) {
+        char *t = SDL_GetClipboardText();
+        if (t != NULL) {
+            __result.return_value.value.object_value = __create_string(t, &Am_Lang_String);
+            SDL_free(t);
+        }
+    }
     __decrease_reference_count(this);
     return __result;
 }

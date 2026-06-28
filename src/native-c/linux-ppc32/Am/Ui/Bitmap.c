@@ -63,10 +63,11 @@ function_result Am_Ui_Bitmap__native_release_0(aobject *const this)
         // is owned by the Window, which AmLang's ARC may destroy before this
         // Bitmap is released — SDL_DestroyRenderer internally frees all of
         // its textures, leaving this->texture as a stale pointer. Calling
-        // SDL_DestroyTexture on a stale pointer crashes (manifested on
-        // ppc64 — the freed bytes get reused immediately). Leaving the
-        // texture leak to SDL's renderer-teardown sweep is the safe path
-        // until the bound_renderer becomes a strong ARC reference.
+        // SDL_DestroyTexture on a stale pointer crashes hard on ppc64 (and
+        // is undefined behaviour everywhere). The renderer-teardown sweep
+        // already covers reclamation in this case; for the mid-program case
+        // where the bitmap dies before its renderer we leak one texture
+        // until bound_renderer becomes a strong ARC reference.
         d->texture = NULL;
         if (d->surface != NULL) { SDL_FreeSurface(d->surface); d->surface = NULL; }
         free(d);
@@ -95,6 +96,12 @@ function_result Am_Ui_Bitmap_createEmpty_0(aobject *const this, unsigned short w
     if (d != NULL && width > 0 && height > 0) {
         d->width = width;
         d->height = height;
+        // Mirror the size onto the AmLang Bitmap.width/height properties —
+        // callers (Label, BitmapView, …) read those, not the native struct.
+        // Without this they read 0 and drawBitmap() early-returns, so e.g.
+        // file-tree icons never paint.
+        this->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_width].nullable_value.value.ushort_value  = width;
+        this->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_height].nullable_value.value.ushort_value = height;
         d->mask_enabled = false;
         // An "empty" Bitmap is the off-screen render target used by
         // Window.getOffscreen(). Create a TARGET-access texture bound
@@ -213,6 +220,8 @@ function_result Am_Ui_Bitmap_createFromImage_0(aobject *const this, aobject *ima
         if (d->surface != NULL) {
             d->width = (Uint16) d->surface->w;
             d->height = (Uint16) d->surface->h;
+            this->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_width].nullable_value.value.ushort_value  = (unsigned short) d->surface->w;
+            this->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_height].nullable_value.value.ushort_value = (unsigned short) d->surface->h;
         }
         d->mask_enabled = false;
         d->is_render_target = false;
@@ -241,6 +250,8 @@ function_result Am_Ui_Bitmap_createFromImageWithMask_0(aobject *const this, aobj
         if (d->surface != NULL) {
             d->width = (Uint16) d->surface->w;
             d->height = (Uint16) d->surface->h;
+            this->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_width].nullable_value.value.ushort_value  = (unsigned short) d->surface->w;
+            this->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_height].nullable_value.value.ushort_value = (unsigned short) d->surface->h;
         }
         // The surface already carries per-pixel alpha; flag mask
         // so LayerGraphics turns on BLEND when it uploads.

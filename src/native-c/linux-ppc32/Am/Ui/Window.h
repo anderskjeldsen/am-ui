@@ -70,6 +70,15 @@ struct _Am_Ui_Window_data {
     // GTK HiDPI integer scale factor (physical = logical * ui_scale).
     // The SDL render surface is physical; GTK widget coords are logical.
     int           ui_scale;
+
+    // Cairo-present path (AM_UI_LINUX_GTK): views render into the SDL offscreen
+    // texture as usual, but we display it by reading those pixels back into
+    // this CPU buffer and painting it through the GtkDrawingArea's `draw`
+    // signal (Cairo). GTK then owns placement + HiDPI scale, so there's no
+    // coordinate offset between rendered content and input. Sized to the
+    // offscreen texture; grown on demand.
+    unsigned char *cairo_buf;
+    size_t         cairo_buf_sz;
 };
 
 // Last opened SDL_Renderer, published so ViewContextGraphics can find

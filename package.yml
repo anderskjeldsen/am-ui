@@ -150,23 +150,61 @@ platforms:
   # bridge is only on linux-x64 (and a fresh G5 install often
   # doesn't have gtk-3-dev anyway). The pure-SDL window path
   # works without it.
+  # Both Adélie ppc targets now use the GTK shell + SDL renderer
+  # path, same as linux-x64. The pure-SDL window path (no -DAM_UI_LINUX_GTK)
+  # had unresolved render-target / GLES2 issues on PPC; mirroring the
+  # linux-x64 stack avoids re-debugging a second compositor codepath.
+  # The -I paths are sysroot-absolute since the cross-build wrapper's
+  # -isystem /sysroot/usr/include only covers the bare include root,
+  # not the per-library subdirs gtk-3.0 / pango-1.0 / etc. live in.
+  # Runtime dep: `apk add gtk+3.0 pango cairo` on the Adélie box.
   - id: linux-ppc32
     extends: libc
     gccCommand: powerpc-linux-gnu-gcc -O2
     gccAdditionalOptions:
       - -DAM_UI_LINUX_SDL_TTF
+      - -DAM_UI_LINUX_GTK
+      - -I/sysroot/usr/include/gtk-3.0
+      - -I/sysroot/usr/include/pango-1.0
+      - -I/sysroot/usr/include/glib-2.0
+      - -I/sysroot/usr/lib/glib-2.0/include
+      - -I/sysroot/usr/include/harfbuzz
+      - -I/sysroot/usr/include/freetype2
+      - -I/sysroot/usr/include/libpng16
+      - -I/sysroot/usr/include/fribidi
+      - -I/sysroot/usr/include/cairo
+      - -I/sysroot/usr/include/pixman-1
+      - -I/sysroot/usr/include/gdk-pixbuf-2.0
+      - -I/sysroot/usr/include/atk-1.0
+      - -I/sysroot/usr/include/at-spi2-atk/2.0
+      - -I/sysroot/usr/include/at-spi-2.0
+      - -I/sysroot/usr/include/dbus-1.0
+      - -I/sysroot/usr/lib/dbus-1.0/include
     # See linux-x64 — GNU ld wants -l flags AFTER the objects, so
     # libraries go in gccAdditionalLibraries.
     gccAdditionalLibraries:
       - SDL2
       - SDL2_ttf
-  # PowerPC 64-bit BE musl (Adélie ppc64 on G5 / Talos II).
-  # Same SDL2/freetype/SDL_ttf stack; the docker image
-  # (adelie-ppc64-gcc:latest) aliases `powerpc-linux-gnu-gcc` to a
-  # zig wrapper that targets powerpc64-linux-musl with -mabi=elfv2.
+      - gtk-3
+      - gdk-3
+      - pangocairo-1.0
+      - pango-1.0
+      - harfbuzz
+      - atk-1.0
+      - cairo-gobject
+      - cairo
+      - gdk_pixbuf-2.0
+      - gio-2.0
+      - gobject-2.0
+      - glib-2.0
   - id: linux-ppc64
     extends: linux-ppc32
     gccCommand: powerpc-linux-gnu-gcc -O2
+    # extends: linux-ppc32 inherits the include paths and -l list above —
+    # but as we saw with gccCommand, amlc's extends doesn't propagate every
+    # field reliably. If linking fails for missing -lgtk-3 or include misses,
+    # copy the linux-ppc32 gccAdditionalOptions / gccAdditionalLibraries
+    # blocks here verbatim.
 
 
 buildTargets:
