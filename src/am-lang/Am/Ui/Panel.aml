@@ -91,7 +91,18 @@ namespace Am.Ui
 
             var currentClip = graphics.getCurrentClipRect()
             var viewClipRect: ClipRect = currentClip.createInnerClipRect(ix, iy, viewWidth.toUShort(), viewHeight.toUShort())
-            graphics.pushClipRect(viewClipRect)
+
+            // Sub-rect clip narrowing — see View.paintAll. Panel.paint()
+            // does a full-inner bg fillRect; without the narrow it wipes
+            // child-paint pixels in the offscreen on every cross-layer
+            // dirty invalidation, leaving holes where the child views
+            // outside the dirty sub-rect should still be visible.
+            var paintClipRect: ClipRect = viewClipRect
+            if (!b1 && this.hasDirtyRects()) {
+                var union = this.dirtyRectUnion()
+                paintClipRect = viewClipRect.createInnerClipRect(union.x, union.y, union.width, union.height)
+            }
+            graphics.pushClipRect(paintClipRect)
 
             if (b1 || b2) {
                 graphics.translate(ix, iy)

@@ -97,18 +97,24 @@ namespace Am.Ui
             }
         }
 
-        // Cross-layer dirty-rect propagation. When false (default),
-        // markDirty() is a no-op — the only thing that adds rects
-        // to dirtyRegions is the usual reportPaintedBounds call
-        // from View.paintAll, identical to the pre-design behaviour.
-        // When true, markDirty also walks every LayeredPane ancestor
-        // of the source view and dirties overlapping peer layers
-        // per the z-order rules in LayeredPane.propagateDirty (and
-        // climbs translucent ancestors so a translucent source's
-        // gaps see fresh parent-bg pixels). Flipped on in step 3
-        // of the multi-layer dirty design once we have a real
-        // cross-layer scenario to exercise.
-        var crossLayerDirty: Bool = false
+        // Cross-layer dirty-rect propagation. When true, markDirty
+        // walks every LayeredPane ancestor of the source view and
+        // dirties overlapping peer layers per the z-order rules in
+        // LayeredPane.propagateDirty (and climbs translucent ancestors
+        // so a translucent source's gaps see fresh parent-bg pixels).
+        //
+        // Default is now ON: required for any overlay sidebar
+        // (Settings, Manage Extensions, etc.) so that lower-z hover /
+        // repaint activity doesn't visually erase the higher-z layer
+        // — the symptom was, e.g., moving the mouse out of the
+        // Extensions sidebar partially wiping its content because the
+        // editor under it requested its own repaint without the
+        // sidebar getting flagged. The LayeredPane.preparePaintCross-
+        // LayerDirty pull-path inside paintAll is a backstop, but it
+        // only fires when LayeredPane.paintAll itself runs — with
+        // dirty-region optimisation that's not guaranteed for every
+        // lower-view repaint. The markDirty push-path catches it.
+        var crossLayerDirty: Bool = true
 
         var font: Font? = null
 
@@ -622,7 +628,7 @@ namespace Am.Ui
         private var focusChangedListeners: List<FocusChangedListener>
             = new List<FocusChangedListener>()
 
-        fun addFocusChangedListener(listener: (oldFocus: View, newFocus: View) => Bool) {
+        fun addFocusChangedListener(listener: (oldFocus: View?, newFocus: View?) => Bool) {
             this.focusChangedListeners.add(new FocusChangedListener(listener))
         }
 

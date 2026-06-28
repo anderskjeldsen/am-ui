@@ -282,6 +282,22 @@ static gboolean gtk_on_draw(GtkWidget *w, cairo_t *cr, gpointer user) {
     int rc = SDL_RenderReadPixels(data->renderer, NULL, SDL_PIXELFORMAT_ARGB8888, data->cairo_buf, stride);
     SDL_SetRenderTarget(data->renderer, NULL);
     am_ui_macos_arm_lg_target_changed(data->renderer, NULL);
+    {
+        static int dbg_n = 0;
+        if (dbg_n < 3) {
+            // Sample a handful of pixels to confirm whether readback actually
+            // pulled data (and what byte order it pulled in). All-zero on
+            // big-endian PPC means either the read failed silently, or the
+            // offscreen really is blank.
+            unsigned char *p = data->cairo_buf;
+            fprintf(stderr, "[am-ui/cairo-blit] rc=%d  tw=%d th=%d stride=%d bytes[0..15]=%02x %02x %02x %02x  %02x %02x %02x %02x  %02x %02x %02x %02x  %02x %02x %02x %02x  SDL_err='%s'\n",
+                rc, tw, th, stride,
+                p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7],
+                p[8], p[9], p[10], p[11], p[12], p[13], p[14], p[15],
+                SDL_GetError());
+            dbg_n++;
+        }
+    }
     if (rc != 0) return TRUE;
 
     cairo_surface_t *surf = cairo_image_surface_create_for_data(
@@ -503,7 +519,10 @@ static unsigned long am_ui_gtk_build_shell(aobject *this, Am_Ui_Window_data *dat
     // and we wait for that allocation before grabbing the SDL XID below.
     gtk_widget_set_size_request(da, 200, 150);
     gtk_widget_set_can_focus(da, TRUE);
-    gtk_widget_set_double_buffered(da, FALSE);   // SDL owns this surface
+    // gtk_widget_set_double_buffered was the pre-3.14 way to tell GTK
+    // not to back-buffer this widget — since 3.14 the call is a no-op
+    // (GTK always cairo-back-buffers and we cairo-blit our SDL offscreen
+    // into it from gtk_on_draw, which is the correct modern pattern).
     gtk_widget_add_events(da, GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK
         | GDK_POINTER_MOTION_MASK | GDK_SCROLL_MASK | GDK_STRUCTURE_MASK
         | GDK_EXPOSURE_MASK);
@@ -691,14 +710,34 @@ function_result Am_Ui_Window_open_0(aobject *const this,
     }
 
     data->window_id = SDL_GetWindowID(data->window);
-    // SDL's Metal backend (default on Apple Silicon) doesn't synchronise
-    // a render-to-target-texture followed by sample-from-that-target
-    // within the same frame — the second op reads zeros and every blit
-    // through the off-screen RenderableBitmap comes back black. OpenGL
-    // and the software renderer handle the read-after-write correctly,
-    // so hint SDL away from Metal before creating the renderer. Pin to
-    // OpenGL on macOS; let other platforms pick their natural default.
-    SDL_SetHint(SDL_HINT_RENDER_DRIVER, "opengl");
+    // Renderer-driver pick. Two-phase logic:
+    //   1. Honour SDL_RENDER_DRIVER env var if set (override priority on
+    //      the hint so SDL_SetHintWithPriority can't be undercut).
+    //   2. Otherwise, on builds where we know the only available
+    //      accelerated backend has broken FBO readback (Adélie ppc/ppc64
+    //      where Mesa GLES2 rejects glFramebufferTexture2D for our
+    //      ARGB8888 offscreens — every cairo blit comes back all zeros),
+    //      hint SDL to software. On linux-x64 / macos / amigaos-sim the
+    //      OpenGL backend works fine.
+    //
+    // The old "OpenGL on macOS, default elsewhere" comment is below;
+    // it's about Metal's broken read-after-write, still relevant on Apple
+    // Silicon.
+    {
+        const char *env = getenv("SDL_RENDER_DRIVER");
+        if (env != NULL && env[0] != '\0') {
+            SDL_SetHintWithPriority(SDL_HINT_RENDER_DRIVER, env, SDL_HINT_OVERRIDE);
+        } else {
+#if defined(__powerpc__) || defined(__powerpc64__) || defined(__PPC__) || defined(__PPC64__)
+            SDL_SetHintWithPriority(SDL_HINT_RENDER_DRIVER, "software", SDL_HINT_OVERRIDE);
+#else
+            // Non-PPC: pin to opengl (matters on Apple Silicon — Metal's
+            // render-to-target / sample-from-target same-frame races and
+            // leaves the read all zeros).
+            SDL_SetHint(SDL_HINT_RENDER_DRIVER, "opengl");
+#endif
+        }
+    }
     // PRESENTVSYNC is nice but we don't want to block paint cycles on
     // it — the IDE explicitly drives refresh, vsync would force a
     // wait that conflicts with the dirty-region model.

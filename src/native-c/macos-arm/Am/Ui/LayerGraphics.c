@@ -507,12 +507,61 @@ function_result Am_Ui_LayerGraphics_scrollRect_0(aobject *const this, short x, s
 {
     function_result __result = { .has_return_value = false };
     __increase_reference_count(this);
-    // TODO(linux): scrollRect is the AmigaOS ScrollRaster path used by
-    // the TextEditor for fast scrolled redraws. On SDL the equivalent
-    // is SDL_RenderCopy from a renderer-readback texture; non-trivial
-    // and not blocking for the initial bring-up — TextEditor will
-    // fall back to a full repaint.
-    (void) this; (void) x; (void) y; (void) w; (void) h; (void) dx; (void) dy; (void) fillPen;
+    Am_Ui_LayerGraphics_data *d = lg_data(this);
+    if (d == NULL || d->renderer == NULL || d->target_texture == NULL) goto __exit;
+    if (w == 0 || h == 0) goto __exit;
+
+    apply_target(d);
+
+    int tx = tx_of(this, x);
+    int ty = ty_of(this, y);
+    SDL_Rect src = { tx, ty, (int) w, (int) h };
+
+    // Texture-to-texture copy via a scratch render-target. SDL can't
+    // copy a texture onto itself, so we snapshot into a temp, then
+    // blit back at the displaced position. Matches the AmigaOS
+    // ScrollRaster semantics the TextEditor relies on for fast
+    // post-edit redraws (insertNewLine, line deletion).
+    Uint32 fmt;
+    int access, tw, th;
+    SDL_QueryTexture(d->target_texture, &fmt, &access, &tw, &th);
+    SDL_Texture *scratch = SDL_CreateTexture(d->renderer, fmt, SDL_TEXTUREACCESS_TARGET, (int) w, (int) h);
+    if (scratch != NULL) {
+        SDL_RenderSetClipRect(d->renderer, NULL);
+
+        SDL_SetRenderTarget(d->renderer, scratch);
+        SDL_Rect full = { 0, 0, (int) w, (int) h };
+        SDL_RenderCopy(d->renderer, d->target_texture, &src, &full);
+
+        SDL_SetRenderTarget(d->renderer, d->target_texture);
+        SDL_Rect dst = { tx + dx, ty + dy, (int) w, (int) h };
+        SDL_RenderCopy(d->renderer, scratch, &full, &dst);
+
+        const Uint32 *pal = d->pen_palette ? d->pen_palette : am_ui_linux_screen_palette();
+        int pn = d->pen_palette_count > 0 ? d->pen_palette_count : am_ui_linux_screen_palette_count();
+        Uint32 argb = (fillPen < pn) ? pal[fillPen] : 0xFF000000u;
+        SDL_Color fill = argb_to_sdl(argb);
+        SDL_SetRenderDrawColor(d->renderer, fill.r, fill.g, fill.b, fill.a);
+        if (dy > 0) {
+            SDL_Rect strip = { tx, ty, (int) w, (int) dy };
+            SDL_RenderFillRect(d->renderer, &strip);
+        } else if (dy < 0) {
+            SDL_Rect strip = { tx, ty + (int) h + (int) dy, (int) w, -(int) dy };
+            SDL_RenderFillRect(d->renderer, &strip);
+        }
+        if (dx > 0) {
+            SDL_Rect strip = { tx, ty, (int) dx, (int) h };
+            SDL_RenderFillRect(d->renderer, &strip);
+        } else if (dx < 0) {
+            SDL_Rect strip = { tx + (int) w + (int) dx, ty, -(int) dx, (int) h };
+            SDL_RenderFillRect(d->renderer, &strip);
+        }
+        apply_foreground(d);
+        restamp_clip(d);
+
+        SDL_DestroyTexture(scratch);
+    }
+__exit:
     __decrease_reference_count(this);
     return __result;
 }
@@ -699,7 +748,15 @@ function_result Am_Ui_LayerGraphics_getCurrentFontSize_0(aobject *const this)
     function_result __result = { .has_return_value = true };
     __increase_reference_count(this);
     Am_Ui_LayerGraphics_data *d = lg_data(this);
-    __result.return_value.value.ushort_value = (unsigned short) ((d != NULL) ? d->current_font_height : 0);
+    // AmLang signature returns UByte — must write into uchar_value, not
+    // ushort_value. They share union memory but the caller reads the
+    // narrower field; on big-endian PPC the high (zero) byte was read,
+    // collapsing every CheckBox/TextField to fontHeight=0. macOS is
+    // little-endian so this happened to work, but the type was always
+    // semantically wrong.
+    unsigned char fh = (unsigned char) ((d != NULL && d->current_font_height > 0)
+        ? (d->current_font_height > 255 ? 255 : d->current_font_height) : 0);
+    __result.return_value.value.uchar_value = fh;
     __decrease_reference_count(this);
     return __result;
 }

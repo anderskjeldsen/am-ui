@@ -83,6 +83,11 @@ static const char *fallback_for_logical(const char *logical)
         "/usr/share/fonts/dejavu/DejaVuSansMono.ttf",
         "/usr/share/fonts/liberation/LiberationMono-Regular.ttf",
         "/usr/share/fonts/inconsolata/Inconsolata-Regular.ttf",
+        // Adélie Linux — fonts live under /usr/share/fonts/ttf-<family>/
+        // and OTF/source-code-pro/.
+        "/usr/share/fonts/ttf-dejavu/DejaVuSansMono.ttf",
+        "/usr/share/fonts/ttf-liberation/LiberationMono-Regular.ttf",
+        "/usr/share/fonts/X11/OTF/source-code-pro/SourceCodePro-Regular.otf",
         NULL
     };
     static const char *generic_sans[] = {
@@ -93,6 +98,10 @@ static const char *fallback_for_logical(const char *logical)
         // Linux
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/TTF/DejaVuSans.ttf",
+        // Adélie Linux — same ttf-<family>/ layout as the mono list.
+        "/usr/share/fonts/ttf-dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/ttf-liberation/LiberationSans-Regular.ttf",
         NULL
     };
 
