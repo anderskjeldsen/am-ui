@@ -34,11 +34,8 @@ static void am_font_ensure_diskfont(void) {
     }
     DiskfontBase = (struct Library *)__ensure_library((unsigned char *)"diskfont.library", 36L);
     if (DiskfontBase == NULL) {
-        printf("[font.native] __ensure_library(diskfont.library, 36) failed\n");
         fflush(stdout);
     } else {
-        printf("[font.native] opened diskfont.library v%u\n",
-            (unsigned)DiskfontBase->lib_Version);
         fflush(stdout);
     }
 }

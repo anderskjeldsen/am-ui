@@ -29,7 +29,6 @@ function_result Am_Ui_Screen__native_init_0(aobject * const this)
 	function_result __result = { .has_return_value = 0 };
 	char __returning = 0;
 	__increase_reference_count(this);
-	printf("TODO: implement native function Am_Ui_Screen__native_init_0\n");
 __exit:
 	__decrease_reference_count(this);
 	return __result;
@@ -127,17 +126,6 @@ function_result Am_Ui_Screen_open_0(aobject * const this, int width, int height,
 		}
 	}
 
-	printf("Screen open: %dx%dx%d id=0x%lx title=%s pens=%s colors=%u\n", width, height, depth,
-		(unsigned long) displayId, title_cstr != NULL ? title_cstr : "(none)",
-		pens_ptr != NULL ? "custom" : "default", color_count);
-	if (pens_ptr != NULL) {
-		printf("  SA_Pens: ");
-		for (int i = 0; pens_ptr[i] != (UWORD) ~0; i++) {
-			printf("%d=%u ", i, (unsigned) pens_ptr[i]);
-		}
-		printf("\n");
-	}
-
 	// Passing SA_Pens=NULL is NOT the same as omitting the tag — Intuition
 	// interprets a NULL pens pointer as "an empty array", which on V40+
 	// degrades the DrawInfo mapping to only use pens 0 and 1 (you can
@@ -171,7 +159,9 @@ function_result Am_Ui_Screen_open_0(aobject * const this, int width, int height,
 	struct Screen * screen = OpenScreenTagList(NULL, screenTags);
 
 	if ( screen == NULL ) {
-		printf("Unable to open screen\n");
+		__throw_simple_exception("OpenScreenTagList returned NULL",
+			"in Am_Ui_Screen_open_0", &__result);
+		goto exit;
 	} else {
 		// On Picasso96 the bar can be drawn before SA_Colors32 reaches the
 		// display, leaving the screen title with the driver's default RGB
@@ -182,25 +172,17 @@ function_result Am_Ui_Screen_open_0(aobject * const this, int width, int height,
 
 		struct DrawInfo * dri = GetScreenDrawInfo(screen);
 		if (dri != NULL) {
-			printf("  Screen DRI: version=%u numPens=%u depth=%u barHeight=%d ",
-				(unsigned) dri->dri_Version, (unsigned) dri->dri_NumPens,
-				(unsigned) dri->dri_Depth, (int) screen->BarHeight);
-			printf("pens: ");
-			for (int i = 0; i < dri->dri_NumPens; i++) {
-				printf("%d=%u ", i, (unsigned) dri->dri_Pens[i]);
-			}
-			printf("\n");
 			FreeScreenDrawInfo(screen, dri);
 		} else {
-			printf("  Screen DRI: NULL\n");
+			__throw_simple_exception("GetScreenDrawInfo returned NULL after OpenScreenTagList",
+				"in Am_Ui_Screen_open_0", &__result);
+			goto exit;
 		}
 
 		// Log Workbench's BarHeight so we can see whether our screen's
 		// bar font / chrome height matches.
 		struct Screen * wb = LockPubScreen("Workbench");
 		if (wb != NULL) {
-			printf("  WB BarHeight=%d (ours=%d)\n",
-				(int) wb->BarHeight, (int) screen->BarHeight);
 			UnlockPubScreen(NULL, wb);
 		}
 	}
@@ -341,7 +323,8 @@ function_result Am_Ui_Screen_fillDefaultScreenMode_0(aobject * mode)
 
 	struct Screen * pub = LockPubScreen(NULL);
 	if (pub == NULL) {
-		printf("fillDefaultScreenMode: LockPubScreen returned NULL\n");
+		__throw_simple_exception("LockPubScreen(NULL) returned NULL",
+			"in Am_Ui_Screen_fillDefaultScreenMode_0", &__result);
 		goto __exit;
 	}
 
@@ -356,8 +339,6 @@ function_result Am_Ui_Screen_fillDefaultScreenMode_0(aobject * mode)
 	mode->object_properties.class_object_properties.properties[Am_Ui_ScreenMode_P_height].nullable_value.value.int_value    = height;
 	mode->object_properties.class_object_properties.properties[Am_Ui_ScreenMode_P_depth].nullable_value.value.int_value     = depth;
 	mode->object_properties.class_object_properties.properties[Am_Ui_ScreenMode_P_displayId].nullable_value.value.int_value = (int) modeId;
-
-	printf("fillDefaultScreenMode: %dx%dx%d id=0x%lx\n", width, height, depth, (unsigned long) modeId);
 
 __exit: ;
 	if (mode != NULL) {
@@ -379,7 +360,6 @@ function_result Am_Ui_Screen_setColor_0(aobject * const this, int index, unsigne
 		goto __exit;
 	}
 
-	printf("Screen setColor: pen=%d rgb=%02x%02x%02x\n", index, (unsigned) r, (unsigned) g, (unsigned) b);
 	SetRGB32(&data->screen->ViewPort, (ULONG) index,
 		((ULONG) r) * 0x01010101UL,
 		((ULONG) g) * 0x01010101UL,
@@ -419,35 +399,11 @@ function_result Am_Ui_Screen_fillHostPaletteColors_0(aobject * out, int count)
 		pub = LockPubScreen(NULL);
 	}
 	if (pub == NULL) {
-		printf("Screen fillHostPaletteColors: LockPubScreen returned NULL\n");
 		goto __exit;
 	}
 
 	ULONG channels[32 * 3];
 	GetRGB32(pub->ViewPort.ColorMap, 0, count, channels);
-
-	// Diagnostic: dump the host screen's DrawInfo so we can compare its
-	// pen-role mapping (SA_Pens) against the one our screen ends up with.
-	// If Workbench's DRI maps roles into the same 0/1 register range,
-	// the host itself is on a degraded palette mapping. If WB's DRI uses
-	// pens 2/3 too, then OUR screen needs the same SA_Pens to look like
-	// it.
-	struct DrawInfo * pubDri = GetScreenDrawInfo(pub);
-	if (pubDri != NULL) {
-		printf("Screen fillHostPaletteColors: host DRI version=%u numPens=%u depth=%u ",
-			(unsigned) pubDri->dri_Version, (unsigned) pubDri->dri_NumPens,
-			(unsigned) pubDri->dri_Depth);
-		printf("pens:");
-		int d = 0;
-		while (d < pubDri->dri_NumPens) {
-			printf(" %d=%u", d, (unsigned) pubDri->dri_Pens[d]);
-			d = d + 1;
-		}
-		printf("\n");
-		FreeScreenDrawInfo(pub, pubDri);
-	} else {
-		printf("Screen fillHostPaletteColors: host DRI = NULL\n");
-	}
 
 	UnlockPubScreen(NULL, pub);
 
@@ -459,10 +415,8 @@ function_result Am_Ui_Screen_fillHostPaletteColors_0(aobject * out, int count)
 		unsigned int g = (channels[i * 3 + 1] >> 24) & 0xFF;
 		unsigned int b = (channels[i * 3 + 2] >> 24) & 0xFF;
 		dst[i] = (r << 16) | (g << 8) | b;
-		printf("  host pen %d: r=%02x g=%02x b=%02x\n", i, r, g, b);
 		i = i + 1;
 	}
-	printf("Screen fillHostPaletteColors: read %d host pens\n", count);
 
 __exit: ;
 	if (out != NULL) {
@@ -503,13 +457,11 @@ function_result Am_Ui_Screen_fillHostDrawInfoPens_0(aobject * out, int count)
 		pub = LockPubScreen(NULL);
 	}
 	if (pub == NULL) {
-		printf("Screen fillHostDrawInfoPens: LockPubScreen returned NULL\n");
 		goto __exit;
 	}
 
 	struct DrawInfo * dri = GetScreenDrawInfo(pub);
 	if (dri == NULL) {
-		printf("Screen fillHostDrawInfoPens: GetScreenDrawInfo returned NULL\n");
 		UnlockPubScreen(NULL, pub);
 		goto __exit;
 	}
@@ -531,7 +483,6 @@ function_result Am_Ui_Screen_fillHostDrawInfoPens_0(aobject * out, int count)
 
 	FreeScreenDrawInfo(pub, dri);
 	UnlockPubScreen(NULL, pub);
-	printf("Screen fillHostDrawInfoPens: copied %d host DRI pens\n", count);
 
 __exit: ;
 	if (out != NULL) {
@@ -547,8 +498,6 @@ function_result Am_Ui_Screen_copyHostPens_0(aobject * const this, int count)
 
 	Am_Ui_Screen_data * const data = (Am_Ui_Screen_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
 	if (data == NULL || data->screen == NULL || count <= 0) {
-		printf("Screen copyHostPens: bailing (data=%p screen=%p count=%d)\n",
-			(void *)data, data ? (void *)data->screen : NULL, count);
 		goto __exit;
 	}
 	if (count > 32) {
@@ -569,21 +518,15 @@ function_result Am_Ui_Screen_copyHostPens_0(aobject * const this, int count)
 		pub = LockPubScreen(NULL);
 	}
 	if (pub == NULL) {
-		printf("Screen copyHostPens: LockPubScreen returned NULL\n");
 		goto __exit;
 	}
 
 	if (pub == data->screen) {
-		// We've ended up locking ourselves — nothing to copy. Log and
-		// bail rather than no-op the SetRGB32 calls below.
-		printf("Screen copyHostPens: pub screen IS our own screen (%p) — skipping\n", (void *)pub);
+		// We've ended up locking ourselves — nothing to copy. Bail
+		// rather than no-op the SetRGB32 calls below.
 		UnlockPubScreen(NULL, pub);
 		goto __exit;
 	}
-
-	printf("Screen copyHostPens: pub=%p our=%p depth=%d count=%d\n",
-		(void *)pub, (void *)data->screen,
-		(int)GetBitMapAttr(pub->RastPort.BitMap, BMA_DEPTH), count);
 
 	// GetRGB32 emits three ULONG channel values per pen; 32 pens = 96
 	// ULONGs = 384 bytes on the stack.
@@ -593,11 +536,6 @@ function_result Am_Ui_Screen_copyHostPens_0(aobject * const this, int count)
 
 	int i = 0;
 	while (i < count) {
-		printf("  pen %d: r=%08lx g=%08lx b=%08lx\n",
-			i,
-			(unsigned long) channels[i * 3 + 0],
-			(unsigned long) channels[i * 3 + 1],
-			(unsigned long) channels[i * 3 + 2]);
 		SetRGB32(&data->screen->ViewPort, (ULONG) i,
 			channels[i * 3 + 0],
 			channels[i * 3 + 1],
