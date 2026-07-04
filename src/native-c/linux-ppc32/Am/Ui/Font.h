@@ -20,6 +20,7 @@ struct _Am_Ui_Font_data {
     void *ttf_font;          // TTF_Font *
     int   height;            // in pixels
     int   ascent;
+    int   line_skip;
 };
 
 // Look up a system fallback font path. Tries a handful of well-known

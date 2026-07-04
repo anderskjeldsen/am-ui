@@ -105,6 +105,63 @@ namespace Am.Ui
             this.setBorderWidths(0S)
         }
 
+        // ---- Editable capability probes (virtual) ----
+        //
+        // The IDE's Edit menu wants to ask "can this focused view
+        // copy / cut / paste / etc.?" without having to `is`-cast
+        // against every implementer — amlc's `is` doesn't unwrap
+        // the cross-thread ARC wrapper, so a wrapped TextEditor
+        // reads as "not a TextEditor" through `is`. Virtual method
+        // dispatch DOES unwrap the receiver (goes through the
+        // vtable), so callers can just invoke these on any View
+        // and get the right answer.
+        //
+        // Base returns false / no-op. TextEditor, TextField and
+        // CliView override to advertise their real capabilities and
+        // wire the actions.
+        open fun canCopy(): Bool {
+            return false
+        }
+        open fun canCut(): Bool {
+            return false
+        }
+        open fun canPaste(): Bool {
+            return false
+        }
+        open fun canSelectAll(): Bool {
+            return false
+        }
+        open fun canToggleSelectMode(): Bool {
+            return false
+        }
+        open fun editCopy(): Bool {
+            return false
+        }
+        open fun editCut(): Bool {
+            return false
+        }
+        open fun editPaste(): Bool {
+            return false
+        }
+        open fun editSelectAll(): Bool {
+            return false
+        }
+        open fun editToggleSelectMode(): Bool {
+            return false
+        }
+        open fun canUndo(): Bool {
+            return false
+        }
+        open fun canRedo(): Bool {
+            return false
+        }
+        open fun editUndo(): Bool {
+            return false
+        }
+        open fun editRedo(): Bool {
+            return false
+        }
+
         fun setPadding(padding: Short) {
             this.padding.left = padding
             this.padding.top = padding

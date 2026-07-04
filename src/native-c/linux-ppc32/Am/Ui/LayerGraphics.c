@@ -719,7 +719,7 @@ function_result Am_Ui_LayerGraphics_setFont_0(aobject *const this, aobject *font
         if (font != NULL) {
             Am_Ui_Font_data *fd = (Am_Ui_Font_data *) font->object_properties.class_object_properties.object_data.value.custom_value;
             d->current_font        = (fd != NULL) ? fd->ttf_font : NULL;
-            d->current_font_height = (fd != NULL) ? fd->height   : 0;
+            d->current_font_height = (fd != NULL) ? fd->line_skip : 0;
         } else {
             d->current_font = NULL;
             d->current_font_height = 0;

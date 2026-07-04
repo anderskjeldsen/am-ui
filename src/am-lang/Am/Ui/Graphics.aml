@@ -32,6 +32,22 @@ namespace Am.Ui
             return this.yOffset
         }
 
+        // Translate a child-local coord to its absolute world
+        // position by composing with the running translate
+        // accumulator. Lets clip-composition callers stay in sync
+        // with the graphics translate state — so a clip built via
+        // getAbsoluteCoord(child.x, child.y) lands at the exact
+        // pixel a subsequent fillRect(0, 0, w, h) would draw at,
+        // regardless of any intermediate translate() calls that
+        // shifted the coordinate frame (like ScrollView's scroll
+        // offset). Callers that were previously doing
+        // parent_clip.x + child.x and drifting from the draw
+        // translate can migrate to this.
+        fun getAbsoluteCoord(x: Short, y: Short): Point2D {
+            var p: Point2D = { x: this.xOffset + x, y: this.yOffset + y }
+            return p
+        }
+
         fun printOffset() {
 //            ("offset: " + this.xOffset.toString() + "," + this.yOffset.toString()).println()
         }

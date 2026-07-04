@@ -1,0 +1,35 @@
+namespace Am.Ui
+{
+    // Standard clipboard / selection surface for the IDE's Edit menu.
+    // Views that support any subset of the classic Copy / Cut / Paste /
+    // Select-All / Toggle-Select-Mode set implement this so the menu
+    // can dispatch to whichever view currently has keyboard focus and
+    // grey out items no focus can honour.
+    //
+    // Every capability is a separate `can*` method so a view can
+    // advertise a partial set — TextField has no scrollback selection
+    // to Select All, CliView has no "select mode" affordance,
+    // read-only views have no cut/paste. Menu code first probes with
+    // can*(); action methods are only called when their guard returns
+    // true.
+    //
+    // The action methods return true when they consumed the action
+    // (the menu item click handler forwards that value back to the
+    // menu system so a false result can let the invocation fall
+    // through — e.g. a paste on a running child could refuse and let
+    // an outer handler retry).
+    interface Editable {
+        import Am.Lang
+
+        fun canCopy(): Bool
+        fun canCut(): Bool
+        fun canPaste(): Bool
+        fun canSelectAll(): Bool
+        fun canToggleSelectMode(): Bool
+        fun editCopy(): Bool
+        fun editCut(): Bool
+        fun editPaste(): Bool
+        fun editSelectAll(): Bool
+        fun editToggleSelectMode(): Bool
+    }
+}

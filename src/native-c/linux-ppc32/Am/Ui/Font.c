@@ -195,9 +195,10 @@ function_result Am_Ui_Font__native_init_0(aobject *const this)
     int line_skip   = TTF_FontLineSkip(f);
     fprintf(stderr, "[am-ui/macos-arm] font '%s' size %d -> %s (TTF_FontHeight=%d ascent=%d lineSkip=%d)\n",
         requested ? requested : "(null)", px, path, real_height, TTF_FontAscent(f), line_skip);
-    d->ttf_font = f;
-    d->height   = real_height;
-    d->ascent   = TTF_FontAscent(f);
+    d->ttf_font   = f;
+    d->height     = real_height;
+    d->ascent     = TTF_FontAscent(f);
+    d->line_skip  = line_skip;
 
     // Write the natural-line-height value onto the AmLang Font's
     // `size` field. We use TTF_FontLineSkip rather than
@@ -285,9 +286,10 @@ function_result Am_Ui_Font_open_0(aobject *const this, aobject *name, int size)
         fprintf(stderr, "[am-ui/linux] TTF_OpenFont(%s, %d) failed: %s\n", path, px, TTF_GetError());
         goto __exit;
     }
-    d->ttf_font = f;
-    d->height   = TTF_FontHeight(f);
-    d->ascent   = TTF_FontAscent(f);
+    d->ttf_font   = f;
+    d->height     = TTF_FontHeight(f);
+    d->ascent     = TTF_FontAscent(f);
+    d->line_skip  = TTF_FontLineSkip(f);
 
 __exit:
 #else

@@ -257,7 +257,20 @@ namespace Am.Ui
                         higher = z > sourceZ
                     }
                     if (higher || !sourceOpaque) {
-                        layer.invalidateOverlapping(winRect)
+                        // Full-layer repaint when this layer has ANY
+                        // overlap with the source's dirty region. Trades
+                        // fine-grained sub-rect narrowing for guaranteed
+                        // correctness: a higher-z layer whose Panel
+                        // wipes its bg would otherwise leave holes where
+                        // its own children didn't happen to be marked
+                        // dirty. Cheaper mental model + no bg-wipe
+                        // collateral in exchange for repainting the
+                        // whole affected higher layer whenever a lower
+                        // layer touches its bounds.
+                        var mine = layer.computeWindowRect()
+                        if (View.rectsOverlap(mine, winRect)) {
+                            layer.requestRepaintTree()
+                        }
                     }
                 }
                 i = i + 1

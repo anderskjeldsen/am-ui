@@ -53,6 +53,13 @@ struct _Am_Ui_Window_data {
     // do on a strip change, so this acts as the dedupe key. NULL means
     // we've never installed one. See MenuBridge.c (Cocoa side).
     void         *installed_menu_strip;
+    // Companion to installed_menu_strip: last-seen value of the AmLang
+    // Window.menuStripVersion counter. AmLang ticks it on every
+    // setMenuStrip() call so a re-install with the SAME strip pointer
+    // (e.g. we just flipped an item's enabled flag) still forces a
+    // Cocoa menu rebuild. Without this, pointer-only dedupe made
+    // "same strip, updated .enabled" invisible in the bar.
+    int           installed_menu_strip_version;
 };
 
 // Last opened SDL_Renderer, published so ViewContextGraphics can find

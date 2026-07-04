@@ -30,6 +30,14 @@ namespace Am.Ui
         private var title: String = ""
         private var screenTitle: String = ""
         private var menuStrip: MenuStrip? = null
+        // Monotonic counter ticked on every `setMenuStrip` call. The
+        // macOS native polling path used to dedupe by strip pointer,
+        // which meant "same MenuStrip whose items' enabled flags just
+        // flipped" wasn't reinstalled — the visible bar kept the old
+        // greyed-out state. Native now compares this version too so
+        // any setMenuStrip call rebuilds the NSMenu even when the
+        // strip pointer is unchanged.
+        var menuStripVersion: Int = 0
 
         // Window-level off-screen buffer for double-buffered painting.
         // Lazy-allocated the first time getOffscreen() is called and sized
@@ -546,7 +554,15 @@ namespace Am.Ui
                 var innerWidth = this.width - (this.border.left + this.border.right).toUShort()
                 var innerHeight = this.height - (this.border.top + this.border.bottom).toUShort()
 
-                var windowClipRect: ClipRect = { x: innerX, y: innerY, width: innerWidth, height: innerHeight }
+                // Root clip: logical == effective at the paint-pass
+                // origin (nothing scrolled up here). Descendants that
+                // shift via ScrollView see the divergence appear at
+                // THEIR level via createInnerClipRect.
+                var windowClipRect: ClipRect = {
+                    x: innerX, y: innerY, width: innerWidth, height: innerHeight,
+                    logicalX: innerX, logicalY: innerY,
+                    logicalWidth: innerWidth, logicalHeight: innerHeight
+                }
                 off.pushClipRect(windowClipRect)
 
                 if (full && this.fillBackground) {
@@ -764,6 +780,14 @@ namespace Am.Ui
                     return
                 }
             }
+            // Shift+Tab reverse-navigates focus. Native layer signals
+            // Shift+Tab as keyCode=66 (Tab raw) with keyChar=0. Plain
+            // Tab keeps keyChar=9 and hits the branch above.
+            if (type == KeyboardEventType.down && keyCode == 66US && keyChar == 0US) {
+                if (this.focusPrev()) {
+                    return
+                }
+            }
             this.rootView?.onKeyboardEvent(type, keyCode, keyChar)
         }
 
@@ -840,6 +864,7 @@ namespace Am.Ui
 
         fun setMenuStrip(strip: MenuStrip) {
             this.menuStrip = strip
+            this.menuStripVersion = this.menuStripVersion + 1
             if (strip == null) {
                 this.nativeClearMenuStrip()
                 return

@@ -138,6 +138,17 @@ namespace Am.Ui
                     textH = win.getCurrentFontSize().toShort()
                 }
             }
+            // Text is set but neither the label's font nor the
+            // window's current font is resolvable yet (view built
+            // detached — JSON-list row inside FormBuilder, deferred
+            // mount, etc). Return a sensible glyph-height floor so
+            // the enclosing VStack doesn't collapse this label to a
+            // zero-height slot and stack the next sibling on top of
+            // our glyphs. 8 px matches the Topaz/8 line height used
+            // as the platform default when no other font is loaded.
+            if (textH <= 0S && this.text != null && this.text.length() > 0UI) {
+                textH = 8S
+            }
             // Reserve room for a trailing bitmap if one is set, even
             // when it's hover-only painted — without this the row
             // collapses to text height and the bitmap clips against

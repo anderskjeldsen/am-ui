@@ -1,7 +1,7 @@
 namespace Am.Ui 
 {
 
-    class TextField : View {
+    class TextField : View, Editable {
         import Am.Lang
 
         private var text: String = ""
@@ -22,6 +22,17 @@ namespace Am.Ui
         private var scrollOffset: Short = 0S  // Horizontal scroll offset in pixels
         private var isDragging: Bool = false  // Track if we're dragging to select text
         private var dragStartPosition: Int = 0  // Track where drag selection started
+
+        // Double-click detection via timestamp comparison. Two clicks
+        // inside DBLCLICK_MS with pointer within DBLCLICK_SLOP px of
+        // each other count as a double click — enough tolerance for a
+        // slightly-shaky second press but tight enough that two
+        // deliberate single clicks read as two singles.
+        private var lastClickMs: Long = 0L
+        private var lastClickX: Short = 0S
+        private var lastClickY: Short = 0S
+        private static const DBLCLICK_MS: Long = 400L
+        private static const DBLCLICK_SLOP: Short = 4S
         var maxLength: Int = 255
         var placeholder: String = ""
         var readOnly: Bool = false
@@ -355,6 +366,50 @@ namespace Am.Ui
             this.requestRepaint()
         }
 
+        // True for characters considered "part of a word" during
+        // double-click word selection. ASCII letters, digits, and
+        // underscore — the usual set. Everything else (spaces,
+        // punctuation) breaks a word.
+        private static fun isWordChar(c: UShort): Bool {
+            if (c >= 48US && c <= 57US)  { return true }
+            if (c >= 65US && c <= 90US)  { return true }
+            if (c >= 97US && c <= 122US) { return true }
+            if (c == 95US)               { return true }
+            return false
+        }
+
+        // Select the word surrounding character index `pos`. Word
+        // boundaries follow isWordChar: scan left from pos while the
+        // preceding char is a word char, then right from pos while
+        // the current char is a word char. If pos sits between two
+        // non-word chars, this collapses to a zero-width selection
+        // at pos (caller's job to treat that as "click missed a
+        // word" and fall back to select-all).
+        fun selectWordAt(pos: Int) {
+            var len: Int = this.text.length() as Int
+            if (pos < 0)   { pos = 0 }
+            if (pos > len) { pos = len }
+            var start: Int = pos
+            var end: Int = pos
+            while (start > 0) {
+                var c: UShort = this.text.characterAt((start - 1).toUInt())
+                if (!TextField.isWordChar(c)) { break }
+                start = start - 1
+            }
+            while (end < len) {
+                var c2: UShort = this.text.characterAt(end.toUInt())
+                if (!TextField.isWordChar(c2)) { break }
+                end = end + 1
+            }
+            if (start == end) {
+                return
+            }
+            this.selectionStart = start
+            this.selectionEnd = end
+            this.cursorPosition = end
+            this.requestRepaint()
+        }
+
         fun copySelectedText() {
             if (!this.hasSelection()) {
                 return
@@ -576,11 +631,16 @@ namespace Am.Ui
                 graphics.drawLine(innerX2 - si, innerY1, innerX2 - si, innerY2)
             }
 
-            // Calculate text area
+            // Calculate text area. innerW / innerH already subtract
+            // margin + padding + border, so `textWidth` / `textHeight`
+            // are just `innerW` / `innerH`. (An earlier version
+            // subtracted padding a SECOND time and left the visible
+            // text band 2× padding shorter than it should be — that
+            // was clipping descenders like g/j/p/q/y at the bottom.)
             var textX = this.borderWidths.left + this.padding.left
             var textY = this.borderWidths.top + this.padding.top
-            var textWidth = innerW - this.padding.left - this.padding.right
-            var textHeight = innerH - this.padding.top - this.padding.bottom
+            var textWidth: Short = innerW
+            var textHeight: Short = innerH
 
             // Set clipping area for text. The clip is extended by 1
             // pixel above and below textY+fontHeight so the caret's
@@ -768,11 +828,15 @@ namespace Am.Ui
                     var sy2 = midY + halfH
                     graphics.fillRect(x1, sy1, x2, sy2)
                 } else if (onChar) {
-                    // Just the top + bottom bands; the glyph repaint
-                    // below fills the middle row with the inverted
-                    // character.
-                    graphics.fillRect(x1, y1, x2, y1)
-                    graphics.fillRect(x1, y2, x2, y2)
+                    // Fill the full caret cell with cursorPen, then
+                    // draw the glyph on top with cursorTextPen. The
+                    // earlier "two thin bands + drawString with
+                    // setBackgroundPen(cursorPen)" idiom relied on
+                    // AmigaOS's JAM2 rastport mode painting each
+                    // glyph cell's bg — SDL_ttf's TTF_RenderUTF8_Blended
+                    // is transparent-bg, so setBackgroundPen has no
+                    // effect and only the top / bottom bands showed.
+                    graphics.fillRect(x1, y1, x2, y2)
                     graphics.setBackgroundPen(this.cursorPen)
                     graphics.setForegroundPen(this.cursorTextPen)
                     graphics.drawString(cursorChar, cursorX, textY)
@@ -831,10 +895,15 @@ namespace Am.Ui
                 var char = displayText.substring(i.toUInt(), 1UI)
                 var charWidth = window.calculateStringWidth(null, char).toShort()
 
-                // Draw selection background with lines above and below (like cursor)
+                // Fill the selection background across the full glyph
+                // band — matches the cursor's y1..y2 (textY-1 to
+                // textY+fontHeight) so the highlight covers the same
+                // area a filled caret would. drawString below renders
+                // the glyph on top with an alpha surface, so we get
+                // "text over the selection rect" reading rather than
+                // just two thin bars.
                 graphics.setForegroundPen(this.selectionPen)
-                graphics.fillRect(charX, textY - 1S, charX + charWidth - 1S, textY - 1S) // Line above
-                graphics.fillRect(charX, textY + fontHeight, charX + charWidth - 1S, textY + fontHeight) // Line below
+                graphics.fillRect(charX, textY - 1S, charX + charWidth - 1S, textY + fontHeight)
 
                 // Draw character with inverted colors
                 graphics.setBackgroundPen(this.selectionPen)
@@ -855,16 +924,74 @@ namespace Am.Ui
             
             if (type == MouseEventType.down && button == MouseButton.left) {
                 if (isInside) {
+                    // Detect double-click by comparing against the
+                    // previous down event's timestamp + position. Do
+                    // this BEFORE flipping focus / cursor so we can
+                    // dispatch word-select vs select-all vs plant
+                    // caret from the same downstream decision tree.
+                    var now: Long = Date.now().getValue().toLong()
+                    var dx: Short = x - this.lastClickX
+                    var dy: Short = y - this.lastClickY
+                    if (dx < 0S) { dx = 0S - dx }
+                    if (dy < 0S) { dy = 0S - dy }
+                    var isDoubleClick: Bool = (now - this.lastClickMs) < TextField.DBLCLICK_MS
+                                              && dx < TextField.DBLCLICK_SLOP
+                                              && dy < TextField.DBLCLICK_SLOP
+                    // "Was already focused" tells us the click was NOT
+                    // a focus-in transition — we handle those two
+                    // states differently for the "click a field with
+                    // text → select all" heuristic.
+                    var wasFocused: Bool = this.isFocused()
                     this.setFocused(true)
-                    
-                    // Calculate cursor position from x coordinate
+
                     var textX = this.borderWidths.left + this.padding.left
-                    var relativeX = x - textX + this.scrollOffset // Account for scroll offset
+                    var relativeX = x - textX + this.scrollOffset
                     var clickPosition = this.getPositionFromX(relativeX)
-                    
-                    // Start potential drag selection
+
+                    // Snapshot for the NEXT click's double-click
+                    // window — done here so any early-return branch
+                    // still updates the tracker.
+                    this.lastClickMs = now
+                    this.lastClickX = x
+                    this.lastClickY = y
+
+                    if (isDoubleClick) {
+                        // Feature 2 + 3: double click on a word
+                        // selects the word; double click on empty
+                        // space (past end-of-text) selects all.
+                        var textLen: Int = this.text.length() as Int
+                        if (clickPosition >= textLen) {
+                            this.selectAll()
+                        } else {
+                            var startBefore: Int = this.selectionStart
+                            var endBefore:   Int = this.selectionEnd
+                            this.selectWordAt(clickPosition)
+                            var startAfter: Int = this.selectionStart
+                            var endAfter:   Int = this.selectionEnd
+                            // If selectWordAt didn't move the selection
+                            // (click landed between two non-word chars),
+                            // fall back to select-all.
+                            if (startAfter == startBefore && endAfter == endBefore) {
+                                this.selectAll()
+                            }
+                        }
+                        this.isDragging = false
+                        return true
+                    }
+
+                    // Feature 1: first click into a TextField that
+                    // already has text selects all. Subsequent clicks
+                    // in the same (already-focused) field position
+                    // the caret as usual.
+                    if (!wasFocused && this.text.length() > 0UI) {
+                        this.selectAll()
+                        this.isDragging = false
+                        return true
+                    }
+
+                    // Regular caret-plant + start drag.
                     this.isDragging = true
-                    this.dragStartPosition = clickPosition  // Remember where we started
+                    this.dragStartPosition = clickPosition
                     this.setCursorPosition(clickPosition)
                     this.clearSelection()
                     return true
@@ -1017,6 +1144,12 @@ namespace Am.Ui
                         this.copySelectedText()
                     }
                     return true
+                } else if (keyChar == 24US) { // Ctrl+X (Cut)
+                    if (this.hasSelection() && !this.readOnly) {
+                        this.copySelectedText()
+                        this.insertText("")
+                    }
+                    return true
                 } else if (keyChar == 22US) { // Ctrl+V (Paste)
                     this.pasteText()
                     return true
@@ -1060,6 +1193,60 @@ namespace Am.Ui
                     return true
                 }
             }
+            return false
+        }
+
+        // -------- Editable interface --------
+        //
+        // Menu-driven Copy / Cut / Paste / Select-All surface for the
+        // IDE Edit menu. Actions delegate to the existing key-handler
+        // helpers so the Ctrl-shortcut path and the menu path stay
+        // bit-identical. Select-Mode isn't a TextField concept (arrow
+        // keys already stretch the selection when Shift is held), so
+        // canToggleSelectMode returns false.
+        override fun canCopy(): Bool {
+            return true
+        }
+        override fun canCut(): Bool {
+            return !this.readOnly
+        }
+        override fun canPaste(): Bool {
+            return !this.readOnly
+        }
+        override fun canSelectAll(): Bool {
+            return true
+        }
+        override fun canToggleSelectMode(): Bool {
+            return false
+        }
+        override fun editCopy(): Bool {
+            if (this.hasSelection()) {
+                this.copySelectedText()
+            }
+            return true
+        }
+        override fun editCut(): Bool {
+            if (this.readOnly) {
+                return true
+            }
+            if (this.hasSelection()) {
+                this.copySelectedText()
+                this.insertText("")
+            }
+            return true
+        }
+        override fun editPaste(): Bool {
+            if (this.readOnly) {
+                return true
+            }
+            this.pasteText()
+            return true
+        }
+        override fun editSelectAll(): Bool {
+            this.selectAll()
+            return true
+        }
+        override fun editToggleSelectMode(): Bool {
             return false
         }
     }

@@ -362,8 +362,18 @@ namespace Am.Ui
             // layer dirty cascade. The flagged children re-paint inside
             // the sub-rect, but children outside get cleared and never
             // repainted → blank rows / missing content.
+            //
+            // BUT: when scroll (or any owner-driven change) fired
+            // requestRepaintTree, b2 is set and the intent is "redraw
+            // the whole viewport at the new offset" — every child moved,
+            // every pixel matters. Any stale dirty rect that survived
+            // from a prior cross-layer cascade would narrow the fill to
+            // a strip and leak the previous frame's row pixels into the
+            // gaps between (transparent) rows. So the narrowing only
+            // fires for pure descendant-driven partial invalidations
+            // (b1 == b2 == false, hasDirtyRects() == true).
             var paintClipRect: ClipRect = viewClipRect
-            if (!b1 && this.hasDirtyRects()) {
+            if (!b1 && !b2 && this.hasDirtyRects()) {
                 var union = this.dirtyRectUnion()
                 paintClipRect = viewClipRect.createInnerClipRect(union.x, union.y, union.width, union.height)
             }
@@ -403,13 +413,21 @@ namespace Am.Ui
                 viewClipRect = currentClip.createInnerClipRect(this.x, this.y, vpW.toUShort(), vpH.toUShort())
                 graphics.pushClipRect(viewClipRect)
 
-                this.child.applyScrollOffset(0S - this.scrollY)
+                // Shift the direct child's y (single write) instead of
+                // iterating grandchildren via applyScrollOffset. This
+                // works for any child type — BitMapView, Label, Panel,
+                // VStack — not just ViewGroups (View's base
+                // applyScrollOffset is a no-op). Same "apply → paint
+                // → restore" shape as before; the shift is transient
+                // so layout code that reads `child.y` between paints
+                // still sees the layout position.
+                this.child.y = this.child.y - this.scrollY
 
                 graphics.translate(this.x, this.y)
                 this.child.paintAll(graphics)
                 graphics.translate(0S - this.x, 0S - this.y)
 
-                this.child.applyScrollOffset(this.scrollY)
+                this.child.y = this.child.y + this.scrollY
 
                 graphics.popClipRect()
             }

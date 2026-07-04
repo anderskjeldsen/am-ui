@@ -1,0 +1,15 @@
+namespace Am.Ui
+{
+    // Simple 2D integer point in world coordinates. Used by
+    // Graphics.getAbsoluteCoord to return a translated
+    // (child-local → world) position that clip-rect callers can
+    // compose against without having to invoke the running
+    // translate directly.
+    struct Point2D
+    {
+        import Am.Lang
+
+        var x: Short
+        var y: Short
+    }
+}

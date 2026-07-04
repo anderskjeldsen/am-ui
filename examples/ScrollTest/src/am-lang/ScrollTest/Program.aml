@@ -1,0 +1,70 @@
+namespace ScrollTest
+{
+    // Minimum reproducer for the "top row stays pinned" scroll bug —
+    // one window, one ScrollView, one VStack, 100 Panels each
+    // wrapping a Label. Nothing else. If Panels visibly scroll with
+    // the wheel/drag, applyScrollOffset works and the bug lives
+    // in a higher layer. If Panels stay pinned while the scrollbar
+    // moves, applyScrollOffset's writes on Panel.y never reach
+    // Panel.paint's reads.
+    class Program {
+        import Am.Lang
+        import Am.Ui
+
+        static fun main(args: String[]) {
+            var window = Window.openWindow(80S, 80S, 320US, 480US, null, null)
+            window.setTitle("ScrollView test — 100 panels")
+            // Font is required for Label.paint to actually draw
+            // anything on the Mac/Linux SDL backend — without it
+            // drawString gets a null current_font and no-ops.
+            window.font = new Font("topaz.font", 8UB)
+
+            var sv = new ScrollView()
+            sv.growX = 1UB
+            sv.growY = 1UB
+            // Default Mac SDL palette is all mid-grey for pen
+            // indices < 32; anything ≥ 32 falls through to
+            // 0xFFFFFFFF (white) in setForegroundPen. Push thumb
+            // to the out-of-bounds-white fallback so it's visible
+            // against the grey track. Track stays grey (pen 0).
+            sv.scrollbarThumbPen = 255UB
+            sv.scrollbarThumbHoverPen = 255UB
+
+            var stack = new VStack(0S)
+            stack.growX = 1UB
+            stack.growY = 0UB
+
+            var i: Int = 1
+            while (i <= 100) {
+                var lbl = new Label("Label " + i.toString())
+                // See scrollbarThumbPen comment above — 255 hits the
+                // out-of-palette white fallback in the Mac SDL
+                // setForegroundPen path so labels read against the
+                // grey Panel bg.
+                lbl.textPen = 255UB
+                lbl.growX = 1UB
+                lbl.growY = 0UB
+
+                var pnl = new Panel()
+                pnl.drawBorder = false
+                pnl.setPadding(5S)
+                pnl.growX = 1UB
+                pnl.growY = 0UB
+                pnl.setChild(lbl)
+
+                stack.addChild(pnl)
+                i = i + 1
+            }
+
+            sv.setChild(stack)
+
+            window.setRootView(sv)
+            window.layout()
+            window.requestRepaint()
+
+            while (window.isOpen()) {
+                window.handleInput()
+            }
+        }
+    }
+}

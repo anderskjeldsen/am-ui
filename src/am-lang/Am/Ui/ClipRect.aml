@@ -1,60 +1,113 @@
 namespace Am.Ui
 {
+    // Two-role clip rectangle: carries BOTH a "logical" origin
+    // (un-clamped, the requested position, used when descendants
+    // compose their own inner clips) AND an "effective" origin
+    // (clamped to the parent, used to set the SDL scissor and
+    // for callers asking "what pixels are actually visible").
+    //
+    // Why two? Because DRAW composition (running graphics translate)
+    // is un-clamped — a ScrollView shifts children into a viewport-
+    // relative negative Y and their draws land at the shifted world
+    // position via translate. CLIP composition, if it clamps at every
+    // intermediate level, permanently loses that shift for anything
+    // deeper: grandchildren compose their clips off the CLAMPED
+    // parent, so their clips land at world coords that DON'T match
+    // where their draws land. Split the roles: logical composes
+    // freely (matches translate), effective clamps for scissor.
+    //
+    // Backwards compatibility: `x, y, width, height` remain the
+    // effective (clamped) rect — every existing caller reading these
+    // for SDL scissor / dirty-rect bounds / hit-testing keeps working
+    // unchanged. The new `logicalX, logicalY, logicalWidth,
+    // logicalHeight` fields are only consumed inside
+    // createInnerClipRect's composition step.
     struct ClipRect
     {
         import Am.Lang
 
+        // Effective (clamped-to-parent) rect. What SDL scissors to.
+        // What callers see when they read the ClipRect fields.
         var x: Short
         var y: Short
         var width: UShort
         var height: UShort
 
-        // Create a new ClipRect that is constrained within this ClipRect's bounds
+        // Logical (un-clamped) rect. What descendants compose their
+        // own inner clips against. Matches the graphics translate
+        // state at the level this clip was pushed. May extend beyond
+        // the effective rect (top-shifted by a ScrollView, for
+        // example) — that's intentional and correct: the effective
+        // still enforces the actual visible pixels.
+        var logicalX: Short
+        var logicalY: Short
+        var logicalWidth: UShort
+        var logicalHeight: UShort
+
+        // Create a new ClipRect nested inside this one.
+        //
+        //   - The NEW clip's LOGICAL origin composes off this clip's
+        //     LOGICAL origin: `newLogical = thisLogical + (x, y)`.
+        //     Shifts propagate down the tree the same way graphics
+        //     translate propagates.
+        //   - The NEW clip's EFFECTIVE rect is the intersection of
+        //     its logical rect with this clip's EFFECTIVE rect.
+        //     Guarantees the effective is always inside the parent's
+        //     effective (scissor invariant), regardless of how far
+        //     the logical extends.
         fun createInnerClipRect(x: Short, y: Short, width: UShort, height: UShort): ClipRect {
-            // Calculate absolute coordinates of the requested rectangle
-            var absoluteX = this.x + x
-            var absoluteY = this.y + y
+            // Logical: no clamping, just addition. Descendants
+            // composing off this see the shift preserved.
+            var newLogicalX: Short  = this.logicalX + x
+            var newLogicalY: Short  = this.logicalY + y
+            var newLogicalW: UShort = width
+            var newLogicalH: UShort = height
 
-            // Calculate bounds of this ClipRect
-            var thisMaxX = this.x + this.width.toShort()
-            var thisMaxY = this.y + this.height.toShort()
-            var requestedMaxX = absoluteX + width.toShort()
-            var requestedMaxY = absoluteY + height.toShort()
+            // Effective: intersect the new LOGICAL rect with the
+            // parent's EFFECTIVE rect. This is what SDL will
+            // scissor to — visible pixels only.
+            var absoluteX = newLogicalX
+            var absoluteY = newLogicalY
+            var thisMaxX  = this.x + this.width.toShort()
+            var thisMaxY  = this.y + this.height.toShort()
+            var reqMaxX   = absoluteX + newLogicalW.toShort()
+            var reqMaxY   = absoluteY + newLogicalH.toShort()
 
-            // Find intersection bounds
             var intersectX1 = absoluteX
             if (intersectX1 < this.x) {
                 intersectX1 = this.x
             }
-
             var intersectY1 = absoluteY
             if (intersectY1 < this.y) {
                 intersectY1 = this.y
             }
-
-            var intersectX2 = requestedMaxX
+            var intersectX2 = reqMaxX
             if (intersectX2 > thisMaxX) {
                 intersectX2 = thisMaxX
             }
-
-            var intersectY2 = requestedMaxY
+            var intersectY2 = reqMaxY
             if (intersectY2 > thisMaxY) {
                 intersectY2 = thisMaxY
             }
-
-            // Calculate final dimensions
-            var finalWidth = intersectX2 - intersectX1
-            var finalHeight = intersectY2 - intersectY1
-
-            // Ensure positive dimensions
-            if (finalWidth < 0S) {
-                finalWidth = 0S
+            var finalW: Short = intersectX2 - intersectX1
+            var finalH: Short = intersectY2 - intersectY1
+            if (finalW < 0S) {
+                finalW = 0S
             }
-            if (finalHeight < 0S) {
-                finalHeight = 0S
+            if (finalH < 0S) {
+                finalH = 0S
             }
 
-            return { x: intersectX1, y: intersectY1, width: finalWidth.toUShort(), height: finalHeight.toUShort() }
+            return {
+                x: intersectX1,
+                y: intersectY1,
+                width:  finalW.toUShort(),
+                height: finalH.toUShort(),
+                logicalX: newLogicalX,
+                logicalY: newLogicalY,
+                logicalWidth:  newLogicalW,
+                logicalHeight: newLogicalH
+            }
         }
     }
 }
