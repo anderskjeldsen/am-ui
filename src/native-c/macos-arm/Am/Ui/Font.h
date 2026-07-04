@@ -18,8 +18,17 @@
 typedef struct _Am_Ui_Font_data Am_Ui_Font_data;
 struct _Am_Ui_Font_data {
     void *ttf_font;          // TTF_Font *
-    int   height;            // in pixels
+    int   height;            // TTF_FontHeight: max glyph extent (no
+                             // descender room beyond baseline). Kept
+                             // for callers that already depended on
+                             // it, but NOT what Window.getCurrentFontSize
+                             // reports — that returns line_skip instead.
     int   ascent;
+    int   line_skip;         // TTF_FontLineSkip: recommended per-line
+                             // vertical stride. Includes descender +
+                             // leading room, so a widget sized to
+                             // line_skip fits the whole render surface
+                             // TTF_RenderUTF8_Blended produces.
 };
 
 // Look up a system fallback font path. Tries a handful of well-known

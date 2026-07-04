@@ -259,6 +259,7 @@ namespace Am.Ui
             // last (matching the contentH reservation in minHeight).
             var stride = this.fontHeight() + this.lineSpacing
             var y = this.margin.top + this.borderWidths.top + this.padding.top + (this.lineSpacing / 2S)
+
             var i = 0
             while (i < this.cachedLines.getSize()) {
                 graphics.drawString(this.cachedLines.get(i), textX, y)

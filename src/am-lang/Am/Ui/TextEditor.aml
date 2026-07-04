@@ -33,7 +33,7 @@ namespace Am.Ui
     // Limitations: no scrollback past the editor's height (content past
     // the bottom is just clipped), no focus system. Left-click moves the
     // cursor to the character cell under the pointer.
-    class TextEditor() : View {
+    class TextEditor() : View, Editable {
         import Am.Lang
         import Am.Collections
 
@@ -153,6 +153,30 @@ namespace Am.Ui
             this.selAnchorLine = -1
             this.selAnchorCol = -1
             this.selDragging = false
+        }
+
+        // Select the entire buffer: anchor at (0, 0), cursor at the
+        // end of the last line. No-op on an empty buffer. Called
+        // by Ctrl+A and by the IDE chrome's Edit → Select All.
+        fun selectAll() {
+            var n: Int = this.lines.getSize()
+            if (n == 0) {
+                return
+            }
+            var lastLine: String = this.lines.get(n - 1)
+            var lastCol: Int = lastLine.length() as Int
+            this.selAnchorLine = 0
+            this.selAnchorCol  = 0
+            this.cursorLine = n - 1
+            this.cursorCol  = lastCol
+            this.selMode = 1
+            this.selDragging = false
+            // Full repaint — plain requestRepaint marks only the row
+            // the cursor moved TO as dirty, so lines above the cursor
+            // never see the new selection state land on their glyphs.
+            // The arrow-key selection-extend path uses the same
+            // forceFullRepaint() call for the same reason.
+            this.forceFullRepaint()
         }
 
         // Normalised selection bounds, returning the top-left and
@@ -334,6 +358,12 @@ namespace Am.Ui
         // restores. The cap stops a long typing session from chewing
         // through Amiga RAM; the oldest entry is dropped when full.
         private var undoStack: List<UndoEntry> = new List<UndoEntry>()
+        // Companion redo stack. `undo()` pushes the pre-undo state
+        // here as it pops from undoStack; `redo()` reverses the flow.
+        // Any fresh edit clears redoStack because a new mutation
+        // invalidates the "linear" redo history — same convention as
+        // every mainstream editor.
+        private var redoStack: List<UndoEntry> = new List<UndoEntry>()
         private static const UNDO_CAP: Int = 100
 
         private static fun singleEmptyLine(): List<String> {
@@ -904,38 +934,81 @@ namespace Am.Ui
                 this.undoStack.removeAt(0)
             }
             this.undoStack.add(entry)
+            // A fresh mutation invalidates the redo history — after
+            // undo -> edit, the user can't "redo forward" into the
+            // discarded branch. Standard convention.
+            this.redoStack = new List<UndoEntry>()
         }
 
-        // Ctrl+Z. Restore the most recent snapshot if any, then drop
-        // it. Returns true if it actually undid something, false when
-        // the stack was empty (so the embedder can flash a "nothing
-        // to undo" cue if it wants). Does NOT fire the
-        // contentChangeListener — the editor's own undo isn't a
-        // user-visible "dirty" event (the buffer goes BACK to a prior
-        // state, which is the opposite of a new edit). It does fire
-        // onContentChanged so the subclass cache (HighlightedTextEditor
-        // tokens) reflects the rolled-back content.
-        fun undo(): Bool {
-            if (this.undoStack.getSize() == 0) {
-                return false
+        // Snapshot of the CURRENT buffer + cursor + scroll for use
+        // by undo() / redo(). Shared factory so both directions push
+        // identical shapes onto their respective stacks.
+        private fun snapshotCurrent(): UndoEntry {
+            var snap = new List<String>()
+            var i = 0
+            while (i < this.lines.getSize()) {
+                snap.add(this.lines.get(i))
+                i = i + 1
             }
-            var top = this.undoStack.removeAt(this.undoStack.getSize() - 1)
-            this.lines = top.lines
-            this.cursorLine = top.cursorLine
-            this.cursorCol = top.cursorCol
-            this.scrollLine = top.scrollLine
+            var entry = new UndoEntry()
+            entry.lines = snap
+            entry.cursorLine = this.cursorLine
+            entry.cursorCol = this.cursorCol
+            entry.scrollLine = this.scrollLine
+            return entry
+        }
+
+        // Restore an UndoEntry's contents into the current editor
+        // state. Shared restore path for undo() and redo() so they
+        // stay in sync on every state field the entry snapshots.
+        private fun applyEntry(entry: UndoEntry) {
+            this.lines = entry.lines
+            this.cursorLine = entry.cursorLine
+            this.cursorCol = entry.cursorCol
+            this.scrollLine = entry.scrollLine
             this.clampCursorCol()
             this.forceFullRepaint()
             this.requestRepaint()
             this.onContentChanged()
             this.fireCursorChanged()
-            // Embedder usually wants to mark the tab dirty too — undo
-            // can take the buffer from "saved" to "modified" or back
-            // again, both of which the IDE wants to reflect.
             var cb = this.contentChangeListener
             if (cb != null) {
                 cb()
             }
+        }
+
+        // Ctrl+Z. Restore the most recent undo snapshot if any, then
+        // push the CURRENT state onto the redoStack so a subsequent
+        // Ctrl+Shift+Z can walk forward. Returns true iff the stack
+        // had something to pop.
+        fun undo(): Bool {
+            if (this.undoStack.getSize() == 0) {
+                return false
+            }
+            var current = this.snapshotCurrent()
+            this.redoStack.add(current)
+            var top = this.undoStack.removeAt(this.undoStack.getSize() - 1)
+            this.applyEntry(top)
+            return true
+        }
+
+        // Ctrl+Shift+Z. Pop the most recent redo snapshot back into
+        // the editor and push the CURRENT (pre-redo) state onto the
+        // undoStack so Ctrl+Z still undoes the redo. Returns true iff
+        // there was actually a redo entry available. Every new edit
+        // path (through pushUndo) clears redoStack, so redo can only
+        // walk contiguous with the current undo history.
+        fun redo(): Bool {
+            if (this.redoStack.getSize() == 0) {
+                return false
+            }
+            var current = this.snapshotCurrent()
+            if (this.undoStack.getSize() >= TextEditor.UNDO_CAP) {
+                this.undoStack.removeAt(0)
+            }
+            this.undoStack.add(current)
+            var top = this.redoStack.removeAt(this.redoStack.getSize() - 1)
+            this.applyEntry(top)
             return true
         }
 
@@ -944,6 +1017,7 @@ namespace Am.Ui
         // previous buffer.
         private fun clearUndo() {
             this.undoStack = new List<UndoEntry>()
+            this.redoStack = new List<UndoEntry>()
         }
 
         private fun insertChar(c: UShort) {
@@ -1668,7 +1742,14 @@ namespace Am.Ui
             var absY = graphics.getTranslateY()
 
             off.translate(absX, absY)
-            var clip: ClipRect = { x: absX, y: absY, width: this.width, height: this.height }
+            // Set logical == effective at construction — this clip
+            // is built from absolute translate coords, so there's
+            // no shift to preserve at the origin.
+            var clip: ClipRect = {
+                x: absX, y: absY, width: this.width, height: this.height,
+                logicalX: absX, logicalY: absY,
+                logicalWidth: this.width, logicalHeight: this.height
+            }
             off.pushClipRect(clip)
 
             this.renderContent(off)
@@ -2096,6 +2177,26 @@ namespace Am.Ui
                 this.moveCursorDown()
                 return true
             }
+            // Backspace with an active selection DELETES the selection
+            // rather than just dropping it. Handled here — above the
+            // generic isEditOp clear-selection block below — because
+            // that block would otherwise wipe selAnchor before we ever
+            // read the selection range. Pushes one undo entry so Ctrl+Z
+            // restores the selection AND its text in a single step.
+            if (keyChar == 8US && this.hasSelection()) {
+                this.pushUndo()
+                this.deleteSelection()
+                return true
+            }
+            // Ctrl+X — cut (copy + delete selection, or cut current
+            // line as fallback). Sits above the isEditOp clear because
+            // its selection-delete path needs the range intact; keyChar
+            // 24 isn't in isEditOp anyway (out of the printable range),
+            // so no functional overlap.
+            if (keyChar == 24US) {
+                this.cutSelectionOrLine()
+                return true
+            }
             // Edit ops clear any active selection before the edit
             // (typing replaces selection vs. deleting it is a future
             // feature; today we just drop it and apply the edit at
@@ -2129,13 +2230,23 @@ namespace Am.Ui
                 this.pasteAtCursor()
                 return true
             }
-            // Ctrl+Z — undo the most recent edit. Per-editor history
-            // (each TextEditor instance has its own undoStack), so
-            // tabs don't share state. Falls through and is consumed
-            // even when the stack was empty so a missing-handler
-            // fallback doesn't insert 0x1A literally.
+            // Ctrl+Z — undo the most recent edit; Ctrl+Shift+Z — redo.
+            // Per-editor history (each TextEditor instance has its own
+            // undoStack / redoStack), so tabs don't share state. Falls
+            // through and is consumed even when the stack was empty so
+            // a missing-handler fallback doesn't insert 0x1A literally.
+            //
+            // The Shift bit rides on `keyCode` for Ctrl+letter combos:
+            // 1 means Shift was held, 0 means Ctrl only — see the
+            // amiga_code encoding in macos-arm/Am/Ui/Window.c. Older
+            // Ctrl-only handlers only look at keyChar and remain
+            // undisturbed.
             if (keyChar == 26US) {
-                this.undo()
+                if (keyCode == 1US) {
+                    this.redo()
+                } else {
+                    this.undo()
+                }
                 return true
             }
             // Ctrl+/ — toggle line comment on the cursor's line.
@@ -2180,6 +2291,15 @@ namespace Am.Ui
                 if (sl != null) {
                     return sl()
                 }
+            }
+            // Ctrl+A — select entire buffer. Only fires from a plain
+            // Ctrl+A press, NOT from the arrow-key-with-Shift path
+            // (those come with keyCode = 76/77/78/79 alongside the
+            // keyChar==1 signal, filtered by the earlier arrow blocks
+            // above so control doesn't fall through to here).
+            if (keyChar == 1US) {
+                this.selectAll()
+                return true
             }
             if (keyChar == 13US || keyChar == 10US) {
                 this.insertNewLine()
@@ -2276,6 +2396,132 @@ namespace Am.Ui
                 sb.add(endLine.substring(0UI, endCol.toUInt()))
             }
             return sb.toString()
+        }
+
+        // Remove the current selection from the buffer, leaving the
+        // cursor at the (former) selection start. No-op if there's no
+        // active selection. Caller is responsible for pushUndo() BEFORE
+        // this runs so cut / selection-backspace remain single-step
+        // undoable.
+        //
+        // The mechanics mirror pasteAtCursor's splice logic inverted:
+        // single-line selections shorten one row; multi-line selections
+        // fuse the start row's prefix with the end row's suffix into
+        // one row, then drop everything strictly between.
+        fun deleteSelection() {
+            if (!this.hasSelection()) {
+                return
+            }
+            var sStart = this.selStartLine()
+            var sEnd = this.selEndLine()
+            var startCol = this.selStartCol()
+            var endCol = this.selEndCol()
+            if (startCol < 0) { startCol = 0 }
+            if (sStart == sEnd) {
+                var line = this.lines.get(sStart)
+                if (endCol > line.length()) { endCol = line.length() }
+                var before = ""
+                var after = ""
+                if (startCol > 0) {
+                    before = line.substring(0UI, startCol.toUInt())
+                }
+                if (endCol < line.length()) {
+                    after = line.substringToEnd(endCol.toUInt())
+                }
+                this.lines.set(sStart, before + after)
+            } else {
+                var startLine = this.lines.get(sStart)
+                var endLine = this.lines.get(sEnd)
+                if (endCol > endLine.length()) { endCol = endLine.length() }
+                var before = ""
+                var after = ""
+                if (startCol > 0) {
+                    before = startLine.substring(0UI, startCol.toUInt())
+                }
+                if (endCol < endLine.length()) {
+                    after = endLine.substringToEnd(endCol.toUInt())
+                }
+                this.lines.set(sStart, before + after)
+                // Drop rows (sStart+1) .. sEnd inclusive. Delete
+                // repeatedly at the same index — each removeAt shifts
+                // successors down by one, so the "next" row keeps
+                // arriving at sStart+1.
+                var toRemove = sEnd - sStart
+                var ri = 0
+                while (ri < toRemove) {
+                    this.lines.removeAt(sStart + 1)
+                    ri = ri + 1
+                }
+            }
+            this.cursorLine = sStart
+            this.cursorCol = startCol
+            this.selMode = 0
+            this.clearSelection()
+            // Line count may have changed by an arbitrary amount and
+            // rows below the deletion shifted up; a partial dirty range
+            // can't express that in one frame.
+            this.forceFullRepaint()
+            if (this.ensureCursorVisible()) {
+                this.forceFullRepaint()
+            }
+            this.requestRepaint()
+            this.fireContentChanged()
+            this.fireCursorChanged()
+            this.onContentChanged()
+        }
+
+        // Ctrl+X — copy the active selection to the clipboard, then
+        // delete it. With no selection, falls back to cutting the
+        // current line (matches copyCurrentLine's line-level fallback
+        // and mirrors VS Code / JetBrains behaviour). Pushes a single
+        // undo entry so Ctrl+Z restores the buffer AND the cursor.
+        private fun cutSelectionOrLine() {
+            var vc = this.getViewContext()
+            if (vc == null) {
+                return
+            }
+            var w = vc.getWindow()
+            if (w == null) {
+                return
+            }
+            if (this.hasSelection()) {
+                var payload = this.getSelectedText()
+                w.copyToClipboard(payload)
+                this.pushUndo()
+                this.deleteSelection()
+                return
+            }
+            // No selection: cut the current line. Removes the row
+            // entirely (empties the buffer to a single blank line when
+            // the last line is cut, since the model requires at least
+            // one row).
+            var lineText = this.currentLine()
+            var payload = lineText + "\n"
+            w.copyToClipboard(payload)
+            this.pushUndo()
+            var lineCount = this.lines.getSize()
+            if (lineCount <= 1) {
+                this.lines.set(0, "")
+                this.cursorLine = 0
+                this.cursorCol = 0
+            } else {
+                this.lines.removeAt(this.cursorLine)
+                if (this.cursorLine >= this.lines.getSize()) {
+                    this.cursorLine = this.lines.getSize() - 1
+                }
+                var newLine = this.lines.get(this.cursorLine)
+                if (this.cursorCol > newLine.length()) {
+                    this.cursorCol = newLine.length()
+                }
+            }
+            this.forceFullRepaint()
+            if (this.ensureCursorVisible()) {
+                this.forceFullRepaint()
+            }
+            this.requestRepaint()
+            this.fireContentChanged()
+            this.fireCursorChanged()
+            this.onContentChanged()
         }
 
         // Paste the system clipboard's contents at the cursor.
@@ -2375,6 +2621,85 @@ namespace Am.Ui
             this.fireContentChanged()
             this.fireCursorChanged()
             this.onContentChanged()
+        }
+
+        // -------- Editable interface --------
+        //
+        // Menu-driven Copy / Cut / Paste / Select-All / Toggle-Select-
+        // Mode surface for the IDE Edit menu. All actions delegate to
+        // the existing private helpers (copyCurrentLine wraps "copy
+        // selection or fall back to current line", cutSelectionOrLine
+        // mirrors the same fallback for cut) so the menu path and the
+        // Ctrl-shortcut path stay bit-identical.
+        //
+        // Every `can*` returns `true` so the items don't grey out
+        // mid-edit — the underlying actions all handle "nothing to
+        // do" gracefully (copy on an empty line = empty clipboard,
+        // paste with empty clipboard = no-op, etc.), and grey-out
+        // would flip on every selection / clipboard change and
+        // require a much heavier notification pipeline.
+        override fun canCopy(): Bool {
+            return true
+        }
+        override fun canCut(): Bool {
+            return true
+        }
+        override fun canPaste(): Bool {
+            return true
+        }
+        override fun canSelectAll(): Bool {
+            return true
+        }
+        override fun canToggleSelectMode(): Bool {
+            return true
+        }
+        override fun editCopy(): Bool {
+            this.copyCurrentLine()
+            return true
+        }
+        override fun editCut(): Bool {
+            this.cutSelectionOrLine()
+            return true
+        }
+        override fun editPaste(): Bool {
+            this.pasteAtCursor()
+            return true
+        }
+        override fun editSelectAll(): Bool {
+            this.selectAll()
+            return true
+        }
+        override fun editToggleSelectMode(): Bool {
+            // Same toggle path Ctrl+B uses in onKeyboardEvent: first
+            // press plants the anchor at the caret; second press
+            // clears it. Kept in one place there — this just wraps
+            // the same state flip so the menu item shows the same
+            // behaviour as the shortcut.
+            if (this.selMode == 0) {
+                this.selMode = 1
+                this.selAnchorLine = this.cursorLine
+                this.selAnchorCol = this.cursorCol
+            } else {
+                this.selMode = 0
+                this.clearSelection()
+            }
+            this.forceFullRepaint()
+            this.requestRepaint()
+            return true
+        }
+        override fun canUndo(): Bool {
+            return true
+        }
+        override fun canRedo(): Bool {
+            return true
+        }
+        override fun editUndo(): Bool {
+            this.undo()
+            return true
+        }
+        override fun editRedo(): Bool {
+            this.redo()
+            return true
         }
     }
 }

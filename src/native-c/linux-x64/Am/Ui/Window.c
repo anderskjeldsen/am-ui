@@ -201,7 +201,7 @@ static gboolean gtk_on_key(GtkWidget *w, GdkEventKey *e, gpointer user) {
         case GDK_KEY_Right:     amiga_code = 78; amiga_char = shift ? 1 : 0; break;
         case GDK_KEY_Up:        amiga_code = 76; amiga_char = shift ? 1 : 0; break;
         case GDK_KEY_Down:      amiga_code = 77; amiga_char = shift ? 1 : 0; break;
-        case GDK_KEY_Tab:       amiga_code = 66; amiga_char = 9;   break;
+        case GDK_KEY_Tab:       amiga_code = 66; amiga_char = shift ? 0 : 9;   break;
         case GDK_KEY_Return:
         case GDK_KEY_KP_Enter:  amiga_code = 68; amiga_char = 13;  break;
         case GDK_KEY_Escape:    amiga_code = 69; amiga_char = 27;  break;
@@ -1349,7 +1349,7 @@ function_result Am_Ui_Window_handleInput_0(aobject *const this)
                 case SDLK_RIGHT:     amiga_code = 78; amiga_char = shift ? 1 : 0; break;
                 case SDLK_UP:        amiga_code = 76; amiga_char = shift ? 1 : 0; break;
                 case SDLK_DOWN:      amiga_code = 77; amiga_char = shift ? 1 : 0; break;
-                case SDLK_TAB:       amiga_code = 66; amiga_char = 9;   break;
+                case SDLK_TAB:       amiga_code = 66; amiga_char = shift ? 0 : 9;   break;
                 case SDLK_RETURN:    amiga_code = 68; amiga_char = 13;  break;
                 case SDLK_KP_ENTER:  amiga_code = 68; amiga_char = 13;  break;
                 case SDLK_ESCAPE:    amiga_code = 69; amiga_char = 27;  break;

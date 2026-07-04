@@ -218,6 +218,7 @@ function_result Am_Ui_Window_open_0(aobject *const this,
     data->pending_refresh = true;    // ask for an initial full paint
     data->pending_resize  = false;
     data->installed_menu_strip = NULL;
+    data->installed_menu_strip_version = 0;
 
     // Tell the AmLang side how much of the Window the WM consumed for
     // chrome. The Cocoa menu bar lives at the top of the *screen*, not
@@ -632,9 +633,16 @@ function_result Am_Ui_Window_handleInput_0(aobject *const this)
     // strip means "no menus", which is exactly what the splash window
     // wants — the bridge clears NSApp.mainMenu in that case.
     aobject *current_strip = this->object_properties.class_object_properties.properties[Am_Ui_Window_P_menuStrip].nullable_value.value.object_value;
-    if ((void *) current_strip != data->installed_menu_strip) {
+    int current_strip_version = (int) this->object_properties.class_object_properties.properties[Am_Ui_Window_P_menuStripVersion].nullable_value.value.int_value;
+    // Rebuild when EITHER the strip pointer changed OR the version
+    // counter ticked — pointer-only dedupe missed "same strip whose
+    // items got their enabled flags flipped" (e.g. the IDE's Edit
+    // menu reacting to a focus change).
+    if ((void *) current_strip != data->installed_menu_strip
+        || current_strip_version != data->installed_menu_strip_version) {
         am_ui_macos_arm_install_menu_strip(current_strip);
         data->installed_menu_strip = (void *) current_strip;
+        data->installed_menu_strip_version = current_strip_version;
     }
 
     SDL_Event ev;
@@ -760,7 +768,13 @@ function_result Am_Ui_Window_handleInput_0(aobject *const this)
                 case SDLK_RIGHT:     amiga_code = 78; amiga_char = shift ? 1 : 0; break;
                 case SDLK_UP:        amiga_code = 76; amiga_char = shift ? 1 : 0; break;
                 case SDLK_DOWN:      amiga_code = 77; amiga_char = shift ? 1 : 0; break;
-                case SDLK_TAB:       amiga_code = 66; amiga_char = 9;   break;
+                // Tab: plain Tab sends keyChar=9 (ASCII TAB). Shift+Tab
+                // sends keyChar=0 with the same keyCode=66 so the AmLang
+                // Window.onKeyboardEvent can distinguish and dispatch to
+                // focusPrev(). Consumers that only care about "Tab was
+                // pressed" (e.g. TextField submit on Tab) still match
+                // keyChar==9 for plain Tab and ignore the reverse-nav case.
+                case SDLK_TAB:       amiga_code = 66; amiga_char = shift ? 0 : 9;   break;
                 case SDLK_RETURN:    amiga_code = 68; amiga_char = 13;  break;
                 case SDLK_KP_ENTER:  amiga_code = 68; amiga_char = 13;  break;
                 case SDLK_ESCAPE:    amiga_code = 69; amiga_char = 27;  break;
@@ -770,7 +784,13 @@ function_result Am_Ui_Window_handleInput_0(aobject *const this)
                     // so the Shift / IME-applied character makes it through;
                     // dispatching here too would double-fire.
                     if (ctrl && sym >= SDLK_a && sym <= SDLK_z) {
-                        amiga_code = (int) sym;
+                        // amiga_code is repurposed as the Shift marker
+                        // for Ctrl+letter combos: 1 when Shift was held,
+                        // 0 otherwise. Callers that care (e.g. the
+                        // TextEditor's Ctrl+Shift+Z redo path) branch
+                        // on it; the older Ctrl-only handlers only look
+                        // at amiga_char and ignore this field.
+                        amiga_code = shift ? 1 : 0;
                         amiga_char = (int) (sym - SDLK_a + 1);
                     }
                     break;
