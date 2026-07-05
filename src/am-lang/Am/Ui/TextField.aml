@@ -641,6 +641,23 @@ namespace Am.Ui
             var textY = this.borderWidths.top + this.padding.top
             var textWidth: Short = innerW
             var textHeight: Short = innerH
+            // Vertically centre the text row inside the inner content
+            // area. Without this, a field laid out taller than a font
+            // row (chat inputs sized to a comfortable click target,
+            // form fields with extra padding, etc.) pinned the text —
+            // and therefore the cursor — to the TOP of the field,
+            // leaving a wide dead band underneath. Only shift down
+            // when there's actually spare vertical room; short fields
+            // fall through unchanged.
+            var currentFontHeightForCenter: Short = 0S
+            var vcCenter = this.getViewContext()
+            if (vcCenter != null) {
+                currentFontHeightForCenter = vcCenter.getWindow().getCurrentFontSize().toShort()
+            }
+            if (currentFontHeightForCenter > 0S && innerH > currentFontHeightForCenter) {
+                var extra = innerH - currentFontHeightForCenter
+                textY = textY + (extra / 2S)
+            }
 
             // Set clipping area for text. The clip is extended by 1
             // pixel above and below textY+fontHeight so the caret's
