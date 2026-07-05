@@ -753,11 +753,13 @@ function_result Am_Ui_Window_handleInput_0(aobject *const this)
             Uint16 mod = ev.key.keysym.mod;
             if (mod & KMOD_GUI) break;
             bool shift = (mod & KMOD_SHIFT) != 0;
-            // On macOS, Option (Alt) doubles as the Ctrl-style modifier
-            // for AmIde shortcuts (Option+C/V copy/paste, etc.). Ctrl is
-            // rare in everyday macOS muscle memory, so accept either.
-            // Cmd is owned by the Cocoa menu bar and skipped above.
-            bool ctrl  = (mod & (KMOD_CTRL | KMOD_ALT)) != 0;
+            // Only Ctrl triggers a shortcut. Option (Alt) used to be
+            // treated as a Ctrl-equivalent here, but that stole the
+            // key from text composition — Nordic layouts type `{ } [ ] |`
+            // as Option+7/8/9/0/7, and those bytes come through
+            // SDL_TEXTINPUT with KMOD_ALT set. Cmd is owned by the
+            // Cocoa menu bar and skipped above.
+            bool ctrl  = (mod & KMOD_CTRL) != 0;
 
             int amiga_code = 0;
             int amiga_char = 0;
@@ -810,12 +812,13 @@ function_result Am_Ui_Window_handleInput_0(aobject *const this)
             // truncated to their first byte for now; AmIde's text path
             // uses ASCII-range keyChar today, broader Unicode is TODO.
             Uint16 mod = SDL_GetModState();
-            // Skip text-input duplicates of modifier combos. Option is
-            // treated as a Ctrl-equivalent on macOS (see SDL_KEYDOWN
-            // branch); SDL would otherwise also deliver Option+C as the
-            // dead-key-composed character "ç" via TEXTINPUT, double-
-            // firing the shortcut into the editor.
-            if (mod & (KMOD_CTRL | KMOD_GUI | KMOD_ALT)) break;
+            // Skip text-input duplicates of true shortcut combos:
+            // Ctrl (SDL_KEYDOWN handled ctrl+letter above) and Cmd
+            // (Cocoa menu bar owns it). Option is NOT skipped — it's
+            // a legitimate text-composition modifier on non-US
+            // layouts (Option+7 → `{` on Nordic keyboards, etc.),
+            // so those bytes must pass through here.
+            if (mod & (KMOD_CTRL | KMOD_GUI)) break;
             unsigned char ch = (unsigned char) ev.text.text[0];
             if (ch >= 32 && ch <= 126) {
                 Am_Ui_Window_f_onKeyboardEvent_0(this, 1, 0, (unsigned short) ch);

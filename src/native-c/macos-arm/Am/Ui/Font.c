@@ -98,6 +98,32 @@ static const char *fallback_for_logical(const char *logical)
 
     const char *const *list = generic_mono;
     if (logical != NULL) {
+        // Direct-name hits for the specific coding faces the IDE (or
+        // theme layer) may ask for. Case-insensitive equality — no
+        // prefix match so "menlo-regular" doesn't sneak past. Each
+        // entry is a straight file path, no fallback list, so a
+        // "Menlo" request lands on Menlo and doesn't degrade to SF
+        // Mono when Menlo is missing (rare on stock macOS). If the
+        // file is absent the loop below falls back to generic_mono.
+        static const struct { const char *name; const char *path; } named[] = {
+            { "menlo",             "/System/Library/Fonts/Menlo.ttc" },
+            { "monaco",            "/System/Library/Fonts/Monaco.ttf" },
+            { "courier",           "/System/Library/Fonts/Courier.ttc" },
+            { "sf mono",           "/System/Library/Fonts/SFNSMono.ttf" },
+            { "sfmono",            "/System/Library/Fonts/SFNSMono.ttf" },
+            { "andale mono",       "/System/Library/Fonts/Supplemental/Andale Mono.ttf" },
+            { "courier new",       "/System/Library/Fonts/Supplemental/Courier New.ttf" },
+            { "dejavu sans mono",  "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf" },
+            { "liberation mono",   "/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf" },
+            { "inconsolata",       "/usr/share/fonts/inconsolata/Inconsolata-Regular.ttf" },
+            { NULL, NULL },
+        };
+        for (int i = 0; named[i].name != NULL; i++) {
+            if (strcasecmp(logical, named[i].name) == 0) {
+                if (file_exists(named[i].path)) return named[i].path;
+                break;
+            }
+        }
         // Case-insensitive prefix match on the family. Anything that
         // doesn't list as a sans family lands on the mono list because
         // that's what the IDE expects for code views (and topaz reads

@@ -534,7 +534,18 @@ void handle_message(aobject * this, struct IntuiMessage * msg) {
 						// We got a printable character
 						ascii_char = key_buffer[0];
 //						printf("onKey, key press: raw code %d -> ASCII '%c' (%d)\n", msg->Code, ascii_char, ascii_char);
-						Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, ascii_char);
+						// For Ctrl+letter combos (ASCII 1..26), overload
+						// keyCode as a Shift marker (1 = shift, 0 = not)
+						// so downstream handlers can distinguish Ctrl+Z
+						// from Ctrl+Shift+Z (Redo). Mirrors macos-arm's
+						// SDL branch. Older handlers only look at
+						// keyChar and remain undisturbed.
+						if (ascii_char >= 1 && ascii_char <= 26) {
+							bool shift = (msg->Qualifier & (IEQUALIFIER_LSHIFT | IEQUALIFIER_RSHIFT)) != 0;
+							Am_Ui_Window_f_onKeyboardEvent_0(this, 1, shift ? 1 : 0, ascii_char);
+						} else {
+							Am_Ui_Window_f_onKeyboardEvent_0(this, 1, msg->Code, ascii_char);
+						}
 					} else {
 						// Other special key (function keys, etc.)
 //						printf("onKey, key press: special key code %d (no ASCII equivalent)\n", msg->Code);
