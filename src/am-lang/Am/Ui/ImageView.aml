@@ -8,8 +8,45 @@ namespace Am.Ui
         var scaleToFit: Bool = false
         var maintainAspectRatio: Bool = true
 
+        // Cached Bitmap built from `image` on first paint. macOS /
+        // Linux LayerGraphics.drawImage is a no-op stub — the
+        // rendering path only supports Bitmap-backed textures via
+        // drawBitmap. Bitmap.fromImage does the pixel upload once
+        // and we blit through drawBitmap from then on.
+        //
+        // Invalidated whenever setImage swaps the source in — the
+        // next paint rebuilds the cache against the new pixels.
+        private var cachedBitmap: Bitmap? = null
+        private var cachedForImage: Am.Imaging.Image? = null
+
+        // Fixed layout size. Default -1 means "size off the current
+        // image", which was the original behaviour. Values >= 0 win
+        // over image dimensions so a widget with a 1x1 placeholder
+        // still claims real screen space — needed when a form
+        // author writes `<Image width="240" height="180"/>` and
+        // sets the actual bitmap later via
+        // `form.image(id).setImage(url)`. Without an explicit size,
+        // the parent's layout gives the ImageView 1 pixel and even
+        // a successful setImage never becomes visible.
+        var preferredWidth: Short = -1S
+        var preferredHeight: Short = -1S
+
         fun setImage(image: Am.Imaging.Image) {
             this.image = image
+            // Drop the cached Bitmap so the next paint rebuilds
+            // against the new pixels. Setting to null lets the ARC
+            // reclaim the SDL texture backing the old bitmap.
+            this.cachedBitmap = null
+            this.cachedForImage = null
+            var w = 0
+            var h = 0
+            if (image != null) {
+                w = image.getWidth().toInt()
+                h = image.getHeight().toInt()
+            }
+            ("[ImageView] setImage " + w.toString() + "x" + h.toString()
+                + " view.wh=" + this.width.toString() + "x" + this.height.toString()
+                + " pref=" + this.preferredWidth.toString() + "x" + this.preferredHeight.toString()).println()
             this.requestRepaint()
         }
 
@@ -18,6 +55,9 @@ namespace Am.Ui
         }
 
         override fun minHeight(): Short {
+            if (this.preferredHeight >= 0S) {
+                return this.preferredHeight + base.minHeight()
+            }
             if (this.image != null) {
                 return this.image.getHeight().toShort() + base.minHeight()
             }
@@ -25,6 +65,9 @@ namespace Am.Ui
         }
 
         override fun minWidth(): Short {
+            if (this.preferredWidth >= 0S) {
+                return this.preferredWidth + base.minWidth()
+            }
             if (this.image != null) {
                 return this.image.getWidth().toShort() + base.minWidth()
             }
@@ -35,6 +78,7 @@ namespace Am.Ui
             base.paint(graphics)
 
             if (this.image == null) {
+                "[ImageView] paint: image=null".println()
                 return
             }
 
@@ -42,6 +86,9 @@ namespace Am.Ui
             var innerH = this.innerHeight()
             var imgW = this.image.getWidth().toShort()
             var imgH = this.image.getHeight().toShort()
+
+            ("[ImageView] paint: inner=" + innerW.toString() + "x" + innerH.toString()
+                + " img=" + imgW.toString() + "x" + imgH.toString()).println()
 
             if (innerW <= 0S || innerH <= 0S || imgW <= 0S || imgH <= 0S) {
                 return
@@ -116,8 +163,19 @@ namespace Am.Ui
             drawX = drawXInt.toShort()
             drawY = drawYInt.toShort()
 
-            // Draw the image using the graphics context
-            graphics.drawImage(this.image, drawX, drawY, drawW, drawH)
+            // Build (or reuse) the Bitmap cache. Need a Window for
+            // the SDL renderer handle — if we don't have one yet
+            // (before onAttach), skip drawing this frame; the next
+            // paint will find it.
+            var vc = this.getViewContext()
+            if (vc == null) { return }
+            var win = vc.getWindow()
+            if (win == null) { return }
+            if (this.cachedBitmap == null || this.cachedForImage != this.image) {
+                this.cachedBitmap = Bitmap.fromImage(this.image, win)
+                this.cachedForImage = this.image
+            }
+            graphics.drawBitmap(this.cachedBitmap, drawX, drawY, drawW, drawH)
         }
     }
 }
