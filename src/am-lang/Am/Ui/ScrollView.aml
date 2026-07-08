@@ -165,8 +165,23 @@ namespace Am.Ui
         fun updateDragFromWindow(wx: Short, wy: Short) {
             var r = this.computeWindowRect()
             var ly = wy - r.y
+            // Clamp to the ScrollView's vertical extent — SDL keeps
+            // delivering move events with the raw mouse position
+            // when the cursor exits the app window (button-held
+            // capture behaviour), and those can be very negative or
+            // larger than the window height. Without the clamp, the
+            // dy delta blew past the track and dragScrollStartY +
+            // (dy * max) / travel resolved to a large negative
+            // number, which clampScrollY then pinned to 0 — i.e.
+            // "jumps to the top" the moment you drift off the edge.
+            // Clamping to [0, viewportHeight] pins the thumb at
+            // the track boundary instead; when you drift back in
+            // from that edge the drag picks up where it left off.
+            var vh = this.viewportHeight()
+            if (ly < 0S) { ly = 0S }
+            if (ly > vh) { ly = vh }
             var dy = (ly - this.dragMouseStartY).toInt()
-            var travel = (this.viewportHeight() - this.thumbHeight()).toInt()
+            var travel = (vh - this.thumbHeight()).toInt()
             if (travel <= 0) {
                 return
             }
@@ -654,22 +669,17 @@ namespace Am.Ui
         }
 
         override fun onMouseEvent(type: MouseEventType, button: MouseButton, x: Short, y: Short): Bool {
-            // Active drag: track move + up regardless of cursor
-            // position so the thumb keeps following even when the
-            // mouse drifts out of the scrollbar lane.
+            // Active drag: move / up are handled EXCLUSIVELY by
+            // onWindowMouse. The layer-scoped dispatch path here
+            // gets fed (-1, -1) by LayeredPane whenever the cursor
+            // leaves the current owner layer (e.g. drags out of a
+            // ModalDialog that hosts this ScrollView) — running
+            // the drag math on those bogus coords races the window
+            // listener's real-coord update every frame, and the
+            // resulting delta pinned scrollY to the track edge
+            // ("jumps to the top" the moment the mouse leaves).
             if (this.draggingThumb) {
                 if (type == MouseEventType.move) {
-                    var dy = (y - this.dragMouseStartY).toInt()
-                    var travel = (this.viewportHeight() - this.thumbHeight()).toInt()
-                    if (travel > 0) {
-                        // Int math: dy*max overflows Short once the
-                        // content is more than ~150 rows long.
-                        var max = this.maxScrollY().toInt()
-                        var newScroll = this.dragScrollStartY.toInt() + (dy * max) / travel
-                        this.scrollY = newScroll.toShort()
-                        this.clampScrollY()
-                        this.forceRepaintNow()
-                    }
                     return true
                 }
                 if (type == MouseEventType.up) {

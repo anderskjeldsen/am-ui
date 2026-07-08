@@ -669,7 +669,21 @@ namespace Am.Ui
                 var arr = text.split(0x000AUS)
                 var i = 0
                 while (i < arr.length()) {
-                    newLines.add(arr[i])
+                    var line = arr[i]
+                    // CRLF normalisation — drop a trailing 0x0D so
+                    // a Windows-style CRLF file doesn't leave the
+                    // carriage return on the end of every visible
+                    // line. Without this, SDL_ttf renders the CR
+                    // as its `.notdef` rectangle glyph (visible in
+                    // Menlo / SF Mono) and every line looks like it
+                    // ends with a mystery box. Cheap tail-check —
+                    // the pasted-clipboard path in pasteAtCursor
+                    // already does the same thing.
+                    var n = line.length()
+                    if (n > 0 && line.characterAt((n - 1).toUInt()) == 0x000DUS) {
+                        line = line.substring(0UI, (n - 1).toUInt())
+                    }
+                    newLines.add(line)
                     i++
                 }
             }
