@@ -221,7 +221,7 @@ function_result Am_Ui_Screen_open_0(aobject * const this, int width, int height,
 
 	Am_Ui_Screen_data * const data = (Am_Ui_Screen_data * const) malloc(sizeof(Am_Ui_Screen_data));
 	data->screen = screen;
-	this->object_properties.class_object_properties.object_data.value.custom_value = data;
+	__unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value = data;
 
 exit:
 	if (colors32 != NULL) {
@@ -247,14 +247,14 @@ function_result Am_Ui_Screen_close_0(aobject * const this)
 	function_result __result = { .has_return_value = 0 };
 	__increase_reference_count(this);
 
-	Am_Ui_Screen_data * const data = (Am_Ui_Screen_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
+	Am_Ui_Screen_data * const data = (Am_Ui_Screen_data * const) __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
 
 	if ( data != NULL && data->screen != NULL ) {
 		CloseScreen(data->screen);
 	}
 
-	free(this->object_properties.class_object_properties.object_data.value.custom_value);
-	this->object_properties.class_object_properties.object_data.value.custom_value = NULL;
+	free(__unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value);
+	__unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value = NULL;
 
 exit:
 	__decrease_reference_count(this);
@@ -298,7 +298,7 @@ function_result Am_Ui_Screen_getBarHeight_0(aobject * const this)
 {
 	function_result __result = { .has_return_value = true };
 	__increase_reference_count(this);
-	Am_Ui_Screen_data * const data = (Am_Ui_Screen_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
+	Am_Ui_Screen_data * const data = (Am_Ui_Screen_data * const) __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
 	unsigned short v = 0;
 	if (data != NULL && data->screen != NULL) {
 		// BarHeight is the index of the bottom row of the bar; +1 makes
@@ -314,7 +314,7 @@ function_result Am_Ui_Screen_getWidth_0(aobject * const this)
 {
 	function_result __result = { .has_return_value = true };
 	__increase_reference_count(this);
-	Am_Ui_Screen_data * const data = (Am_Ui_Screen_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
+	Am_Ui_Screen_data * const data = (Am_Ui_Screen_data * const) __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
 	unsigned short v = 0;
 	if (data != NULL && data->screen != NULL) {
 		v = (unsigned short) data->screen->Width;
@@ -328,7 +328,7 @@ function_result Am_Ui_Screen_getHeight_0(aobject * const this)
 {
 	function_result __result = { .has_return_value = true };
 	__increase_reference_count(this);
-	Am_Ui_Screen_data * const data = (Am_Ui_Screen_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
+	Am_Ui_Screen_data * const data = (Am_Ui_Screen_data * const) __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
 	unsigned short v = 0;
 	if (data != NULL && data->screen != NULL) {
 		v = (unsigned short) data->screen->Height;
@@ -366,10 +366,10 @@ function_result Am_Ui_Screen_fillDefaultScreenMode_0(aobject * mode)
 
 	UnlockPubScreen(NULL, pub);
 
-	mode->object_properties.class_object_properties.properties[Am_Ui_ScreenMode_P_width].nullable_value.value.int_value     = width;
-	mode->object_properties.class_object_properties.properties[Am_Ui_ScreenMode_P_height].nullable_value.value.int_value    = height;
-	mode->object_properties.class_object_properties.properties[Am_Ui_ScreenMode_P_depth].nullable_value.value.int_value     = depth;
-	mode->object_properties.class_object_properties.properties[Am_Ui_ScreenMode_P_displayId].nullable_value.value.int_value = (int) modeId;
+	__unwrap(mode)->object_properties.class_object_properties.properties[Am_Ui_ScreenMode_P_width].nullable_value.value.int_value     = width;
+	__unwrap(mode)->object_properties.class_object_properties.properties[Am_Ui_ScreenMode_P_height].nullable_value.value.int_value    = height;
+	__unwrap(mode)->object_properties.class_object_properties.properties[Am_Ui_ScreenMode_P_depth].nullable_value.value.int_value     = depth;
+	__unwrap(mode)->object_properties.class_object_properties.properties[Am_Ui_ScreenMode_P_displayId].nullable_value.value.int_value = (int) modeId;
 
 	printf("fillDefaultScreenMode: %dx%dx%d id=0x%lx\n", width, height, depth, (unsigned long) modeId);
 
@@ -388,7 +388,7 @@ function_result Am_Ui_Screen_setColor_0(aobject * const this, int index, unsigne
 	function_result __result = { .has_return_value = false };
 	__increase_reference_count(this);
 
-	Am_Ui_Screen_data * const data = (Am_Ui_Screen_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
+	Am_Ui_Screen_data * const data = (Am_Ui_Screen_data * const) __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
 	if (data == NULL || data->screen == NULL) {
 		goto __exit;
 	}
@@ -559,7 +559,7 @@ function_result Am_Ui_Screen_copyHostPens_0(aobject * const this, int count)
 	function_result __result = { .has_return_value = false };
 	__increase_reference_count(this);
 
-	Am_Ui_Screen_data * const data = (Am_Ui_Screen_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
+	Am_Ui_Screen_data * const data = (Am_Ui_Screen_data * const) __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
 	if (data == NULL || data->screen == NULL || count <= 0) {
 		printf("Screen copyHostPens: bailing (data=%p screen=%p count=%d)\n",
 			(void *)data, data ? (void *)data->screen : NULL, count);

@@ -39,7 +39,7 @@ function_result Am_Ui_Bitmap__native_init_0(aobject * const this)
                                  "in Am_Ui_Bitmap__native_init_0", &__result);
         goto __exit;
     }
-    this->object_properties.class_object_properties.object_data.value.custom_value = data;
+    __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value = data;
 
 __exit: ;
     if (this != NULL) {
@@ -54,7 +54,7 @@ function_result Am_Ui_Bitmap__native_release_0(aobject * const this)
     bool __returning = false;
 
     Am_Ui_Bitmap_data *data =
-        (Am_Ui_Bitmap_data *)this->object_properties.class_object_properties.object_data.value.custom_value;
+        (Am_Ui_Bitmap_data *)__unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
     if (data != NULL) {
         if (data->bitmap != NULL) {
             FreeBitMap(data->bitmap);
@@ -65,7 +65,7 @@ function_result Am_Ui_Bitmap__native_release_0(aobject * const this)
             data->mask = NULL;
         }
         FreeVec(data);
-        this->object_properties.class_object_properties.object_data.value.custom_value = NULL;
+        __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value = NULL;
     }
 
 __exit: ;
@@ -87,7 +87,7 @@ static struct BitMap *get_friend_bitmap(aobject *windowObj)
 {
     if (windowObj == NULL) return NULL;
     Am_Ui_Window_data *wd =
-        (Am_Ui_Window_data *)windowObj->object_properties.class_object_properties.object_data.value.custom_value;
+        (Am_Ui_Window_data *)__unwrap(windowObj)->object_properties.class_object_properties.object_data.value.custom_value;
     if (wd == NULL) return NULL;
     // Prefer the window's own screen; fall back to locked_screen.
     struct Screen *scr = wd->window ? wd->window->WScreen : wd->locked_screen;
@@ -120,7 +120,7 @@ function_result Am_Ui_Bitmap_createEmpty_0(aobject * const this,
     }
 
     Am_Ui_Bitmap_data *data =
-        (Am_Ui_Bitmap_data *)this->object_properties.class_object_properties.object_data.value.custom_value;
+        (Am_Ui_Bitmap_data *)__unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
     if (data == NULL) goto __exit;
 
     // One AmLang Bitmap maps to exactly one native BitMap.
@@ -139,9 +139,9 @@ function_result Am_Ui_Bitmap_createEmpty_0(aobject * const this,
     }
 
     // Store dimensions on the AML-side fields so getWidth()/getHeight() work
-    this->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_width].nullable_value.value.ushort_value   = width;
-    this->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_height].nullable_value.value.ushort_value  = height;
-    this->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_pixelFormat].nullable_value.value.int_value = 1; /* BitmapPixelFormat.ZRGB */
+    __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_width].nullable_value.value.ushort_value   = width;
+    __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_height].nullable_value.value.ushort_value  = height;
+    __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_pixelFormat].nullable_value.value.int_value = 1; /* BitmapPixelFormat.ZRGB */
 
 __exit: ;
     if (this != NULL) {
@@ -179,7 +179,7 @@ function_result Am_Ui_Bitmap_createFromImage_0(aobject * const this,
     printf("[Bitmap.createFromImage] step 04: fetch bitmap native data\n");
     fflush(stdout);
     Am_Ui_Bitmap_data *data =
-        (Am_Ui_Bitmap_data *)this->object_properties.class_object_properties.object_data.value.custom_value;
+        (Am_Ui_Bitmap_data *)__unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
     if (data == NULL) {
         printf("[Bitmap.createFromImage] step 05: data is NULL -> throw\n");
         fflush(stdout);
@@ -216,9 +216,9 @@ function_result Am_Ui_Bitmap_createFromImage_0(aobject * const this,
     {
         printf("[Bitmap.createFromImage] step 08: read image dimensions/pixfmt\n");
         fflush(stdout);
-        unsigned short width  = image->object_properties.class_object_properties.properties[Am_Imaging_Image_P_width].nullable_value.value.ushort_value;
-        unsigned short height = image->object_properties.class_object_properties.properties[Am_Imaging_Image_P_height].nullable_value.value.ushort_value;
-        int pixFmt = image->object_properties.class_object_properties.properties[Am_Imaging_Image_P_pixelFormat].nullable_value.value.int_value;
+        unsigned short width  = __unwrap(image)->object_properties.class_object_properties.properties[Am_Imaging_Image_P_width].nullable_value.value.ushort_value;
+        unsigned short height = __unwrap(image)->object_properties.class_object_properties.properties[Am_Imaging_Image_P_height].nullable_value.value.ushort_value;
+        int pixFmt = __unwrap(image)->object_properties.class_object_properties.properties[Am_Imaging_Image_P_pixelFormat].nullable_value.value.int_value;
         printf("[Bitmap.createFromImage] step 09: image width=%u height=%u pixFmt=%d\n", width, height, pixFmt);
         fflush(stdout);
 
@@ -245,7 +245,7 @@ function_result Am_Ui_Bitmap_createFromImage_0(aobject * const this,
             printf("[Bitmap.createFromImage] step 13: ARGB path\n");
             fflush(stdout);
             aobject *pixelColorsObj =
-                image->object_properties.class_object_properties.properties[Am_Imaging_Image_P_pixelColors].nullable_value.value.object_value;
+                __unwrap(image)->object_properties.class_object_properties.properties[Am_Imaging_Image_P_pixelColors].nullable_value.value.object_value;
             printf("[Bitmap.createFromImage] step 14: pixelColors object=%p\n", (void *)pixelColorsObj);
             fflush(stdout);
 
@@ -281,9 +281,9 @@ function_result Am_Ui_Bitmap_createFromImage_0(aobject * const this,
 
         printf("[Bitmap.createFromImage] step 18: write AML bitmap properties\n");
         fflush(stdout);
-        this->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_width].nullable_value.value.ushort_value   = width;
-        this->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_height].nullable_value.value.ushort_value  = height;
-        this->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_pixelFormat].nullable_value.value.int_value = 1; /* BitmapPixelFormat.ZRGB */
+        __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_width].nullable_value.value.ushort_value   = width;
+        __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_height].nullable_value.value.ushort_value  = height;
+        __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_pixelFormat].nullable_value.value.int_value = 1; /* BitmapPixelFormat.ZRGB */
         printf("[Bitmap.createFromImage] step 19: function body complete\n");
         fflush(stdout);
     }
@@ -332,7 +332,7 @@ function_result Am_Ui_Bitmap_createFromImageWithMask_0(aobject * const this,
     }
 
     Am_Ui_Bitmap_data *data =
-        (Am_Ui_Bitmap_data *)this->object_properties.class_object_properties.object_data.value.custom_value;
+        (Am_Ui_Bitmap_data *)__unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
     if (data == NULL) goto __exit;
     if (image == NULL) {
         __throw_simple_exception("image is NULL in createFromImageWithMask",
@@ -346,9 +346,9 @@ function_result Am_Ui_Bitmap_createFromImageWithMask_0(aobject * const this,
     }
 
     {
-        UWORD width  = image->object_properties.class_object_properties.properties[Am_Imaging_Image_P_width].nullable_value.value.ushort_value;
-        UWORD height = image->object_properties.class_object_properties.properties[Am_Imaging_Image_P_height].nullable_value.value.ushort_value;
-        WORD  pixFmt = image->object_properties.class_object_properties.properties[Am_Imaging_Image_P_pixelFormat].nullable_value.value.int_value;
+        UWORD width  = __unwrap(image)->object_properties.class_object_properties.properties[Am_Imaging_Image_P_width].nullable_value.value.ushort_value;
+        UWORD height = __unwrap(image)->object_properties.class_object_properties.properties[Am_Imaging_Image_P_height].nullable_value.value.ushort_value;
+        WORD  pixFmt = __unwrap(image)->object_properties.class_object_properties.properties[Am_Imaging_Image_P_pixelFormat].nullable_value.value.int_value;
 
         data->bitmap = alloc_truecolor_bitmap(width, height, get_friend_bitmap(window));
         if (data->bitmap == NULL) {
@@ -363,7 +363,7 @@ function_result Am_Ui_Bitmap_createFromImageWithMask_0(aobject * const this,
 
         if (pixFmt == 2) { /* ARGB */
             aobject *pixelColorsObj =
-                image->object_properties.class_object_properties.properties[Am_Imaging_Image_P_pixelColors].nullable_value.value.object_value;
+                __unwrap(image)->object_properties.class_object_properties.properties[Am_Imaging_Image_P_pixelColors].nullable_value.value.object_value;
             if (pixelColorsObj != NULL) {
                 array_holder *ah = (array_holder *)&pixelColorsObj[1];
                 unsigned int *pixels = (unsigned int *)(void *)&ah[1];
@@ -426,9 +426,9 @@ function_result Am_Ui_Bitmap_createFromImageWithMask_0(aobject * const this,
          * alpha-aware decoding for indexed PNGs would mean reading
          * the tRNS chunk through to here — out of scope for now. */
 
-        this->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_width].nullable_value.value.ushort_value   = width;
-        this->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_height].nullable_value.value.ushort_value  = height;
-        this->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_pixelFormat].nullable_value.value.int_value = 1; /* ZRGB */
+        __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_width].nullable_value.value.ushort_value   = width;
+        __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_height].nullable_value.value.ushort_value  = height;
+        __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_pixelFormat].nullable_value.value.int_value = 1; /* ZRGB */
     }
 
 __exit: ;

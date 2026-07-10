@@ -29,7 +29,7 @@ function_result Am_Ui_RenderableBitmap__native_init_0(aobject * const this)
                                  "in Am_Ui_RenderableBitmap__native_init_0", &__result);
         goto __exit;
     }
-    this->object_properties.class_object_properties.object_data.value.custom_value = data;
+    __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value = data;
 
 __exit: ;
     if (this != NULL) {
@@ -44,7 +44,7 @@ function_result Am_Ui_RenderableBitmap__native_release_0(aobject * const this)
     bool __returning = false;
 
     Am_Ui_RenderableBitmap_data *data =
-        (Am_Ui_RenderableBitmap_data *)this->object_properties.class_object_properties.object_data.value.custom_value;
+        (Am_Ui_RenderableBitmap_data *)__unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
     if (data != NULL) {
         if (data->layer != NULL) {
             DeleteLayer(0, data->layer);
@@ -55,7 +55,7 @@ function_result Am_Ui_RenderableBitmap__native_release_0(aobject * const this)
             data->layer_info = NULL;
         }
         FreeVec(data);
-        this->object_properties.class_object_properties.object_data.value.custom_value = NULL;
+        __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value = NULL;
     }
 
 __exit: ;
@@ -79,7 +79,7 @@ function_result Am_Ui_RenderableBitmap_attachLayer_0(aobject * const this)
     }
 
     Am_Ui_RenderableBitmap_data *data =
-        (Am_Ui_RenderableBitmap_data *)this->object_properties.class_object_properties.object_data.value.custom_value;
+        (Am_Ui_RenderableBitmap_data *)__unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
     if (data == NULL) {
         __throw_simple_exception("RenderableBitmap not initialized",
                                  "in Am_Ui_RenderableBitmap_f_attachLayer_0", &__result);
@@ -87,7 +87,7 @@ function_result Am_Ui_RenderableBitmap_attachLayer_0(aobject * const this)
     }
 
     aobject *bitmapObj =
-        this->object_properties.class_object_properties.properties[Am_Ui_RenderableBitmap_P_bitmap].nullable_value.value.object_value;
+        __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_RenderableBitmap_P_bitmap].nullable_value.value.object_value;
     if (bitmapObj == NULL) {
         __throw_simple_exception("RenderableBitmap has no bitmap",
                                  "in Am_Ui_RenderableBitmap_f_attachLayer_0", &__result);
@@ -95,15 +95,15 @@ function_result Am_Ui_RenderableBitmap_attachLayer_0(aobject * const this)
     }
 
     Am_Ui_Bitmap_data *bitmapData =
-        (Am_Ui_Bitmap_data *)bitmapObj->object_properties.class_object_properties.object_data.value.custom_value;
+        (Am_Ui_Bitmap_data *)__unwrap(bitmapObj)->object_properties.class_object_properties.object_data.value.custom_value;
     if (bitmapData == NULL || bitmapData->bitmap == NULL) {
         __throw_simple_exception("RenderableBitmap bitmap has no native BitMap",
                                  "in Am_Ui_RenderableBitmap_f_attachLayer_0", &__result);
         goto __exit;
     }
 
-    unsigned short width = bitmapObj->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_width].nullable_value.value.ushort_value;
-    unsigned short height = bitmapObj->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_height].nullable_value.value.ushort_value;
+    unsigned short width = __unwrap(bitmapObj)->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_width].nullable_value.value.ushort_value;
+    unsigned short height = __unwrap(bitmapObj)->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_height].nullable_value.value.ushort_value;
 
     if (data->layer != NULL) {
         goto __exit;

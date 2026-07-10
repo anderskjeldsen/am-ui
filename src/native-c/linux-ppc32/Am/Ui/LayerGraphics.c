@@ -34,7 +34,7 @@
 
 static Am_Ui_LayerGraphics_data *lg_data(aobject *const this)
 {
-    return (Am_Ui_LayerGraphics_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+    return (Am_Ui_LayerGraphics_data *) __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
 }
 
 static void lg_ensure_data(aobject *const this)
@@ -46,7 +46,7 @@ static void lg_ensure_data(aobject *const this)
         d->background = (SDL_Color) { 0, 0, 0, 255 };
         d->pen_palette = am_ui_linux_screen_palette();
         d->pen_palette_count = am_ui_linux_screen_palette_count();
-        this->object_properties.class_object_properties.object_data.value.custom_value = d;
+        __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value = d;
     }
 }
 
@@ -159,12 +159,12 @@ void am_ui_macos_arm_lg_target_changed(SDL_Renderer *renderer, SDL_Texture *now)
 // math always in sync with the AmLang-side push/pop translate stack.
 static inline int tx_of(aobject *const this, int x)
 {
-    short xoff = this->object_properties.class_object_properties.properties[Am_Ui_Graphics_P_xOffset].nullable_value.value.short_value;
+    short xoff = __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_Graphics_P_xOffset].nullable_value.value.short_value;
     return x + (int) xoff;
 }
 static inline int ty_of(aobject *const this, int y)
 {
-    short yoff = this->object_properties.class_object_properties.properties[Am_Ui_Graphics_P_yOffset].nullable_value.value.short_value;
+    short yoff = __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_Graphics_P_yOffset].nullable_value.value.short_value;
     return y + (int) yoff;
 }
 
@@ -194,7 +194,7 @@ function_result Am_Ui_LayerGraphics__native_release_0(aobject *const this)
     Am_Ui_LayerGraphics_data *d = lg_data(this);
     if (d != NULL) {
         free(d);
-        this->object_properties.class_object_properties.object_data.value.custom_value = NULL;
+        __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value = NULL;
     }
     return __result;
 }
@@ -216,9 +216,9 @@ function_result Am_Ui_LayerGraphics_attachWindow_0(aobject *const this)
     Am_Ui_LayerGraphics_data *d = lg_data(this);
     if (d != NULL) {
         // Pull the Window out of the AmLang-side `window` property.
-        aobject *window = this->object_properties.class_object_properties.properties[Am_Ui_LayerGraphics_P_window].nullable_value.value.object_value;
+        aobject *window = __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_LayerGraphics_P_window].nullable_value.value.object_value;
         if (window != NULL) {
-            Am_Ui_Window_data *wd = (Am_Ui_Window_data *) window->object_properties.class_object_properties.object_data.value.custom_value;
+            Am_Ui_Window_data *wd = (Am_Ui_Window_data *) __unwrap(window)->object_properties.class_object_properties.object_data.value.custom_value;
             if (wd != NULL) {
                 d->renderer = wd->renderer;
                 d->target_texture = NULL;
@@ -240,9 +240,9 @@ function_result Am_Ui_LayerGraphics_attachRenderableBitmap_0(aobject *const this
     lg_ensure_data(this);
     Am_Ui_LayerGraphics_data *d = lg_data(this);
     if (d != NULL) {
-        aobject *rb = this->object_properties.class_object_properties.properties[Am_Ui_LayerGraphics_P_renderableBitmap].nullable_value.value.object_value;
+        aobject *rb = __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_LayerGraphics_P_renderableBitmap].nullable_value.value.object_value;
         if (rb != NULL) {
-            Am_Ui_RenderableBitmap_data *rbd = (Am_Ui_RenderableBitmap_data *) rb->object_properties.class_object_properties.object_data.value.custom_value;
+            Am_Ui_RenderableBitmap_data *rbd = (Am_Ui_RenderableBitmap_data *) __unwrap(rb)->object_properties.class_object_properties.object_data.value.custom_value;
             if (rbd != NULL) {
                 d->renderer = rbd->renderer;
                 d->target_texture = rbd->texture;
@@ -627,7 +627,7 @@ function_result Am_Ui_LayerGraphics_drawBitmap_0(aobject *const this, aobject *b
     if (d == NULL || d->renderer == NULL || bitmap == NULL) goto __exit;
     if (destWidth <= 0 || destHeight <= 0) goto __exit;
 
-    Am_Ui_Bitmap_data *bd = (Am_Ui_Bitmap_data *) bitmap->object_properties.class_object_properties.object_data.value.custom_value;
+    Am_Ui_Bitmap_data *bd = (Am_Ui_Bitmap_data *) __unwrap(bitmap)->object_properties.class_object_properties.object_data.value.custom_value;
     if (bd == NULL) goto __exit;
     apply_target(d);
 
@@ -678,7 +678,7 @@ function_result Am_Ui_LayerGraphics_blitBitmapRect_0(aobject *const this, aobjec
 
     Am_Ui_LayerGraphics_data *d = lg_data(this);
     if (d == NULL || d->renderer == NULL || bitmap == NULL) goto __exit;
-    Am_Ui_Bitmap_data *bd = (Am_Ui_Bitmap_data *) bitmap->object_properties.class_object_properties.object_data.value.custom_value;
+    Am_Ui_Bitmap_data *bd = (Am_Ui_Bitmap_data *) __unwrap(bitmap)->object_properties.class_object_properties.object_data.value.custom_value;
     if (bd == NULL || bd->texture == NULL) goto __exit;
     apply_target(d);
     restamp_clip(d);
@@ -717,7 +717,7 @@ function_result Am_Ui_LayerGraphics_setFont_0(aobject *const this, aobject *font
     Am_Ui_LayerGraphics_data *d = lg_data(this);
     if (d != NULL) {
         if (font != NULL) {
-            Am_Ui_Font_data *fd = (Am_Ui_Font_data *) font->object_properties.class_object_properties.object_data.value.custom_value;
+            Am_Ui_Font_data *fd = (Am_Ui_Font_data *) __unwrap(font)->object_properties.class_object_properties.object_data.value.custom_value;
             d->current_font        = (fd != NULL) ? fd->ttf_font : NULL;
             d->current_font_height = (fd != NULL) ? fd->line_skip : 0;
         } else {

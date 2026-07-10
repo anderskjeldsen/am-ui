@@ -78,7 +78,7 @@ extern void am_ui_macos_arm_lg_target_changed(SDL_Renderer *renderer, SDL_Textur
 
 static Am_Ui_Window_data *win_data(aobject *const this)
 {
-    return (Am_Ui_Window_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+    return (Am_Ui_Window_data *) __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
 }
 
 // Process-global "most recent renderer" pointer. Window.open_0 updates
@@ -126,7 +126,7 @@ static int g_gtk_inited = 0;
 
 static bool item_bool(aobject *item, int idx, bool dflt) {
     if (item == NULL) return dflt;
-    return item->object_properties.class_object_properties.properties[idx].nullable_value.value.bool_value;
+    return __unwrap(item)->object_properties.class_object_properties.properties[idx].nullable_value.value.bool_value;
 }
 
 static unsigned char map_gdk_button(guint b) {
@@ -254,11 +254,11 @@ static gboolean gtk_on_draw(GtkWidget *w, cairo_t *cr, gpointer user) {
     Am_Ui_Window_data *data = win_data(this);
     if (data == NULL || data->renderer == NULL) return TRUE;
 
-    aobject *off_rb = this->object_properties.class_object_properties.properties[Am_Ui_Window_P_offscreen].nullable_value.value.object_value;
+    aobject *off_rb = __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_Window_P_offscreen].nullable_value.value.object_value;
     if (off_rb == NULL) return TRUE;
-    aobject *off_bm = off_rb->object_properties.class_object_properties.properties[Am_Ui_RenderableBitmap_P_bitmap].nullable_value.value.object_value;
+    aobject *off_bm = __unwrap(off_rb)->object_properties.class_object_properties.properties[Am_Ui_RenderableBitmap_P_bitmap].nullable_value.value.object_value;
     if (off_bm == NULL) return TRUE;
-    Am_Ui_Bitmap_data *bd = (Am_Ui_Bitmap_data *) off_bm->object_properties.class_object_properties.object_data.value.custom_value;
+    Am_Ui_Bitmap_data *bd = (Am_Ui_Bitmap_data *) __unwrap(off_bm)->object_properties.class_object_properties.object_data.value.custom_value;
     if (bd == NULL || bd->texture == NULL) return TRUE;
 
     int tw = 0, th = 0;
@@ -332,14 +332,14 @@ static void gtk_on_menu_activate(GtkMenuItem *mi, gpointer user) {
     if (item == NULL) return;
     function_result fr = Am_Ui_MenuItem_f_invokeClick_0(item);
     if (fr.exception != NULL) {
-        aobject *msg_obj = fr.exception->object_properties.class_object_properties.properties[Am_Lang_Exception_P_message].nullable_value.value.object_value;
+        aobject *msg_obj = __unwrap(fr.exception)->object_properties.class_object_properties.properties[Am_Lang_Exception_P_message].nullable_value.value.object_value;
         const char *msg = "(no msg)";
         if (msg_obj != NULL) {
             string_holder *sh = (string_holder *) (msg_obj + 1);
             if (sh != NULL && sh->string_value != NULL) msg = sh->string_value;
         }
         fprintf(stderr, "[am-ui/linux-gtk] menu click threw: %s\n", msg);
-        aobject *st = fr.exception->object_properties.class_object_properties.properties[Am_Lang_Exception_P_stackTrace].nullable_value.value.object_value;
+        aobject *st = __unwrap(fr.exception)->object_properties.class_object_properties.properties[Am_Lang_Exception_P_stackTrace].nullable_value.value.object_value;
         if (st != NULL) {
             function_result n = Am_Collections_List_ta_Am_Lang_String_f_getSize_0(st);
             if (n.exception == NULL) {
@@ -624,7 +624,7 @@ function_result Am_Ui_Window__native_init_0(aobject *const this)
 
     Am_Ui_Window_data *data = (Am_Ui_Window_data *) calloc(1, sizeof(Am_Ui_Window_data));
     if (data != NULL) {
-        this->object_properties.class_object_properties.object_data.value.custom_value = data;
+        __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value = data;
     }
 
     __decrease_reference_count(this);
@@ -650,7 +650,7 @@ function_result Am_Ui_Window__native_release_0(aobject *const this)
         if (data->gtk_window != NULL) { gtk_widget_destroy(GTK_WIDGET(data->gtk_window)); data->gtk_window = NULL; data->gtk_menubar = NULL; data->gtk_draw_area = NULL; }
 #endif
         free(data);
-        this->object_properties.class_object_properties.object_data.value.custom_value = NULL;
+        __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value = NULL;
     }
 
     return __result;
@@ -1049,17 +1049,17 @@ static void add_menu_item_to(id ns_menu, aobject *amlang_item)
 {
     if (amlang_item == NULL) return;
 
-    bool is_sep = amlang_item->object_properties.class_object_properties.properties[MENU_BRIDGE_P_MenuItem_isSeparator].nullable_value.value.bool_value;
+    bool is_sep = __unwrap(amlang_item)->object_properties.class_object_properties.properties[MENU_BRIDGE_P_MenuItem_isSeparator].nullable_value.value.bool_value;
     if (is_sep) {
         id sep = ((id (*)(Class, SEL)) objc_msgSend)(g_NSMenuItem, g_sel_separatorItem);
         ((void (*)(id, SEL, id)) objc_msgSend)(ns_menu, g_sel_addItem, sep);
         return;
     }
 
-    aobject *label_obj = amlang_item->object_properties.class_object_properties.properties[MENU_BRIDGE_P_MenuItem_label].nullable_value.value.object_value;
+    aobject *label_obj = __unwrap(amlang_item)->object_properties.class_object_properties.properties[MENU_BRIDGE_P_MenuItem_label].nullable_value.value.object_value;
     const char *label = amlang_str(label_obj);
 
-    aobject *commKey_obj = amlang_item->object_properties.class_object_properties.properties[MENU_BRIDGE_P_MenuItem_commKey].nullable_value.value.object_value;
+    aobject *commKey_obj = __unwrap(amlang_item)->object_properties.class_object_properties.properties[MENU_BRIDGE_P_MenuItem_commKey].nullable_value.value.object_value;
     const char *commKey = amlang_str(commKey_obj);
     // commKey is single-char on AmLang; if it's longer, use the first
     // char. Empty/NULL → no shortcut.
@@ -1068,11 +1068,11 @@ static void add_menu_item_to(id ns_menu, aobject *amlang_item)
         keq_buf[0] = commKey[0];
     }
 
-    bool enabled = amlang_item->object_properties.class_object_properties.properties[MENU_BRIDGE_P_MenuItem_enabled].nullable_value.value.bool_value;
+    bool enabled = __unwrap(amlang_item)->object_properties.class_object_properties.properties[MENU_BRIDGE_P_MenuItem_enabled].nullable_value.value.bool_value;
 
     // Check whether this item has sub-items; if so we want a parent
     // item with a submenu (no action) rather than a clickable one.
-    aobject *subs = amlang_item->object_properties.class_object_properties.properties[MENU_BRIDGE_P_MenuItem_subItems].nullable_value.value.object_value;
+    aobject *subs = __unwrap(amlang_item)->object_properties.class_object_properties.properties[MENU_BRIDGE_P_MenuItem_subItems].nullable_value.value.object_value;
     int sub_count = 0;
     if (subs != NULL) {
         function_result fr = Am_Collections_List_ta_Am_Ui_MenuItem_f_getSize_0(subs);
@@ -1111,7 +1111,7 @@ static void add_menu_item_to(id ns_menu, aobject *amlang_item)
 
 static void build_ns_menu_items(id ns_menu, aobject *items_container, int items_property_index)
 {
-    aobject *items = items_container->object_properties.class_object_properties.properties[items_property_index].nullable_value.value.object_value;
+    aobject *items = __unwrap(items_container)->object_properties.class_object_properties.properties[items_property_index].nullable_value.value.object_value;
     if (items == NULL) return;
     function_result fr = Am_Collections_List_ta_Am_Ui_MenuItem_f_getSize_0(items);
     if (fr.exception != NULL) { __decrease_reference_count(fr.exception); return; }
@@ -1139,7 +1139,7 @@ void am_ui_macos_arm_install_menu_strip(aobject *menuStrip)
     // menus in order; the first one becomes the app menu visually.
     id main_menu = new_ns_menu("");
     if (menuStrip != NULL) {
-        aobject *menus = menuStrip->object_properties.class_object_properties.properties[MENU_BRIDGE_P_MenuStrip_menus].nullable_value.value.object_value;
+        aobject *menus = __unwrap(menuStrip)->object_properties.class_object_properties.properties[MENU_BRIDGE_P_MenuStrip_menus].nullable_value.value.object_value;
         if (menus != NULL) {
             function_result fr = Am_Collections_List_ta_Am_Ui_Menu_f_getSize_0(menus);
             if (fr.exception != NULL) { __decrease_reference_count(fr.exception); }
@@ -1151,7 +1151,7 @@ void am_ui_macos_arm_install_menu_strip(aobject *menuStrip)
                     aobject *amlang_menu = gr.return_value.value.object_value;
                     if (amlang_menu == NULL) continue;
 
-                    aobject *title_obj = amlang_menu->object_properties.class_object_properties.properties[MENU_BRIDGE_P_Menu_title].nullable_value.value.object_value;
+                    aobject *title_obj = __unwrap(amlang_menu)->object_properties.class_object_properties.properties[MENU_BRIDGE_P_Menu_title].nullable_value.value.object_value;
                     const char *title = amlang_str(title_obj);
 
                     // Top-level NSMenuItem hosting the dropdown.
@@ -1216,7 +1216,7 @@ function_result Am_Ui_Window_handleInput_0(aobject *const this)
     // (pure-SDL / Cocoa path) Poll the menuStrip property and rebuild the
     // native menu on change. The GTK build instead populates a real
     // GtkMenuBar directly from setMenuStrip's nativeAddMenu* calls.
-    aobject *current_strip = this->object_properties.class_object_properties.properties[Am_Ui_Window_P_menuStrip].nullable_value.value.object_value;
+    aobject *current_strip = __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_Window_P_menuStrip].nullable_value.value.object_value;
     if ((void *) current_strip != data->installed_menu_strip) {
         am_ui_macos_arm_install_menu_strip(current_strip);
         data->installed_menu_strip = (void *) current_strip;
@@ -1410,7 +1410,7 @@ function_result Am_Ui_Window_handleInput_0(aobject *const this)
             // bugs and stare at a blank window. The message lives at the
             // canonical Am.Lang.Exception property layout — pull it out
             // safely so the print itself doesn't strlen NULL.
-            aobject *msg_obj = paint_res.exception->object_properties.class_object_properties.properties[Am_Lang_Exception_P_message].nullable_value.value.object_value;
+            aobject *msg_obj = __unwrap(paint_res.exception)->object_properties.class_object_properties.properties[Am_Lang_Exception_P_message].nullable_value.value.object_value;
             const char *msg = "(no msg)";
             if (msg_obj != NULL) {
                 string_holder *sh = (string_holder *) (msg_obj + 1);
@@ -1428,7 +1428,7 @@ function_result Am_Ui_Window_handleInput_0(aobject *const this)
                 // straight to string_holder is what segfaulted my last
                 // attempt to print it). Pull each frame via the typed
                 // List accessor.
-                aobject *st_list = paint_res.exception->object_properties.class_object_properties.properties[Am_Lang_Exception_P_stackTrace].nullable_value.value.object_value;
+                aobject *st_list = __unwrap(paint_res.exception)->object_properties.class_object_properties.properties[Am_Lang_Exception_P_stackTrace].nullable_value.value.object_value;
                 if (st_list != NULL) {
                     function_result n_fr = Am_Collections_List_ta_Am_Lang_String_f_getSize_0(st_list);
                     if (n_fr.exception == NULL) {
@@ -1470,11 +1470,11 @@ function_result Am_Ui_Window_handleInput_0(aobject *const this)
             SDL_SetRenderTarget(data->renderer, NULL);
             am_ui_macos_arm_lg_target_changed(data->renderer, NULL);
             SDL_RenderSetClipRect(data->renderer, NULL);
-            aobject *off_rb = this->object_properties.class_object_properties.properties[Am_Ui_Window_P_offscreen].nullable_value.value.object_value;
+            aobject *off_rb = __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_Window_P_offscreen].nullable_value.value.object_value;
             if (off_rb != NULL) {
-                aobject *off_bm = off_rb->object_properties.class_object_properties.properties[Am_Ui_RenderableBitmap_P_bitmap].nullable_value.value.object_value;
+                aobject *off_bm = __unwrap(off_rb)->object_properties.class_object_properties.properties[Am_Ui_RenderableBitmap_P_bitmap].nullable_value.value.object_value;
                 if (off_bm != NULL) {
-                    Am_Ui_Bitmap_data *bd = (Am_Ui_Bitmap_data *) off_bm->object_properties.class_object_properties.object_data.value.custom_value;
+                    Am_Ui_Bitmap_data *bd = (Am_Ui_Bitmap_data *) __unwrap(off_bm)->object_properties.class_object_properties.object_data.value.custom_value;
                     if (bd != NULL && bd->texture != NULL) {
                         int out_w = 0, out_h = 0;
                         SDL_GetRendererOutputSize(data->renderer, &out_w, &out_h);

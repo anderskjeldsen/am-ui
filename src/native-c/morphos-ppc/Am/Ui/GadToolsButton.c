@@ -64,7 +64,7 @@ function_result Am_Ui_GadToolsButton_attachButton_0(aobject * const this, aobjec
 		__increase_reference_count(window);
 	}
 
-    Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
+    Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) __unwrap(window)->object_properties.class_object_properties.object_data.value.custom_value;
   
     struct TextAttr topaz8 = {
         "topaz.font", 8, 0, 0
@@ -86,7 +86,7 @@ function_result Am_Ui_GadToolsButton_attachButton_0(aobject * const this, aobjec
 	gvh->gadget = gadget;
 	gvh->gadget_num = gadget_count(gadget);
 
-	this->object_properties.class_object_properties.object_data.value.custom_value = gvh;
+	__unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value = gvh;
 
 //	AddGList(window_data->window, gadget, -1, 1, NULL);
 	RefreshGList(gadget, window_data->window, NULL, gvh->gadget_num);
@@ -114,8 +114,8 @@ function_result Am_Ui_GadToolsButton_detachButton_0(aobject * const this, aobjec
 		__increase_reference_count(window);
 	}
 
-	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
-	gadget_view_holder *gvh = (gadget_view_holder *) this->object_properties.class_object_properties.object_data.value.custom_value;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) __unwrap(window)->object_properties.class_object_properties.object_data.value.custom_value;
+	gadget_view_holder *gvh = (gadget_view_holder *) __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
 //	printf("RemoveGadget %p %p %p\n", gvh->gadget, window_data, window_data->window);
 	UWORD pos = RemoveGList(window_data->window, gvh->gadget, gvh->gadget_num);
 	if (pos >= 0) {
@@ -124,7 +124,7 @@ function_result Am_Ui_GadToolsButton_detachButton_0(aobject * const this, aobjec
 	}
 	free(gvh);
 
-	this->object_properties.class_object_properties.object_data.value.custom_value = NULL;
+	__unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value = NULL;
 
 __exit: ;
 	if (this != NULL) {

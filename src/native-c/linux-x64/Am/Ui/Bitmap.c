@@ -22,7 +22,7 @@
 
 static Am_Ui_Bitmap_data *bm_data(aobject *const this)
 {
-    return (Am_Ui_Bitmap_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+    return (Am_Ui_Bitmap_data *) __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
 }
 
 static void bm_ensure_data(aobject *const this)
@@ -30,7 +30,7 @@ static void bm_ensure_data(aobject *const this)
     if (bm_data(this) != NULL) return;
     Am_Ui_Bitmap_data *d = (Am_Ui_Bitmap_data *) calloc(1, sizeof(Am_Ui_Bitmap_data));
     if (d != NULL) {
-        this->object_properties.class_object_properties.object_data.value.custom_value = d;
+        __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value = d;
     }
 }
 
@@ -71,7 +71,7 @@ function_result Am_Ui_Bitmap__native_release_0(aobject *const this)
         d->texture = NULL;
         if (d->surface != NULL) { SDL_FreeSurface(d->surface); d->surface = NULL; }
         free(d);
-        this->object_properties.class_object_properties.object_data.value.custom_value = NULL;
+        __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value = NULL;
     }
     return __result;
 }
@@ -100,8 +100,8 @@ function_result Am_Ui_Bitmap_createEmpty_0(aobject *const this, unsigned short w
         // callers (Label, BitmapView, …) read those, not the native struct.
         // Without this they read 0 and drawBitmap() early-returns, so e.g.
         // file-tree icons never paint.
-        this->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_width].nullable_value.value.ushort_value  = width;
-        this->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_height].nullable_value.value.ushort_value = height;
+        __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_width].nullable_value.value.ushort_value  = width;
+        __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_height].nullable_value.value.ushort_value = height;
         d->mask_enabled = false;
         // An "empty" Bitmap is the off-screen render target used by
         // Window.getOffscreen(). Create a TARGET-access texture bound
@@ -112,7 +112,7 @@ function_result Am_Ui_Bitmap_createEmpty_0(aobject *const this, unsigned short w
         // window stays black.
         SDL_Renderer *r = NULL;
         if (window != NULL) {
-            Am_Ui_Window_data *wd = (Am_Ui_Window_data *) window->object_properties.class_object_properties.object_data.value.custom_value;
+            Am_Ui_Window_data *wd = (Am_Ui_Window_data *) __unwrap(window)->object_properties.class_object_properties.object_data.value.custom_value;
             if (wd != NULL) r = wd->renderer;
         }
         if (r == NULL) r = am_ui_linux_primary_renderer();
@@ -163,9 +163,9 @@ function_result Am_Ui_Bitmap_createEmpty_0(aobject *const this, unsigned short w
 static SDL_Surface *surface_from_image(aobject *image)
 {
     if (image == NULL) return NULL;
-    unsigned short w = image->object_properties.class_object_properties.properties[Am_Imaging_Image_P_width].nullable_value.value.ushort_value;
-    unsigned short h = image->object_properties.class_object_properties.properties[Am_Imaging_Image_P_height].nullable_value.value.ushort_value;
-    int pixFmt        = image->object_properties.class_object_properties.properties[Am_Imaging_Image_P_pixelFormat].nullable_value.value.int_value;
+    unsigned short w = __unwrap(image)->object_properties.class_object_properties.properties[Am_Imaging_Image_P_width].nullable_value.value.ushort_value;
+    unsigned short h = __unwrap(image)->object_properties.class_object_properties.properties[Am_Imaging_Image_P_height].nullable_value.value.ushort_value;
+    int pixFmt        = __unwrap(image)->object_properties.class_object_properties.properties[Am_Imaging_Image_P_pixelFormat].nullable_value.value.int_value;
     if (w == 0 || h == 0) return NULL;
 
     // PngLoader stores pixels in A,R,G,B byte order (after
@@ -189,7 +189,7 @@ static SDL_Surface *surface_from_image(aobject *image)
 
     if (pixFmt == 2) { /* ARGB */
         aobject *pixelColorsObj =
-            image->object_properties.class_object_properties.properties[Am_Imaging_Image_P_pixelColors].nullable_value.value.object_value;
+            __unwrap(image)->object_properties.class_object_properties.properties[Am_Imaging_Image_P_pixelColors].nullable_value.value.object_value;
         if (pixelColorsObj != NULL) {
             array_holder *ah = (array_holder *) &pixelColorsObj[1];
             unsigned int *src = (unsigned int *) ah->array_data;
@@ -220,8 +220,8 @@ function_result Am_Ui_Bitmap_createFromImage_0(aobject *const this, aobject *ima
         if (d->surface != NULL) {
             d->width = (Uint16) d->surface->w;
             d->height = (Uint16) d->surface->h;
-            this->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_width].nullable_value.value.ushort_value  = (unsigned short) d->surface->w;
-            this->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_height].nullable_value.value.ushort_value = (unsigned short) d->surface->h;
+            __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_width].nullable_value.value.ushort_value  = (unsigned short) d->surface->w;
+            __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_height].nullable_value.value.ushort_value = (unsigned short) d->surface->h;
         }
         d->mask_enabled = false;
         d->is_render_target = false;
@@ -250,8 +250,8 @@ function_result Am_Ui_Bitmap_createFromImageWithMask_0(aobject *const this, aobj
         if (d->surface != NULL) {
             d->width = (Uint16) d->surface->w;
             d->height = (Uint16) d->surface->h;
-            this->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_width].nullable_value.value.ushort_value  = (unsigned short) d->surface->w;
-            this->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_height].nullable_value.value.ushort_value = (unsigned short) d->surface->h;
+            __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_width].nullable_value.value.ushort_value  = (unsigned short) d->surface->w;
+            __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_height].nullable_value.value.ushort_value = (unsigned short) d->surface->h;
         }
         // The surface already carries per-pixel alpha; flag mask
         // so LayerGraphics turns on BLEND when it uploads.

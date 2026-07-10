@@ -53,7 +53,7 @@ function_result Am_Ui_FolderRequester_requestFolder_0(aobject * title, aobject *
 
 	struct Window * parent_window = NULL;
 	if (parent != NULL) {
-		Am_Ui_Window_data * wd = (Am_Ui_Window_data *) parent->object_properties.class_object_properties.object_data.value.custom_value;
+		Am_Ui_Window_data * wd = (Am_Ui_Window_data *) __unwrap(parent)->object_properties.class_object_properties.object_data.value.custom_value;
 		if (wd != NULL) {
 			parent_window = wd->window;
 		}

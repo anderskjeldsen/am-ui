@@ -30,19 +30,19 @@
 #include <libc/core_inline_functions.h>
 
 short lg_translated_x(aobject *g, short x) {
-    short tx = g->object_properties.class_object_properties.properties[Am_Ui_Graphics_P_xOffset].nullable_value.value.short_value;
+    short tx = __unwrap(g)->object_properties.class_object_properties.properties[Am_Ui_Graphics_P_xOffset].nullable_value.value.short_value;
     return tx + x;
 }
 
 short lg_translated_y(aobject *g, short y) {
-    short ty = g->object_properties.class_object_properties.properties[Am_Ui_Graphics_P_yOffset].nullable_value.value.short_value;
+    short ty = __unwrap(g)->object_properties.class_object_properties.properties[Am_Ui_Graphics_P_yOffset].nullable_value.value.short_value;
     return ty + y;
 }
 
 static Am_Ui_LayerGraphics_data *get_layer_graphics_data(aobject *this)
 {
     if (this == NULL) return NULL;
-    return (Am_Ui_LayerGraphics_data *)this->object_properties.class_object_properties.object_data.value.custom_value;
+    return (Am_Ui_LayerGraphics_data *)__unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
 }
 
 static struct RastPort *get_rp(aobject *this)
@@ -72,7 +72,7 @@ static void bind_renderable_bitmap_target(aobject *this)
     Am_Ui_LayerGraphics_data *data = get_layer_graphics_data(this);
     if (data == NULL) return;
 
-    aobject *rb = this->object_properties.class_object_properties.properties[Am_Ui_LayerGraphics_P_renderableBitmap]
+    aobject *rb = __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_LayerGraphics_P_renderableBitmap]
         .nullable_value.value.object_value;
     if (rb == NULL) {
         clear_target(data);
@@ -80,7 +80,7 @@ static void bind_renderable_bitmap_target(aobject *this)
     }
 
     Am_Ui_RenderableBitmap_data *rbData =
-        (Am_Ui_RenderableBitmap_data *)rb->object_properties.class_object_properties.object_data.value.custom_value;
+        (Am_Ui_RenderableBitmap_data *)__unwrap(rb)->object_properties.class_object_properties.object_data.value.custom_value;
     if (rbData == NULL || rbData->layer == NULL || rbData->rastport.BitMap == NULL) {
         clear_target(data);
         return;
@@ -96,7 +96,7 @@ static void bind_window_target(aobject *this)
     Am_Ui_LayerGraphics_data *data = get_layer_graphics_data(this);
     if (data == NULL) return;
 
-    aobject *windowObj = this->object_properties.class_object_properties.properties[Am_Ui_LayerGraphics_P_window]
+    aobject *windowObj = __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_LayerGraphics_P_window]
         .nullable_value.value.object_value;
     if (windowObj == NULL) {
         clear_target(data);
@@ -104,7 +104,7 @@ static void bind_window_target(aobject *this)
     }
 
     Am_Ui_Window_data *windowData =
-        (Am_Ui_Window_data *)windowObj->object_properties.class_object_properties.object_data.value.custom_value;
+        (Am_Ui_Window_data *)__unwrap(windowObj)->object_properties.class_object_properties.object_data.value.custom_value;
     if (windowData == NULL || windowData->window == NULL || windowData->window->RPort == NULL || windowData->window->WLayer == NULL) {
         clear_target(data);
         return;
@@ -120,7 +120,7 @@ static void apply_clip_rect(aobject *this, struct Am_Ui_ClipRect *clipRect)
     if (clipRect == NULL) return;
 
     Am_Ui_LayerGraphics_data *gData =
-        (Am_Ui_LayerGraphics_data *)this->object_properties.class_object_properties.object_data.value.custom_value;
+        (Am_Ui_LayerGraphics_data *)__unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
     if (gData == NULL || gData->clip_region == NULL) return;
 
     struct Layer *layer = get_layer(this);
@@ -156,7 +156,7 @@ function_result Am_Ui_LayerGraphics__native_init_0(aobject * const this)
     }
     data->clip_region = NewRegion();
     clear_target(data);
-    this->object_properties.class_object_properties.object_data.value.custom_value = data;
+    __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value = data;
 
 __exit: ;
     if (this != NULL) {
@@ -171,14 +171,14 @@ function_result Am_Ui_LayerGraphics__native_release_0(aobject * const this)
     bool __returning = false;
 
     Am_Ui_LayerGraphics_data *data =
-        (Am_Ui_LayerGraphics_data *)this->object_properties.class_object_properties.object_data.value.custom_value;
+        (Am_Ui_LayerGraphics_data *)__unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
     if (data != NULL) {
         if (data->clip_region != NULL) {
             DisposeRegion(data->clip_region);
             data->clip_region = NULL;
         }
         FreeVec(data);
-        this->object_properties.class_object_properties.object_data.value.custom_value = NULL;
+        __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value = NULL;
     }
 
 __exit: ;
@@ -362,7 +362,7 @@ function_result Am_Ui_LayerGraphics_drawString_0(aobject * const this, aobject *
     struct RastPort *rp = get_rp(this);
     if (rp == NULL || text == NULL) goto __exit;
     {
-        string_holder *sh = text->object_properties.class_object_properties.object_data.value.custom_value;
+        string_holder *sh = __unwrap(text)->object_properties.class_object_properties.object_data.value.custom_value;
         struct TextFont *tf = rp->Font;
         short baseline = tf ? tf->tf_Baseline : 0;
         short ysize = tf ? tf->tf_YSize : 0;
@@ -388,7 +388,7 @@ function_result Am_Ui_LayerGraphics_calculateStringWidth_0(aobject * const this,
     }
     struct RastPort *rp = get_rp(this);
     if (rp != NULL && text != NULL) {
-        string_holder *sh = text->object_properties.class_object_properties.object_data.value.custom_value;
+        string_holder *sh = __unwrap(text)->object_properties.class_object_properties.object_data.value.custom_value;
         __result.return_value.value.ushort_value = (unsigned short)TextLength(rp, sh->string_value, sh->length);
     }
 __exit: ;
@@ -419,7 +419,7 @@ function_result Am_Ui_LayerGraphics_setFont_0(aobject * const this, aobject *fon
     }
     struct RastPort *rp = get_rp(this);
     if (rp != NULL && font != NULL) {
-        struct TextFont *tf = font->object_properties.class_object_properties.object_data.value.custom_value;
+        struct TextFont *tf = __unwrap(font)->object_properties.class_object_properties.object_data.value.custom_value;
         if (tf != NULL) SetFont(rp, tf);
     }
 __exit: ;
@@ -440,11 +440,11 @@ function_result Am_Ui_LayerGraphics_drawImage_0(aobject * const this, aobject *i
     struct RastPort *rp = get_rp(this);
     if (rp == NULL || image == NULL) goto __exit;
     {
-        int pixFmt = image->object_properties.class_object_properties.properties[Am_Imaging_Image_P_pixelFormat].nullable_value.value.int_value;
+        int pixFmt = __unwrap(image)->object_properties.class_object_properties.properties[Am_Imaging_Image_P_pixelFormat].nullable_value.value.int_value;
         if (pixFmt == 2) {
             aobject *pixelColorsObj =
-                image->object_properties.class_object_properties.properties[Am_Imaging_Image_P_pixelColors].nullable_value.value.object_value;
-            unsigned short imgW = image->object_properties.class_object_properties.properties[Am_Imaging_Image_P_width].nullable_value.value.ushort_value;
+                __unwrap(image)->object_properties.class_object_properties.properties[Am_Imaging_Image_P_pixelColors].nullable_value.value.object_value;
+            unsigned short imgW = __unwrap(image)->object_properties.class_object_properties.properties[Am_Imaging_Image_P_width].nullable_value.value.ushort_value;
             if (pixelColorsObj != NULL) {
                 array_holder *ah = (array_holder *)&pixelColorsObj[1];
                 unsigned int *pixels = (unsigned int *)(void *)&ah[1];
@@ -478,7 +478,7 @@ function_result Am_Ui_LayerGraphics_blitBitmapRect_0(aobject * const this, aobje
     if (srcW == 0 || srcH == 0) goto __exit;
     {
         Am_Ui_Bitmap_data *bitmapData =
-            (Am_Ui_Bitmap_data *)bitmap->object_properties.class_object_properties.object_data.value.custom_value;
+            (Am_Ui_Bitmap_data *)__unwrap(bitmap)->object_properties.class_object_properties.object_data.value.custom_value;
         if (bitmapData == NULL || bitmapData->bitmap == NULL) goto __exit;
 
         short tx = lg_translated_x(this, dstX);
@@ -516,11 +516,11 @@ function_result Am_Ui_LayerGraphics_drawBitmap_0(aobject * const this, aobject *
     if (destWidth <= 0 || destHeight <= 0) goto __exit;
     {
         Am_Ui_Bitmap_data *bitmapData =
-            (Am_Ui_Bitmap_data *)bitmap->object_properties.class_object_properties.object_data.value.custom_value;
+            (Am_Ui_Bitmap_data *)__unwrap(bitmap)->object_properties.class_object_properties.object_data.value.custom_value;
         if (bitmapData == NULL || bitmapData->bitmap == NULL) goto __exit;
 
-        unsigned short srcW = bitmap->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_width].nullable_value.value.ushort_value;
-        unsigned short srcH = bitmap->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_height].nullable_value.value.ushort_value;
+        unsigned short srcW = __unwrap(bitmap)->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_width].nullable_value.value.ushort_value;
+        unsigned short srcH = __unwrap(bitmap)->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_height].nullable_value.value.ushort_value;
         short tx = lg_translated_x(this, x);
         short ty = lg_translated_y(this, y);
 

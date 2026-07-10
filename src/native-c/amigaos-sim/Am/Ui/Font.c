@@ -37,7 +37,7 @@ function_result Am_Ui_Font_calculateStringWidth_0(aobject * const this, aobject 
     if (text != NULL) __increase_reference_count(text);
     unsigned short width = 0;
     if (text != NULL) {
-        string_holder *sh = (string_holder *) text->object_properties.class_object_properties.object_data.value.custom_value;
+        string_holder *sh = (string_holder *) __unwrap(text)->object_properties.class_object_properties.object_data.value.custom_value;
         if (sh != NULL) width = (unsigned short)(sh->length * 8);
     }
     __result.return_value.value.ushort_value = width;

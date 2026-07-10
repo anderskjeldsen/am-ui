@@ -34,12 +34,12 @@
 struct Region *InstallClipRegion(struct Layer *layer, struct Region *region);
 
 short translated_x(aobject *g, short x) {
-	short tx = g->object_properties.class_object_properties.properties[Am_Ui_Graphics_P_xOffset].nullable_value.value.short_value;
+	short tx = __unwrap(g)->object_properties.class_object_properties.properties[Am_Ui_Graphics_P_xOffset].nullable_value.value.short_value;
 	return tx + x;
 }
 
 short translated_y(aobject *g, short y) {
-	short ty = g->object_properties.class_object_properties.properties[Am_Ui_Graphics_P_yOffset].nullable_value.value.short_value;
+	short ty = __unwrap(g)->object_properties.class_object_properties.properties[Am_Ui_Graphics_P_yOffset].nullable_value.value.short_value;
 	return ty + y;
 }
 
@@ -82,7 +82,7 @@ function_result Am_Ui_ViewContextGraphics_setForegroundPen_0(aobject * const thi
 	}
 
 	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
-	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) __unwrap(window)->object_properties.class_object_properties.object_data.value.custom_value;
 	struct RastPort *rp = window_data->window->RPort;
 
 	SetAPen(rp, pen);
@@ -106,7 +106,7 @@ function_result Am_Ui_ViewContextGraphics_setBackgroundPen_0(aobject * const thi
 	}
 
 	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
-	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) __unwrap(window)->object_properties.class_object_properties.object_data.value.custom_value;
 	struct RastPort *rp = window_data->window->RPort;
 
 	SetBPen(rp, pen);
@@ -130,7 +130,7 @@ function_result Am_Ui_ViewContextGraphics_drawLine_0(aobject * const this, short
 	}
 
 	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
-	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) __unwrap(window)->object_properties.class_object_properties.object_data.value.custom_value;
 	struct RastPort *rp = window_data->window->RPort;
 
 	short tx = translated_x(this, x);
@@ -167,7 +167,7 @@ function_result Am_Ui_ViewContextGraphics_eraseRect_0(aobject * const this, shor
 	}
 
 	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
-	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) __unwrap(window)->object_properties.class_object_properties.object_data.value.custom_value;
 	struct RastPort *rp = window_data->window->RPort;
 
 	short tx = translated_x(this, x);
@@ -197,7 +197,7 @@ function_result Am_Ui_ViewContextGraphics_fillRect_0(aobject * const this, short
 	}
 
 	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
-	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) __unwrap(window)->object_properties.class_object_properties.object_data.value.custom_value;
 	struct RastPort *rp = window_data->window->RPort;
 
 	short tx = translated_x(this, x);
@@ -230,9 +230,9 @@ function_result Am_Ui_ViewContextGraphics_drawString_0(aobject * const this, aob
 	}
 
 	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
-	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) __unwrap(window)->object_properties.class_object_properties.object_data.value.custom_value;
 	struct RastPort *rp = window_data->window->RPort;
-	string_holder *sh = text->object_properties.class_object_properties.object_data.value.custom_value;
+	string_holder *sh = __unwrap(text)->object_properties.class_object_properties.object_data.value.custom_value;
     struct TextFont *textFont = rp->Font;
 
 	short tx = translated_x(this, x);
@@ -266,9 +266,9 @@ function_result Am_Ui_ViewContextGraphics_calculateStringWidth_0(aobject * const
 	}
 
 	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
-	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) __unwrap(window)->object_properties.class_object_properties.object_data.value.custom_value;
 	struct RastPort *rp = window_data->window->RPort;
-	string_holder *sh = text->object_properties.class_object_properties.object_data.value.custom_value;
+	string_holder *sh = __unwrap(text)->object_properties.class_object_properties.object_data.value.custom_value;
 
 	ULONG width = TextLength(rp, sh->string_value, sh->length);
 
@@ -296,7 +296,7 @@ function_result Am_Ui_ViewContextGraphics_getCurrentFontSize_0(aobject * const t
 	}
 
 	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
-	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) __unwrap(window)->object_properties.class_object_properties.object_data.value.custom_value;
 	struct RastPort *rp = window_data->window->RPort;
 
     struct TextFont *textFont = rp->Font; // this->object_properties.class_object_properties.object_data.value.custom_value;
@@ -329,10 +329,10 @@ function_result Am_Ui_ViewContextGraphics_setFont_0(aobject * const this, aobjec
 	}
 
 	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
-	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) __unwrap(window)->object_properties.class_object_properties.object_data.value.custom_value;
 	struct RastPort *rp = window_data->window->RPort;
 
-    struct TextFont *textFont = this->object_properties.class_object_properties.object_data.value.custom_value;
+    struct TextFont *textFont = __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
 
 	SetFont(rp, textFont);
 __exit: ;
@@ -361,7 +361,7 @@ function_result Am_Ui_ViewContextGraphics_drawImage_0(aobject * const this, aobj
 	}
 
 	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
-	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) __unwrap(window)->object_properties.class_object_properties.object_data.value.custom_value;
 	struct RastPort *rp = window_data->window->RPort;
 
 	short tx = translated_x(this, x);
@@ -395,7 +395,7 @@ function_result Am_Ui_ViewContextGraphics_setClipRect_0(aobject * const this, st
 	// clipRect is a struct value-type (not ARC-tracked); no ref count adjustments needed.
 
 	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
-	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) __unwrap(window)->object_properties.class_object_properties.object_data.value.custom_value;
 
 	// Add the current clipRect to the master region
 	if (clipRect != NULL) {
@@ -433,7 +433,7 @@ function_result Am_Ui_ViewContextGraphics_clearClipRect_0(aobject * const this)
 	}
 
 	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
-	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) __unwrap(window)->object_properties.class_object_properties.object_data.value.custom_value;
 
 	InstallClipRegion(window_data->window->WLayer, NULL);
 
@@ -456,7 +456,7 @@ function_result Am_Ui_ViewContextGraphics_beginPainting_0(aobject * const this, 
 	// clipRect is a struct value-type (not ARC-tracked); no ref count adjustments needed.
 
 	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
-	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) __unwrap(window)->object_properties.class_object_properties.object_data.value.custom_value;
 
 	// Add the current clipRect to the master region
 	if (clipRect != NULL) {
@@ -494,7 +494,7 @@ function_result Am_Ui_ViewContextGraphics_endPainting_0(aobject * const this)
 	}
 
 	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
-	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) __unwrap(window)->object_properties.class_object_properties.object_data.value.custom_value;
 
 	InstallClipRegion(window_data->window->WLayer, NULL);
 	// Clear the region
@@ -539,19 +539,19 @@ function_result Am_Ui_ViewContextGraphics_drawBitmap_0(aobject * const this,
 
 	{
 		Am_Ui_Bitmap_data * const bitmapData =
-			(Am_Ui_Bitmap_data *)bitmap->object_properties.class_object_properties.object_data.value.custom_value;
+			(Am_Ui_Bitmap_data *)__unwrap(bitmap)->object_properties.class_object_properties.object_data.value.custom_value;
 		if (bitmapData == NULL || bitmapData->bitmap == NULL) goto __exit;
 
 		aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
 		Am_Ui_Window_data * const window_data =
-			(Am_Ui_Window_data * const)window->object_properties.class_object_properties.object_data.value.custom_value;
+			(Am_Ui_Window_data * const)__unwrap(window)->object_properties.class_object_properties.object_data.value.custom_value;
 		struct RastPort * const rp = window_data->window->RPort;
 
 		short tx = translated_x(this, x);
 		short ty = translated_y(this, y);
 
-		unsigned short srcW = bitmap->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_width].nullable_value.value.ushort_value;
-		unsigned short srcH = bitmap->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_height].nullable_value.value.ushort_value;
+		unsigned short srcW = __unwrap(bitmap)->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_width].nullable_value.value.ushort_value;
+		unsigned short srcH = __unwrap(bitmap)->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_height].nullable_value.value.ushort_value;
 
 		if (destWidth == (short)srcW && destHeight == (short)srcH) {
 			/* 1:1 blit — no scaling needed.
@@ -645,7 +645,7 @@ function_result Am_Ui_ViewContextGraphics_scrollRect_0(aobject * const this,
 	aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(this).return_value.value.object_value;
 	if (window == NULL || w == 0 || h == 0) goto __exit;
 	if (dx == 0 && dy == 0) goto __exit;
-	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) window->object_properties.class_object_properties.object_data.value.custom_value;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) __unwrap(window)->object_properties.class_object_properties.object_data.value.custom_value;
 	if (window_data == NULL || window_data->window == NULL || window_data->window->RPort == NULL) goto __exit;
 	struct RastPort *rp = window_data->window->RPort;
 

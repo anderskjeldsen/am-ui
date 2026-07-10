@@ -24,20 +24,20 @@
 
 static short translated_x(aobject *g, short x)
 {
-    short ox = g->object_properties.class_object_properties.properties[Am_Ui_Graphics_P_xOffset].nullable_value.value.short_value;
+    short ox = __unwrap(g)->object_properties.class_object_properties.properties[Am_Ui_Graphics_P_xOffset].nullable_value.value.short_value;
     return (short)(ox + x);
 }
 
 static short translated_y(aobject *g, short y)
 {
-    short oy = g->object_properties.class_object_properties.properties[Am_Ui_Graphics_P_yOffset].nullable_value.value.short_value;
+    short oy = __unwrap(g)->object_properties.class_object_properties.properties[Am_Ui_Graphics_P_yOffset].nullable_value.value.short_value;
     return (short)(oy + y);
 }
 
 static headless_screen_t * lg_screen(aobject *this)
 {
     if (this == NULL) return NULL;
-    aobject *window = this->object_properties.class_object_properties.properties[Am_Ui_LayerGraphics_P_window].nullable_value.value.object_value;
+    aobject *window = __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_LayerGraphics_P_window].nullable_value.value.object_value;
     return headless_screen_for_window(window);
 }
 
@@ -205,7 +205,7 @@ function_result Am_Ui_LayerGraphics_drawString_0(aobject * const this, aobject *
 
     headless_screen_t *s = lg_screen(this);
     if (s != NULL && text != NULL) {
-        string_holder *sh = (string_holder *) text->object_properties.class_object_properties.object_data.value.custom_value;
+        string_holder *sh = (string_holder *) __unwrap(text)->object_properties.class_object_properties.object_data.value.custom_value;
         if (sh != NULL && sh->string_value != NULL) {
             headless_draw_text_box(s, translated_x(this, x), translated_y(this, y),
                                    (unsigned int) sh->length, s->foreground_pen);
@@ -224,7 +224,7 @@ function_result Am_Ui_LayerGraphics_calculateStringWidth_0(aobject * const this,
 
     unsigned short width = 0;
     if (text != NULL) {
-        string_holder *sh = (string_holder *) text->object_properties.class_object_properties.object_data.value.custom_value;
+        string_holder *sh = (string_holder *) __unwrap(text)->object_properties.class_object_properties.object_data.value.custom_value;
         if (sh != NULL) width = (unsigned short)(sh->length * 8);
     }
     __result.return_value.value.ushort_value = width;

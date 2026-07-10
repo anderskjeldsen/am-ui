@@ -20,13 +20,13 @@ extern function_result Am_Ui_ViewContextGraphics_f_getWindow_0(aobject * const t
 
 static short translated_x(aobject *g, short x)
 {
-    short ox = g->object_properties.class_object_properties.properties[Am_Ui_Graphics_P_xOffset].nullable_value.value.short_value;
+    short ox = __unwrap(g)->object_properties.class_object_properties.properties[Am_Ui_Graphics_P_xOffset].nullable_value.value.short_value;
     return (short)(ox + x);
 }
 
 static short translated_y(aobject *g, short y)
 {
-    short oy = g->object_properties.class_object_properties.properties[Am_Ui_Graphics_P_yOffset].nullable_value.value.short_value;
+    short oy = __unwrap(g)->object_properties.class_object_properties.properties[Am_Ui_Graphics_P_yOffset].nullable_value.value.short_value;
     return (short)(oy + y);
 }
 
@@ -145,7 +145,7 @@ function_result Am_Ui_ViewContextGraphics_drawString_0(aobject * const this, aob
     if (text != NULL) __increase_reference_count(text);
     headless_screen_t *s = vcg_screen(this);
     if (s != NULL && text != NULL) {
-        string_holder *sh = (string_holder *) text->object_properties.class_object_properties.object_data.value.custom_value;
+        string_holder *sh = (string_holder *) __unwrap(text)->object_properties.class_object_properties.object_data.value.custom_value;
         if (sh != NULL) {
             headless_draw_text_box(s, translated_x(this, x), translated_y(this, y),
                                    (unsigned int) sh->length, s->foreground_pen);
@@ -163,7 +163,7 @@ function_result Am_Ui_ViewContextGraphics_calculateStringWidth_0(aobject * const
     if (text != NULL) __increase_reference_count(text);
     unsigned short width = 0;
     if (text != NULL) {
-        string_holder *sh = (string_holder *) text->object_properties.class_object_properties.object_data.value.custom_value;
+        string_holder *sh = (string_holder *) __unwrap(text)->object_properties.class_object_properties.object_data.value.custom_value;
         if (sh != NULL) width = (unsigned short)(sh->length * 8);
     }
     __result.return_value.value.ushort_value = width;

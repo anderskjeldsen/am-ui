@@ -30,7 +30,7 @@
 #include <libc/core_inline_functions.h>
 
 static void do_full_close(aobject * const this) {
-	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
+	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
 	if ( data != NULL ) {
 		bool releasing = this->reference_count == 0; // diiiirty
 		if (releasing) {
@@ -97,13 +97,13 @@ static void do_full_close(aobject * const this) {
 		}
 	}
 
-	free(this->object_properties.class_object_properties.object_data.value.custom_value);
-	this->object_properties.class_object_properties.object_data.value.custom_value = NULL;
+	free(__unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value);
+	__unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value = NULL;
 
 }
 
 void close_window_native(aobject * const this) {
-	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
+	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
 	if (data == NULL) {
 		return;
 	}
@@ -201,14 +201,14 @@ function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHO
 	}
 
 	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) calloc(1, sizeof(Am_Ui_Window_data));
-	this->object_properties.class_object_properties.object_data.value.custom_value = data;
+	__unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value = data;
 	data->clip_region = NewRegion();
 
 	struct Screen *amiga_screen = NULL;
 	struct VisualInfo *visual_info = NULL;
 
 	if (screen != NULL) {
-		Am_Ui_Screen_data *screen_data = (Am_Ui_Screen_data *) screen->object_properties.class_object_properties.object_data.value.custom_value;
+		Am_Ui_Screen_data *screen_data = (Am_Ui_Screen_data *) __unwrap(screen)->object_properties.class_object_properties.object_data.value.custom_value;
 		amiga_screen = screen_data->screen;
 	} else {
 		amiga_screen = LockPubScreen(NULL);
@@ -291,8 +291,8 @@ function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHO
 	// 640x256: x: 5x2, y: 5x1
 	// 320x512: x: 5x1, y: 5x2
 
-	this->object_properties.class_object_properties.properties[Am_Ui_Window_P_pixelScaleX].nullable_value.value.uchar_value = calculate_pixel_scale_x(window->WScreen->Width, window->WScreen->Height);
-	this->object_properties.class_object_properties.properties[Am_Ui_Window_P_pixelScaleY].nullable_value.value.uchar_value = calculate_pixel_scale_y(window->WScreen->Width, window->WScreen->Height);
+	__unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_Window_P_pixelScaleX].nullable_value.value.uchar_value = calculate_pixel_scale_x(window->WScreen->Width, window->WScreen->Height);
+	__unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_Window_P_pixelScaleY].nullable_value.value.uchar_value = calculate_pixel_scale_y(window->WScreen->Width, window->WScreen->Height);
 
 	Am_Ui_Window_f_setBorder_0(this, window->BorderLeft, window->BorderTop, window->BorderRight, window->BorderBottom);
 	Am_Ui_Window_f_onResize_0(this, window->LeftEdge, window->TopEdge, window->Width, window->Height);
@@ -329,7 +329,7 @@ __exit: ;
 };
 
 void handle_message(aobject * this, struct IntuiMessage * msg) {
-	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
 	struct Window * win = window_data->window;
 
 //	printf("Handle message %d\n", msg->Class);
@@ -565,7 +565,7 @@ function_result Am_Ui_Window_handleInput_0(aobject * const this)
 		__increase_reference_count(this);
 	}
 
-	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
+	Am_Ui_Window_data * const window_data = (Am_Ui_Window_data * const) __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
 	struct Window * win = window_data->window;
 
 	window_data->pending_close = FALSE;
@@ -658,7 +658,7 @@ function_result Am_Ui_Window_isOpen_0(aobject * const this)
 		__increase_reference_count(this);
 	}
 
-	__result.return_value.value.bool_value = this->object_properties.class_object_properties.object_data.value.custom_value != NULL;
+	__result.return_value.value.bool_value = __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value != NULL;
 __exit: ;
 	if (this != NULL) {
 		__decrease_reference_count(this);
@@ -670,7 +670,7 @@ function_result Am_Ui_Window_getHostScreenWidth_0(aobject * const this)
 {
 	function_result __result = { .has_return_value = true };
 	__increase_reference_count(this);
-	Am_Ui_Window_data * data = (Am_Ui_Window_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+	Am_Ui_Window_data * data = (Am_Ui_Window_data *) __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
 	unsigned short v = 0;
 	if (data != NULL && data->window != NULL && data->window->WScreen != NULL) {
 		v = (unsigned short) data->window->WScreen->Width;
@@ -684,7 +684,7 @@ function_result Am_Ui_Window_getHostScreenHeight_0(aobject * const this)
 {
 	function_result __result = { .has_return_value = true };
 	__increase_reference_count(this);
-	Am_Ui_Window_data * data = (Am_Ui_Window_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+	Am_Ui_Window_data * data = (Am_Ui_Window_data *) __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
 	unsigned short v = 0;
 	if (data != NULL && data->window != NULL && data->window->WScreen != NULL) {
 		v = (unsigned short) data->window->WScreen->Height;
@@ -702,7 +702,7 @@ function_result Am_Ui_Window_refresh_0(aobject * const this)
 		__increase_reference_count(this);
 	}
 
-	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
+	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
 	struct Window *window = data->window;
 //	EraseRect(window->RPort, 0, 0, window->Width - 1, window->Height - 1); // Erase old content
 
@@ -732,7 +732,7 @@ function_result Am_Ui_Window_getUserPortTaskPtr_0(aobject * const this)
 	function_result __result = { .has_return_value = true };
 	if (this != NULL) __increase_reference_count(this);
 	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const)
-		this->object_properties.class_object_properties.object_data.value.custom_value;
+		__unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
 	LONG ptr = 0;
 	if (data != NULL && data->window != NULL && data->window->UserPort != NULL) {
 		ptr = (LONG) data->window->UserPort->mp_SigTask;
@@ -747,7 +747,7 @@ function_result Am_Ui_Window_getUserPortSigBit_0(aobject * const this)
 	function_result __result = { .has_return_value = true };
 	if (this != NULL) __increase_reference_count(this);
 	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const)
-		this->object_properties.class_object_properties.object_data.value.custom_value;
+		__unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
 	LONG bit = -1;
 	if (data != NULL && data->window != NULL && data->window->UserPort != NULL) {
 		bit = (LONG) data->window->UserPort->mp_SigBit;
@@ -771,12 +771,12 @@ function_result Am_Ui_Window_setTitleNative_0(aobject * const this, aobject * co
 		__increase_reference_count(screenTitle);
 	}
 
-	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) this->object_properties.class_object_properties.object_data.value.custom_value;
+	Am_Ui_Window_data * const data = (Am_Ui_Window_data * const) __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
 	if (data != NULL && data->window != NULL) {
 		// Extract window title string
 		char *windowTitleStr = NULL;
 		if (windowTitle != NULL) {
-			string_holder *windowTitleSh = windowTitle->object_properties.class_object_properties.object_data.value.custom_value;
+			string_holder *windowTitleSh = __unwrap(windowTitle)->object_properties.class_object_properties.object_data.value.custom_value;
 			if (windowTitleSh != NULL && windowTitleSh->string_value != NULL) {
 				windowTitleStr = windowTitleSh->string_value;
 			}
@@ -785,7 +785,7 @@ function_result Am_Ui_Window_setTitleNative_0(aobject * const this, aobject * co
 		// Extract screen title string  
 		char *screenTitleStr = NULL;
 		if (screenTitle != NULL) {
-			string_holder *screenTitleSh = screenTitle->object_properties.class_object_properties.object_data.value.custom_value;
+			string_holder *screenTitleSh = __unwrap(screenTitle)->object_properties.class_object_properties.object_data.value.custom_value;
 			if (screenTitleSh != NULL && screenTitleSh->string_value != NULL && screenTitleSh->length > 0) {
 				screenTitleStr = screenTitleSh->string_value;
 			}
@@ -830,8 +830,8 @@ function_result Am_Ui_Window_copyToClipboard_0(aobject * const this, aobject * c
 	}
 
 	// Get the string content from the AmLang String object
-	if (text->object_properties.class_object_properties.object_data.value.custom_value != NULL) {
-		string_holder* holder = (string_holder*)text->object_properties.class_object_properties.object_data.value.custom_value;
+	if (__unwrap(text)->object_properties.class_object_properties.object_data.value.custom_value != NULL) {
+		string_holder* holder = (string_holder*)__unwrap(text)->object_properties.class_object_properties.object_data.value.custom_value;
 		if (holder->string_value != NULL) {
 			// Free previous clipboard content
 			if (stored_clipboard_text != NULL) {
@@ -889,7 +889,7 @@ static char * extract_string_dup(aobject * str) {
 	if (str == NULL) {
 		return NULL;
 	}
-	string_holder * sh = (string_holder *) str->object_properties.class_object_properties.object_data.value.custom_value;
+	string_holder * sh = (string_holder *) __unwrap(str)->object_properties.class_object_properties.object_data.value.custom_value;
 	if (sh == NULL || sh->string_value == NULL) {
 		return NULL;
 	}
@@ -928,7 +928,7 @@ function_result Am_Ui_Window_nativeBeginMenuStrip_0(aobject * const this) {
 		__increase_reference_count(this);
 	}
 
-	Am_Ui_Window_data * data = (Am_Ui_Window_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+	Am_Ui_Window_data * data = (Am_Ui_Window_data *) __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
 	if (data == NULL) {
 		goto __exit;
 	}
@@ -963,7 +963,7 @@ function_result Am_Ui_Window_nativeAddMenu_0(aobject * const this, aobject * con
 		__increase_reference_count(title);
 	}
 
-	Am_Ui_Window_data * data = (Am_Ui_Window_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+	Am_Ui_Window_data * data = (Am_Ui_Window_data *) __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
 	if (data == NULL || data->menu_builder == NULL) {
 		goto __exit;
 	}
@@ -1033,7 +1033,7 @@ function_result Am_Ui_Window_nativeAddMenuItem_0(aobject * const this, int menuI
 		__increase_reference_count(commKey);
 	}
 
-	Am_Ui_Window_data * data = (Am_Ui_Window_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+	Am_Ui_Window_data * data = (Am_Ui_Window_data *) __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
 	if (data == NULL || data->menu_builder == NULL) {
 		goto __exit;
 	}
@@ -1070,7 +1070,7 @@ function_result Am_Ui_Window_nativeAddMenuSubItem_0(aobject * const this, int me
 		__increase_reference_count(commKey);
 	}
 
-	Am_Ui_Window_data * data = (Am_Ui_Window_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+	Am_Ui_Window_data * data = (Am_Ui_Window_data *) __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
 	if (data == NULL || data->menu_builder == NULL) {
 		goto __exit;
 	}
@@ -1098,7 +1098,7 @@ function_result Am_Ui_Window_nativeFinalizeMenuStrip_0(aobject * const this) {
 		__increase_reference_count(this);
 	}
 
-	Am_Ui_Window_data * data = (Am_Ui_Window_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+	Am_Ui_Window_data * data = (Am_Ui_Window_data *) __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
 	if (data == NULL || data->menu_builder == NULL || data->window == NULL) {
 		goto __exit;
 	}
@@ -1137,12 +1137,12 @@ function_result Am_Ui_Window_nativeFinalizeMenuStrip_0(aobject * const this) {
 			aobject *amItem = b->item_aobjects[i];
 			bool itemIsSeparator = false;
 			if (amItem != NULL) {
-				bool itemEnabled = amItem->object_properties.class_object_properties
+				bool itemEnabled = __unwrap(amItem)->object_properties.class_object_properties
 					.properties[Am_Ui_MenuItem_P_enabled].nullable_value.value.bool_value;
 				if (!itemEnabled) {
 					nm[n].nm_Flags |= NM_ITEMDISABLED;
 				}
-				itemIsSeparator = amItem->object_properties.class_object_properties
+				itemIsSeparator = __unwrap(amItem)->object_properties.class_object_properties
 					.properties[Am_Ui_MenuItem_P_isSeparator].nullable_value.value.bool_value;
 			}
 			// MenuItem.isSeparator → NM_BARLABEL (the (STRPTR)-1
@@ -1209,7 +1209,7 @@ function_result Am_Ui_Window_nativeClearMenuStrip_0(aobject * const this) {
 		__increase_reference_count(this);
 	}
 
-	Am_Ui_Window_data * data = (Am_Ui_Window_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+	Am_Ui_Window_data * data = (Am_Ui_Window_data *) __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
 	if (data != NULL) {
 		free_menu_strip(data);
 	}

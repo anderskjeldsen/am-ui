@@ -47,8 +47,8 @@ function_result Am_Ui_ScreenModeRequester__native_init_0(aobject * const this)
 	}
 
 	// TODO: replace [0] with a way to get a named property
-	aobject * title = this->object_properties.class_object_properties.properties[0].nullable_value.value.object_value;
-	string_holder *title_holder = title->object_properties.class_object_properties.object_data.value.custom_value;
+	aobject * title = __unwrap(this)->object_properties.class_object_properties.properties[0].nullable_value.value.object_value;
+	string_holder *title_holder = __unwrap(title)->object_properties.class_object_properties.object_data.value.custom_value;
 
 	struct TagItem reqTypes[] = 
 	{
@@ -75,7 +75,7 @@ function_result Am_Ui_ScreenModeRequester__native_init_0(aobject * const this)
 	};
 
 	Am_Ui_ScreenModeRequester_data * data = malloc(sizeof(Am_Ui_ScreenModeRequester_data));
-	this->object_properties.class_object_properties.object_data.value.custom_value = data;
+	__unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value = data;
 
 	data->screenModeRequester = (struct ScreenModeRequester *) AllocAslRequest(ASL_ScreenModeRequest, reqTypes);
 	if (data->screenModeRequester == NULL) {
@@ -92,11 +92,11 @@ function_result Am_Ui_ScreenModeRequester__native_release_0(aobject * const this
 	char __returning = 0;
 	printf("TODO: implement native function Am_Ui_ScreenModeRequester__native_release_0\n");
 
-	Am_Ui_ScreenModeRequester_data * data = (Am_Ui_ScreenModeRequester_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+	Am_Ui_ScreenModeRequester_data * data = (Am_Ui_ScreenModeRequester_data *) __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
 	FreeAslRequest((APTR)data->screenModeRequester);
 	free(data);
 
-	this->object_properties.class_object_properties.object_data.value.custom_value = NULL;
+	__unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value = NULL;
 
 __exit:
 	return __result;
@@ -117,7 +117,7 @@ function_result Am_Ui_ScreenModeRequester_setMin_0(aobject * const this, int wid
 	__increase_reference_count(this);
 	printf("Am_Ui_ScreenModeRequester_setMin_0: %d x %d x %d\n", width, height, depth);
 
-	Am_Ui_ScreenModeRequester_data * data = (Am_Ui_ScreenModeRequester_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+	Am_Ui_ScreenModeRequester_data * data = (Am_Ui_ScreenModeRequester_data *) __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
 	data->min_width = width;
 	data->min_height = height;
 	data->min_depth = depth;
@@ -134,7 +134,7 @@ function_result Am_Ui_ScreenModeRequester_setDesired_0(aobject * const this, int
 	__increase_reference_count(this);
 //	printf("Am_Ui_ScreenModeRequester_setDesired_0: %dx%d\n", width, height);
 
-	Am_Ui_ScreenModeRequester_data * data = (Am_Ui_ScreenModeRequester_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+	Am_Ui_ScreenModeRequester_data * data = (Am_Ui_ScreenModeRequester_data *) __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
 	data->desired_width = width;
 	data->desired_height = height;
 	data->desired_depth = depth;
@@ -151,7 +151,7 @@ function_result Am_Ui_ScreenModeRequester_setMax_0(aobject * const this, int wid
 	__increase_reference_count(this);
 //	printf("Am_Ui_ScreenModeRequester_setMax_0: %dx%d\n", width, height);
 
-	Am_Ui_ScreenModeRequester_data * data = (Am_Ui_ScreenModeRequester_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+	Am_Ui_ScreenModeRequester_data * data = (Am_Ui_ScreenModeRequester_data *) __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
 	data->max_width = width;
 	data->max_height = height;
 	data->max_depth = depth;
@@ -168,7 +168,7 @@ function_result Am_Ui_ScreenModeRequester_open_0(aobject * const this)
 	__increase_reference_count(this);
 	printf("TODO: implement native function Am_Ui_ScreenModeRequester_open_0\n");
 
-	Am_Ui_ScreenModeRequester_data * data = (Am_Ui_ScreenModeRequester_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+	Am_Ui_ScreenModeRequester_data * data = (Am_Ui_ScreenModeRequester_data *) __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
 
 	struct TagItem reqTypes[] = 
 	{
