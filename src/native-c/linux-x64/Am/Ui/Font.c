@@ -32,7 +32,7 @@
 
 static Am_Ui_Font_data *fn_data(aobject *const this)
 {
-    return (Am_Ui_Font_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+    return (Am_Ui_Font_data *) __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
 }
 
 static void fn_ensure_data(aobject *const this)
@@ -40,7 +40,7 @@ static void fn_ensure_data(aobject *const this)
     if (fn_data(this) != NULL) return;
     Am_Ui_Font_data *d = (Am_Ui_Font_data *) calloc(1, sizeof(Am_Ui_Font_data));
     if (d != NULL) {
-        this->object_properties.class_object_properties.object_data.value.custom_value = d;
+        __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value = d;
     }
 }
 
@@ -152,8 +152,8 @@ function_result Am_Ui_Font__native_init_0(aobject *const this)
     // The AmLang Font constructor stores name + size as ordinary
     // properties before _native_init_0 fires — mirror the amigaos
     // peer and pull them straight off `this`.
-    aobject *name      = this->object_properties.class_object_properties.properties[Am_Ui_Font_P_name].nullable_value.value.object_value;
-    unsigned char size = this->object_properties.class_object_properties.properties[Am_Ui_Font_P_size].nullable_value.value.uchar_value;
+    aobject *name      = __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_Font_P_name].nullable_value.value.object_value;
+    unsigned char size = __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_Font_P_size].nullable_value.value.uchar_value;
 
     const char *requested = NULL;
     if (name != NULL) {
@@ -204,7 +204,7 @@ function_result Am_Ui_Font__native_init_0(aobject *const this)
     int chosen = line_skip > real_height ? line_skip : real_height;
     int stored = chosen > 255 ? 255 : chosen;
     nullable_value scaled = { .flags = PRIMITIVE_UBYTE, .value = { .uchar_value = (unsigned char) stored } };
-    this->object_properties.class_object_properties.properties[Am_Ui_Font_P_size].nullable_value = scaled;
+    __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_Font_P_size].nullable_value = scaled;
 
 __exit:
 #endif
@@ -229,7 +229,7 @@ function_result Am_Ui_Font__native_release_0(aobject *const this)
         if (d->ttf_font != NULL) TTF_CloseFont((TTF_Font *) d->ttf_font);
 #endif
         free(d);
-        this->object_properties.class_object_properties.object_data.value.custom_value = NULL;
+        __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value = NULL;
     }
     return __result;
 }

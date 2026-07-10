@@ -72,7 +72,7 @@ extern void am_ui_macos_arm_lg_target_changed(SDL_Renderer *renderer, SDL_Textur
 
 static Am_Ui_Window_data *win_data(aobject *const this)
 {
-    return (Am_Ui_Window_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+    return (Am_Ui_Window_data *) __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
 }
 
 // Process-global "most recent renderer" pointer. Window.open_0 updates
@@ -111,7 +111,7 @@ function_result Am_Ui_Window__native_init_0(aobject *const this)
 
     Am_Ui_Window_data *data = (Am_Ui_Window_data *) calloc(1, sizeof(Am_Ui_Window_data));
     if (data != NULL) {
-        this->object_properties.class_object_properties.object_data.value.custom_value = data;
+        __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value = data;
     }
 
     __decrease_reference_count(this);
@@ -134,7 +134,7 @@ function_result Am_Ui_Window__native_release_0(aobject *const this)
         if (data->renderer != NULL) { SDL_DestroyRenderer(data->renderer); data->renderer = NULL; }
         if (data->window != NULL)   { SDL_DestroyWindow(data->window);     data->window = NULL; }
         free(data);
-        this->object_properties.class_object_properties.object_data.value.custom_value = NULL;
+        __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value = NULL;
     }
 
     return __result;
@@ -478,17 +478,17 @@ static void add_menu_item_to(id ns_menu, aobject *amlang_item)
 {
     if (amlang_item == NULL) return;
 
-    bool is_sep = amlang_item->object_properties.class_object_properties.properties[MENU_BRIDGE_P_MenuItem_isSeparator].nullable_value.value.bool_value;
+    bool is_sep = __unwrap(amlang_item)->object_properties.class_object_properties.properties[MENU_BRIDGE_P_MenuItem_isSeparator].nullable_value.value.bool_value;
     if (is_sep) {
         id sep = ((id (*)(Class, SEL)) objc_msgSend)(g_NSMenuItem, g_sel_separatorItem);
         ((void (*)(id, SEL, id)) objc_msgSend)(ns_menu, g_sel_addItem, sep);
         return;
     }
 
-    aobject *label_obj = amlang_item->object_properties.class_object_properties.properties[MENU_BRIDGE_P_MenuItem_label].nullable_value.value.object_value;
+    aobject *label_obj = __unwrap(amlang_item)->object_properties.class_object_properties.properties[MENU_BRIDGE_P_MenuItem_label].nullable_value.value.object_value;
     const char *label = amlang_str(label_obj);
 
-    aobject *commKey_obj = amlang_item->object_properties.class_object_properties.properties[MENU_BRIDGE_P_MenuItem_commKey].nullable_value.value.object_value;
+    aobject *commKey_obj = __unwrap(amlang_item)->object_properties.class_object_properties.properties[MENU_BRIDGE_P_MenuItem_commKey].nullable_value.value.object_value;
     const char *commKey = amlang_str(commKey_obj);
     // commKey is single-char on AmLang; if it's longer, use the first
     // char. Empty/NULL → no shortcut.
@@ -497,11 +497,11 @@ static void add_menu_item_to(id ns_menu, aobject *amlang_item)
         keq_buf[0] = commKey[0];
     }
 
-    bool enabled = amlang_item->object_properties.class_object_properties.properties[MENU_BRIDGE_P_MenuItem_enabled].nullable_value.value.bool_value;
+    bool enabled = __unwrap(amlang_item)->object_properties.class_object_properties.properties[MENU_BRIDGE_P_MenuItem_enabled].nullable_value.value.bool_value;
 
     // Check whether this item has sub-items; if so we want a parent
     // item with a submenu (no action) rather than a clickable one.
-    aobject *subs = amlang_item->object_properties.class_object_properties.properties[MENU_BRIDGE_P_MenuItem_subItems].nullable_value.value.object_value;
+    aobject *subs = __unwrap(amlang_item)->object_properties.class_object_properties.properties[MENU_BRIDGE_P_MenuItem_subItems].nullable_value.value.object_value;
     int sub_count = 0;
     if (subs != NULL) {
         function_result fr = Am_Collections_List_ta_Am_Ui_MenuItem_f_getSize_0(subs);
@@ -540,7 +540,7 @@ static void add_menu_item_to(id ns_menu, aobject *amlang_item)
 
 static void build_ns_menu_items(id ns_menu, aobject *items_container, int items_property_index)
 {
-    aobject *items = items_container->object_properties.class_object_properties.properties[items_property_index].nullable_value.value.object_value;
+    aobject *items = __unwrap(items_container)->object_properties.class_object_properties.properties[items_property_index].nullable_value.value.object_value;
     if (items == NULL) return;
     function_result fr = Am_Collections_List_ta_Am_Ui_MenuItem_f_getSize_0(items);
     if (fr.exception != NULL) { __decrease_reference_count(fr.exception); return; }
@@ -568,7 +568,7 @@ void am_ui_macos_arm_install_menu_strip(aobject *menuStrip)
     // menus in order; the first one becomes the app menu visually.
     id main_menu = new_ns_menu("");
     if (menuStrip != NULL) {
-        aobject *menus = menuStrip->object_properties.class_object_properties.properties[MENU_BRIDGE_P_MenuStrip_menus].nullable_value.value.object_value;
+        aobject *menus = __unwrap(menuStrip)->object_properties.class_object_properties.properties[MENU_BRIDGE_P_MenuStrip_menus].nullable_value.value.object_value;
         if (menus != NULL) {
             function_result fr = Am_Collections_List_ta_Am_Ui_Menu_f_getSize_0(menus);
             if (fr.exception != NULL) { __decrease_reference_count(fr.exception); }
@@ -580,7 +580,7 @@ void am_ui_macos_arm_install_menu_strip(aobject *menuStrip)
                     aobject *amlang_menu = gr.return_value.value.object_value;
                     if (amlang_menu == NULL) continue;
 
-                    aobject *title_obj = amlang_menu->object_properties.class_object_properties.properties[MENU_BRIDGE_P_Menu_title].nullable_value.value.object_value;
+                    aobject *title_obj = __unwrap(amlang_menu)->object_properties.class_object_properties.properties[MENU_BRIDGE_P_Menu_title].nullable_value.value.object_value;
                     const char *title = amlang_str(title_obj);
 
                     // Top-level NSMenuItem hosting the dropdown.
@@ -632,8 +632,8 @@ function_result Am_Ui_Window_handleInput_0(aobject *const this)
     // strip actually changes (boot, workspace switch, etc.). NULL
     // strip means "no menus", which is exactly what the splash window
     // wants — the bridge clears NSApp.mainMenu in that case.
-    aobject *current_strip = this->object_properties.class_object_properties.properties[Am_Ui_Window_P_menuStrip].nullable_value.value.object_value;
-    int current_strip_version = (int) this->object_properties.class_object_properties.properties[Am_Ui_Window_P_menuStripVersion].nullable_value.value.int_value;
+    aobject *current_strip = __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_Window_P_menuStrip].nullable_value.value.object_value;
+    int current_strip_version = (int) __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_Window_P_menuStripVersion].nullable_value.value.int_value;
     // Rebuild when EITHER the strip pointer changed OR the version
     // counter ticked — pointer-only dedupe missed "same strip whose
     // items got their enabled flags flipped" (e.g. the IDE's Edit
@@ -848,7 +848,7 @@ function_result Am_Ui_Window_handleInput_0(aobject *const this)
             // bugs and stare at a blank window. The message lives at the
             // canonical Am.Lang.Exception property layout — pull it out
             // safely so the print itself doesn't strlen NULL.
-            aobject *msg_obj = paint_res.exception->object_properties.class_object_properties.properties[Am_Lang_Exception_P_message].nullable_value.value.object_value;
+            aobject *msg_obj = __unwrap(paint_res.exception)->object_properties.class_object_properties.properties[Am_Lang_Exception_P_message].nullable_value.value.object_value;
             const char *msg = "(no msg)";
             if (msg_obj != NULL) {
                 string_holder *sh = (string_holder *) (msg_obj + 1);
@@ -866,7 +866,7 @@ function_result Am_Ui_Window_handleInput_0(aobject *const this)
                 // straight to string_holder is what segfaulted my last
                 // attempt to print it). Pull each frame via the typed
                 // List accessor.
-                aobject *st_list = paint_res.exception->object_properties.class_object_properties.properties[Am_Lang_Exception_P_stackTrace].nullable_value.value.object_value;
+                aobject *st_list = __unwrap(paint_res.exception)->object_properties.class_object_properties.properties[Am_Lang_Exception_P_stackTrace].nullable_value.value.object_value;
                 if (st_list != NULL) {
                     function_result n_fr = Am_Collections_List_ta_Am_Lang_String_f_getSize_0(st_list);
                     if (n_fr.exception == NULL) {
@@ -908,11 +908,11 @@ function_result Am_Ui_Window_handleInput_0(aobject *const this)
             // still bound there and skip its real switch.
             am_ui_macos_arm_lg_target_changed(data->renderer, NULL);
             SDL_RenderSetClipRect(data->renderer, NULL);
-            aobject *off_rb = this->object_properties.class_object_properties.properties[Am_Ui_Window_P_offscreen].nullable_value.value.object_value;
+            aobject *off_rb = __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_Window_P_offscreen].nullable_value.value.object_value;
             if (off_rb != NULL) {
-                aobject *off_bm = off_rb->object_properties.class_object_properties.properties[Am_Ui_RenderableBitmap_P_bitmap].nullable_value.value.object_value;
+                aobject *off_bm = __unwrap(off_rb)->object_properties.class_object_properties.properties[Am_Ui_RenderableBitmap_P_bitmap].nullable_value.value.object_value;
                 if (off_bm != NULL) {
-                    Am_Ui_Bitmap_data *bd = (Am_Ui_Bitmap_data *) off_bm->object_properties.class_object_properties.object_data.value.custom_value;
+                    Am_Ui_Bitmap_data *bd = (Am_Ui_Bitmap_data *) __unwrap(off_bm)->object_properties.class_object_properties.object_data.value.custom_value;
                     if (bd != NULL && bd->texture != NULL) {
                         int win_w = 0, win_h = 0;
                         SDL_GetWindowSize(data->window, &win_w, &win_h);

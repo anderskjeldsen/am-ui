@@ -85,7 +85,7 @@ function_result Am_Ui_Screen__native_init_0(aobject *const this)
         }
         data->display_w = 0;
         data->display_h = 0;
-        this->object_properties.class_object_properties.object_data.value.custom_value = data;
+        __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value = data;
     }
 
     __decrease_reference_count(this);
@@ -103,7 +103,7 @@ function_result Am_Ui_Screen__native_release_0(aobject *const this)
 {
     function_result __result = { .has_return_value = false };
 
-    Am_Ui_Screen_data *data = (Am_Ui_Screen_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+    Am_Ui_Screen_data *data = (Am_Ui_Screen_data *) __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
     if (data != NULL) {
         if (g_palette == data->palette) {
             // We were the live palette source; revert to the static
@@ -113,7 +113,7 @@ function_result Am_Ui_Screen__native_release_0(aobject *const this)
             g_palette_count = AM_UI_LINUX_SCREEN_PALETTE_SIZE;
         }
         free(data);
-        this->object_properties.class_object_properties.object_data.value.custom_value = NULL;
+        __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value = NULL;
     }
 
     return __result;
@@ -139,7 +139,7 @@ function_result Am_Ui_Screen_open_0(aobject *const this,
     if (systemPens != NULL)    __increase_reference_count(systemPens);
     if (paletteColors != NULL) __increase_reference_count(paletteColors);
 
-    Am_Ui_Screen_data *data = (Am_Ui_Screen_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+    Am_Ui_Screen_data *data = (Am_Ui_Screen_data *) __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
     if (data == NULL) goto __exit;
 
     // Capture the user's primary display geometry. SDL_GetDisplayBounds
@@ -220,7 +220,7 @@ function_result Am_Ui_Screen_getWidth_0(aobject *const this)
 {
     function_result __result = { .has_return_value = true };
     __increase_reference_count(this);
-    Am_Ui_Screen_data *data = (Am_Ui_Screen_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+    Am_Ui_Screen_data *data = (Am_Ui_Screen_data *) __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
     __result.return_value.value.ushort_value = (unsigned short) (data ? data->display_w : 0);
     __decrease_reference_count(this);
     return __result;
@@ -230,7 +230,7 @@ function_result Am_Ui_Screen_getHeight_0(aobject *const this)
 {
     function_result __result = { .has_return_value = true };
     __increase_reference_count(this);
-    Am_Ui_Screen_data *data = (Am_Ui_Screen_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+    Am_Ui_Screen_data *data = (Am_Ui_Screen_data *) __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
     __result.return_value.value.ushort_value = (unsigned short) (data ? data->display_h : 0);
     __decrease_reference_count(this);
     return __result;
@@ -257,10 +257,10 @@ function_result Am_Ui_Screen_fillDefaultScreenMode_0(aobject *mode)
     SDL_GetDisplayBounds(0, &bounds);
 
     if (mode != NULL) {
-        mode->object_properties.class_object_properties.properties[Am_Ui_ScreenMode_P_width].nullable_value.value.int_value     = bounds.w;
-        mode->object_properties.class_object_properties.properties[Am_Ui_ScreenMode_P_height].nullable_value.value.int_value    = bounds.h;
-        mode->object_properties.class_object_properties.properties[Am_Ui_ScreenMode_P_depth].nullable_value.value.int_value     = 32;
-        mode->object_properties.class_object_properties.properties[Am_Ui_ScreenMode_P_displayId].nullable_value.value.int_value = 0;
+        __unwrap(mode)->object_properties.class_object_properties.properties[Am_Ui_ScreenMode_P_width].nullable_value.value.int_value     = bounds.w;
+        __unwrap(mode)->object_properties.class_object_properties.properties[Am_Ui_ScreenMode_P_height].nullable_value.value.int_value    = bounds.h;
+        __unwrap(mode)->object_properties.class_object_properties.properties[Am_Ui_ScreenMode_P_depth].nullable_value.value.int_value     = 32;
+        __unwrap(mode)->object_properties.class_object_properties.properties[Am_Ui_ScreenMode_P_displayId].nullable_value.value.int_value = 0;
     }
 
     if (mode != NULL) __decrease_reference_count(mode);
@@ -276,7 +276,7 @@ function_result Am_Ui_Screen_setColor_0(aobject *const this, int index, unsigned
     function_result __result = { .has_return_value = false };
     __increase_reference_count(this);
 
-    Am_Ui_Screen_data *data = (Am_Ui_Screen_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+    Am_Ui_Screen_data *data = (Am_Ui_Screen_data *) __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
     if (data != NULL && index >= 0 && index < AM_UI_LINUX_SCREEN_PALETTE_SIZE) {
         data->palette[index] = 0xFF000000u
                              | ((Uint32) r << 16)
@@ -293,7 +293,7 @@ function_result Am_Ui_Screen_copyHostPens_0(aobject *const this, int count)
     function_result __result = { .has_return_value = false };
     __increase_reference_count(this);
 
-    Am_Ui_Screen_data *data = (Am_Ui_Screen_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+    Am_Ui_Screen_data *data = (Am_Ui_Screen_data *) __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
     if (data != NULL && count > 0) {
         if (count > AM_UI_LINUX_SCREEN_PALETTE_SIZE) count = AM_UI_LINUX_SCREEN_PALETTE_SIZE;
         for (int i = 0; i < count; i++) {

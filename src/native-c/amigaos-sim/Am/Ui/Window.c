@@ -38,7 +38,7 @@ function_result Am_Ui_Window__native_release_0(aobject * const this)
     headless_screen_t *s = headless_screen_for_window(this);
     if (s != NULL) {
         headless_screen_free(s);
-        this->object_properties.class_object_properties.object_data.value.custom_value = NULL;
+        __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value = NULL;
     }
 __exit: ;
     return __result;
@@ -69,7 +69,7 @@ function_result Am_Ui_Window_open_0(aobject * const this, short x, short y,
     if (h == 0) h = HEADLESS_SCREEN_HEIGHT;
 
     headless_screen_t *s = headless_screen_alloc(w, h);
-    this->object_properties.class_object_properties.object_data.value.custom_value = s;
+    __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value = s;
 
 __exit: ;
     return __result;

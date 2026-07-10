@@ -44,7 +44,7 @@ void headless_screen_free(headless_screen_t *s)
 headless_screen_t * headless_screen_for_window(aobject *window)
 {
     if (window == NULL) return NULL;
-    return (headless_screen_t *) window->object_properties.class_object_properties.object_data.value.custom_value;
+    return (headless_screen_t *) __unwrap(window)->object_properties.class_object_properties.object_data.value.custom_value;
 }
 
 // ---------------- drawing primitives ----------------

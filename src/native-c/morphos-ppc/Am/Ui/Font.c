@@ -43,10 +43,10 @@ function_result Am_Ui_Font__native_init_0(aobject * const this)
 		__increase_reference_count(this);
 	}
 
-    aobject *name = this->object_properties.class_object_properties.properties[Am_Ui_Font_P_name].nullable_value.value.object_value;
-    UBYTE size = this->object_properties.class_object_properties.properties[Am_Ui_Font_P_size].nullable_value.value.uchar_value;
+    aobject *name = __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_Font_P_name].nullable_value.value.object_value;
+    UBYTE size = __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_Font_P_size].nullable_value.value.uchar_value;
 
-    string_holder *sh = name->object_properties.class_object_properties.object_data.value.custom_value;
+    string_holder *sh = __unwrap(name)->object_properties.class_object_properties.object_data.value.custom_value;
 
 
     struct TextAttr textAttr = { sh->string_value, size, 0, 0 };
@@ -71,7 +71,7 @@ function_result Am_Ui_Font__native_init_0(aobject * const this)
 		goto __exit;
     }
 
-    this->object_properties.class_object_properties.object_data.value.custom_value = font;
+    __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value = font;
 
 __exit: ;
 	if (this != NULL) {
@@ -85,10 +85,10 @@ function_result Am_Ui_Font__native_release_0(aobject * const this)
 	function_result __result = { .has_return_value = false };
 	bool __returning = false;
 
-    struct TextFont *font = this->object_properties.class_object_properties.object_data.value.custom_value;
+    struct TextFont *font = __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
     if (font != NULL) {
         CloseFont(font);
-        this->object_properties.class_object_properties.object_data.value.custom_value = NULL;
+        __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value = NULL;
     }
 
 
@@ -131,8 +131,8 @@ function_result Am_Ui_Font_calculateStringWidth_0(aobject * const this, aobject 
 		goto __exit;
 	}
 
-	struct TextFont *font = this->object_properties.class_object_properties.object_data.value.custom_value;
-	string_holder *sh = text->object_properties.class_object_properties.object_data.value.custom_value;
+	struct TextFont *font = __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
+	string_holder *sh = __unwrap(text)->object_properties.class_object_properties.object_data.value.custom_value;
 
 	if (font == NULL || sh == NULL || sh->length == 0) {
 		goto __exit;

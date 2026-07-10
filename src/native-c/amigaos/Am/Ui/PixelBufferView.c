@@ -25,19 +25,19 @@ static struct RastPort *get_rastport_from_graphics(aobject *graphics)
 {
     if (graphics == NULL) return NULL;
 
-    if (graphics->class_ptr == &Am_Ui_LayerGraphics) {
+    if (__unwrap(graphics)->class_ptr == &Am_Ui_LayerGraphics) {
         Am_Ui_LayerGraphics_data *data = (Am_Ui_LayerGraphics_data *)
-            graphics->object_properties.class_object_properties.object_data.value.custom_value;
+            __unwrap(graphics)->object_properties.class_object_properties.object_data.value.custom_value;
         if (data == NULL || data->rastport == NULL) return NULL;
         return data->rastport;
     }
 
-    if (graphics->class_ptr == &Am_Ui_ViewContextGraphics) {
+    if (__unwrap(graphics)->class_ptr == &Am_Ui_ViewContextGraphics) {
         aobject *window = Am_Ui_ViewContextGraphics_f_getWindow_0(graphics)
             .return_value.value.object_value;
         if (window == NULL) return NULL;
         Am_Ui_Window_data *wd = (Am_Ui_Window_data *)
-            window->object_properties.class_object_properties.object_data.value.custom_value;
+            __unwrap(window)->object_properties.class_object_properties.object_data.value.custom_value;
         if (wd == NULL || wd->window == NULL) return NULL;
         return wd->window->RPort;
     }
@@ -105,9 +105,9 @@ function_result Am_Ui_PixelBufferView_initBuffer_0(
     }
 
     // Record buffer dimensions in the AML properties.
-    this->object_properties.class_object_properties
+    __unwrap(this)->object_properties.class_object_properties
         .properties[Am_Ui_PixelBufferView_P_bufferWidth].nullable_value.value.ushort_value = width;
-    this->object_properties.class_object_properties
+    __unwrap(this)->object_properties.class_object_properties
         .properties[Am_Ui_PixelBufferView_P_bufferHeight].nullable_value.value.ushort_value = height;
 
 __exit: ;
@@ -136,7 +136,7 @@ function_result Am_Ui_PixelBufferView_writePixels_0(
 
     {
         // Get the pixel buffer.
-        aobject *pixelsObj = this->object_properties.class_object_properties
+        aobject *pixelsObj = __unwrap(this)->object_properties.class_object_properties
             .properties[Am_Ui_PixelBufferView_P_pixels].nullable_value.value.object_value;
         if (pixelsObj == NULL) goto __exit;
 
@@ -146,9 +146,9 @@ function_result Am_Ui_PixelBufferView_writePixels_0(
         unsigned int *pixels = (unsigned int *)get_array_data(ah);
         if (pixels == NULL) goto __exit;
 
-        unsigned short width  = this->object_properties.class_object_properties
+        unsigned short width  = __unwrap(this)->object_properties.class_object_properties
             .properties[Am_Ui_PixelBufferView_P_bufferWidth].nullable_value.value.ushort_value;
-        unsigned short height = this->object_properties.class_object_properties
+        unsigned short height = __unwrap(this)->object_properties.class_object_properties
             .properties[Am_Ui_PixelBufferView_P_bufferHeight].nullable_value.value.ushort_value;
         if (width == 0 || height == 0) goto __exit;
 
@@ -159,9 +159,9 @@ function_result Am_Ui_PixelBufferView_writePixels_0(
         // Translate view-local x/y through the graphics offset.
         // paintAll() calls graphics.translate(ix, iy) before invoking paint(),
         // so xOffset/yOffset already encode the view's screen position.
-        short xOff = graphics->object_properties.class_object_properties
+        short xOff = __unwrap(graphics)->object_properties.class_object_properties
             .properties[Am_Ui_Graphics_P_xOffset].nullable_value.value.short_value;
-        short yOff = graphics->object_properties.class_object_properties
+        short yOff = __unwrap(graphics)->object_properties.class_object_properties
             .properties[Am_Ui_Graphics_P_yOffset].nullable_value.value.short_value;
 
         WritePixelArray(

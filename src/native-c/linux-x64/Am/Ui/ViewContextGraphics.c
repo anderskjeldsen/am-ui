@@ -47,7 +47,7 @@ typedef struct {
 
 static Am_Ui_ViewContextGraphics_data *vcg_data(aobject *const this)
 {
-    return (Am_Ui_ViewContextGraphics_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+    return (Am_Ui_ViewContextGraphics_data *) __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
 }
 
 static void vcg_ensure_data(aobject *const this)
@@ -59,7 +59,7 @@ static void vcg_ensure_data(aobject *const this)
         d->background = (SDL_Color) { 0, 0, 0, 255 };
         d->pen_palette = am_ui_linux_screen_palette();
         d->pen_palette_count = am_ui_linux_screen_palette_count();
-        this->object_properties.class_object_properties.object_data.value.custom_value = d;
+        __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value = d;
     }
 }
 
@@ -81,8 +81,8 @@ static SDL_Renderer *vcg_renderer(aobject *const this)
 // Graphics-base xOffset / yOffset are properties on Graphics; we read
 // them per primitive to handle translate() correctly without our own
 // shadow state.
-static short get_xoff(aobject *const this) { return this->object_properties.class_object_properties.properties[Am_Ui_Graphics_P_xOffset].nullable_value.value.short_value; }
-static short get_yoff(aobject *const this) { return this->object_properties.class_object_properties.properties[Am_Ui_Graphics_P_yOffset].nullable_value.value.short_value; }
+static short get_xoff(aobject *const this) { return __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_Graphics_P_xOffset].nullable_value.value.short_value; }
+static short get_yoff(aobject *const this) { return __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_Graphics_P_yOffset].nullable_value.value.short_value; }
 
 static SDL_Color argb_to_sdl(Uint32 argb)
 {
@@ -119,7 +119,7 @@ function_result Am_Ui_ViewContextGraphics__native_release_0(aobject *const this)
     Am_Ui_ViewContextGraphics_data *d = vcg_data(this);
     if (d != NULL) {
         free(d);
-        this->object_properties.class_object_properties.object_data.value.custom_value = NULL;
+        __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value = NULL;
     }
     return __result;
 }
@@ -310,7 +310,7 @@ function_result Am_Ui_ViewContextGraphics_drawBitmap_0(aobject *const this, aobj
     SDL_Renderer *r = vcg_renderer(this);
     if (r == NULL || bitmap == NULL || destWidth <= 0 || destHeight <= 0) goto __exit;
 
-    Am_Ui_Bitmap_data *bd = (Am_Ui_Bitmap_data *) bitmap->object_properties.class_object_properties.object_data.value.custom_value;
+    Am_Ui_Bitmap_data *bd = (Am_Ui_Bitmap_data *) __unwrap(bitmap)->object_properties.class_object_properties.object_data.value.custom_value;
     if (bd == NULL) goto __exit;
 
     if (bd->texture == NULL && bd->surface != NULL) {
@@ -344,7 +344,7 @@ function_result Am_Ui_ViewContextGraphics_setFont_0(aobject *const this, aobject
     Am_Ui_ViewContextGraphics_data *d = vcg_data(this);
     if (d != NULL) {
         if (font != NULL) {
-            Am_Ui_Font_data *fd = (Am_Ui_Font_data *) font->object_properties.class_object_properties.object_data.value.custom_value;
+            Am_Ui_Font_data *fd = (Am_Ui_Font_data *) __unwrap(font)->object_properties.class_object_properties.object_data.value.custom_value;
             d->current_font        = (fd != NULL) ? fd->ttf_font : NULL;
             d->current_font_height = (fd != NULL) ? fd->height   : 0;
         } else {

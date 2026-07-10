@@ -15,7 +15,7 @@
 
 static Am_Ui_RenderableBitmap_data *rb_data(aobject *const this)
 {
-    return (Am_Ui_RenderableBitmap_data *) this->object_properties.class_object_properties.object_data.value.custom_value;
+    return (Am_Ui_RenderableBitmap_data *) __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
 }
 
 static void rb_ensure_data(aobject *const this)
@@ -23,7 +23,7 @@ static void rb_ensure_data(aobject *const this)
     if (rb_data(this) != NULL) return;
     Am_Ui_RenderableBitmap_data *d = (Am_Ui_RenderableBitmap_data *) calloc(1, sizeof(Am_Ui_RenderableBitmap_data));
     if (d != NULL) {
-        this->object_properties.class_object_properties.object_data.value.custom_value = d;
+        __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value = d;
     }
 }
 
@@ -50,7 +50,7 @@ function_result Am_Ui_RenderableBitmap__native_release_0(aobject *const this)
     if (d != NULL) {
         if (d->texture != NULL) { SDL_DestroyTexture(d->texture); d->texture = NULL; }
         free(d);
-        this->object_properties.class_object_properties.object_data.value.custom_value = NULL;
+        __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value = NULL;
     }
     return __result;
 }
@@ -73,12 +73,12 @@ function_result Am_Ui_RenderableBitmap_attachLayer_0(aobject *const this)
     Am_Ui_RenderableBitmap_data *d = rb_data(this);
     if (d == NULL) goto __exit;
 
-    aobject *bitmapObj = this->object_properties.class_object_properties.properties[Am_Ui_RenderableBitmap_P_bitmap].nullable_value.value.object_value;
+    aobject *bitmapObj = __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_RenderableBitmap_P_bitmap].nullable_value.value.object_value;
     if (bitmapObj == NULL) goto __exit;
 
     // Pull width/height directly from the Bitmap aobject's properties.
-    unsigned short w = bitmapObj->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_width].nullable_value.value.ushort_value;
-    unsigned short h = bitmapObj->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_height].nullable_value.value.ushort_value;
+    unsigned short w = __unwrap(bitmapObj)->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_width].nullable_value.value.ushort_value;
+    unsigned short h = __unwrap(bitmapObj)->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_height].nullable_value.value.ushort_value;
     d->width  = w;
     d->height = h;
 
@@ -86,7 +86,7 @@ function_result Am_Ui_RenderableBitmap_attachLayer_0(aobject *const this)
     // built them up-front using the Window's renderer). Without this,
     // any LayerGraphics that attaches to us gets renderer=NULL and
     // silently drops every paint call.
-    Am_Ui_Bitmap_data *bd = (Am_Ui_Bitmap_data *) bitmapObj->object_properties.class_object_properties.object_data.value.custom_value;
+    Am_Ui_Bitmap_data *bd = (Am_Ui_Bitmap_data *) __unwrap(bitmapObj)->object_properties.class_object_properties.object_data.value.custom_value;
     if (bd != NULL) {
         d->texture  = bd->texture;
         d->renderer = bd->bound_renderer;
