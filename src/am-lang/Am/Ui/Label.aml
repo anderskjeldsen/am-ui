@@ -210,12 +210,6 @@ namespace Am.Ui
                 } else {
                     bgPen = this.hoverBackgroundPen
                     useColor = false
-                } else {
-                    var hbc = this.hoverBackgroundColor
-                    if (hbc != null) {
-                        bgColor = hbc
-                        useColor = true
-                    }
                 }
             }
             // When hover is in play, always paint the whole row's bg — on
