@@ -503,7 +503,9 @@ static unsigned long am_ui_gtk_build_shell(aobject *this, Am_Ui_Window_data *dat
     // and we wait for that allocation before grabbing the SDL XID below.
     gtk_widget_set_size_request(da, 200, 150);
     gtk_widget_set_can_focus(da, TRUE);
-    gtk_widget_set_double_buffered(da, FALSE);   // SDL owns this surface
+    // (Previously set_double_buffered(FALSE) for the SDL-into-da-window path.
+    // We now present via Cairo in the draw handler, so GTK's default
+    // double-buffering is what we want — and the setter is deprecated in GTK3.)
     gtk_widget_add_events(da, GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK
         | GDK_POINTER_MOTION_MASK | GDK_SCROLL_MASK | GDK_STRUCTURE_MASK
         | GDK_EXPOSURE_MASK);
