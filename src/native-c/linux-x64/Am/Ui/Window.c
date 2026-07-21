@@ -397,6 +397,17 @@ static void am_ui_gtk_sanitize_env(void) {
     // disagreed. With GDK_SCALE=1, GTK logical == physical and everything
     // is predictable; the scale comes from am_ui_gtk_scale_factor().
     setenv("GDK_SCALE", "1", 1);
+
+    // Force the X11 backend for both GTK and SDL. Our window integration
+    // pulls the drawing area's X11 window id (gdk_x11_window_get_xid) and
+    // hands it to SDL_CreateWindowFrom — under a Wayland GDK backend that
+    // XID doesn't exist, so gdk_x11_window_get_xid asserts, returns 0, the
+    // window never comes up and the app exits at startup. XWayland covers
+    // Wayland sessions transparently. overwrite=1 is required: GNOME/mutter
+    // Wayland sessions export GDK_BACKEND=wayland, which we must override
+    // (the X11 path is the only one this integration supports).
+    setenv("GDK_BACKEND", "x11", 1);
+    setenv("SDL_VIDEODRIVER", "x11", 1);
 }
 
 // The desired UI scale, derived from the font DPI. 96 dpi -> 1, 192 -> 2.

@@ -83,6 +83,16 @@ static int am_ui_linux_screen_scale_factor(void) {
     if (cached > 0) return cached;
 
     setenv("GDK_SCALE", "1", 1);
+    // Pin GTK+SDL to X11 (XWayland) before the FIRST gtk_init in the whole
+    // process — this Screen path can run before Window.c's build shell, and
+    // whichever gtk_init fires first locks the GDK backend. Our window code
+    // needs the X11 window id (gdk_x11_window_get_xid + SDL_CreateWindowFrom),
+    // which doesn't exist under a Wayland backend, so without this the app
+    // renders once and exits at startup. overwrite=1 is required: GNOME/mutter
+    // Wayland sessions export GDK_BACKEND=wayland, which we must override
+    // (the X11 path is the only one this integration supports).
+    setenv("GDK_BACKEND", "x11", 1);
+    setenv("SDL_VIDEODRIVER", "x11", 1);
     int s = 1;
     if (gtk_init_check(NULL, NULL)) {
         GtkSettings *st = gtk_settings_get_default();
