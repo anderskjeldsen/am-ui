@@ -165,7 +165,7 @@ function_result Am_Ui_Window_open_0(aobject *const this,
     Uint32 flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI;
 
     data->window = SDL_CreateWindow(
-        "amStudio",                  // title; setTitleNative overwrites later
+        "am-ui",                  // title; setTitleNative overwrites later
         sdl_x, sdl_y,
         (int) width, (int) height,
         flags

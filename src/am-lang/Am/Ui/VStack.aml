@@ -33,11 +33,16 @@ namespace Am.Ui
         }
 
         fun innerMinHeight(): Short {
+            // (n-1) spacing gaps between children. Track "not first" with a
+            // flag rather than `h > 0` so a leading zero-min child doesn't
+            // cause one gap to be skipped (mirrors HStack.innerMinWidth).
             var h = 0S
+            var first = true
             each(this.getChildren(), c) {
-                if (h > 0S) {
+                if (!first) {
                     h = h + this.spacing
                 }
+                first = false
                 h = h + c.minHeight()
             }
             return h

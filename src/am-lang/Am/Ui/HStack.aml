@@ -28,11 +28,20 @@ namespace Am.Ui
         }
 
         fun innerMinWidth(): Short {
+            // Count a `spacing` gap between every adjacent pair of children,
+            // i.e. (n-1) gaps. Detect "not the first child" with a flag, NOT
+            // `w > 0` — a leading zero-min child (e.g. a growX spacer) leaves
+            // w at 0, which would skip the gap after it and under-count the
+            // total by one spacing. That made layoutChildren over-estimate the
+            // free space and push the trailing children `spacing` px past the
+            // right edge (clipped last button / lost right padding).
             var w = 0S
+            var first = true
             each(this.getChildren(), c) {
-                if (w > 0S) {
+                if (!first) {
                     w = w + this.spacing
                 }
+                first = false
                 w = w + c.minWidth()
             }
             return w

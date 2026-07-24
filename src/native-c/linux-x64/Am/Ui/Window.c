@@ -443,7 +443,8 @@ static int am_ui_gtk_scale_factor(void) {
 // Build the GTK window + menubar + drawing area. Returns the drawing
 // area's X11 window id for SDL_CreateWindowFrom, or 0 on failure.
 static unsigned long am_ui_gtk_build_shell(aobject *this, Am_Ui_Window_data *data,
-                                           const char *title, int x, int y, int w, int h) {
+                                           const char *title, int x, int y, int w, int h,
+                                           int no_menu) {
     if (!g_gtk_inited) {
         am_ui_gtk_sanitize_env();
         if (!gtk_init_check(NULL, NULL)) {
@@ -480,7 +481,7 @@ static unsigned long am_ui_gtk_build_shell(aobject *this, Am_Ui_Window_data *dat
     }
 
     GtkWidget *win     = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-    gtk_window_set_title(GTK_WINDOW(win), title ? title : "amStudio");
+    gtk_window_set_title(GTK_WINDOW(win), title ? title : "am-ui");
     gtk_window_set_default_size(GTK_WINDOW(win), lw, lh);
 
     // Decide whether this is a "fill the screen" window (the IDE main
@@ -510,7 +511,9 @@ static unsigned long am_ui_gtk_build_shell(aobject *this, Am_Ui_Window_data *dat
     }
 
     GtkWidget *vbox    = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-    GtkWidget *menubar = gtk_menu_bar_new();
+    // no_menu windows (e.g. the splash) get no menu bar at all — otherwise the
+    // reserved bar leaves an empty strip at the top of the window.
+    GtkWidget *menubar = no_menu ? NULL : gtk_menu_bar_new();
     GtkWidget *da      = gtk_drawing_area_new();
     // The menu items are populated later by the AmLang side (nativeAddMenu*),
     // so the bar is empty here — and an empty GtkMenuBar requests only ~1px of
@@ -520,8 +523,11 @@ static unsigned long am_ui_gtk_build_shell(aobject *this, Am_Ui_Window_data *dat
     // Add a throwaway item so the bar realizes at its true height; we pin that
     // height and drop the probe before grabbing the XID, so the drawing area
     // is positioned below the real menu bar from the start.
-    GtkWidget *menu_probe = gtk_menu_item_new_with_label("Xj");
-    gtk_menu_shell_append(GTK_MENU_SHELL(menubar), menu_probe);
+    GtkWidget *menu_probe = NULL;
+    if (menubar != NULL) {
+        menu_probe = gtk_menu_item_new_with_label("Xj");
+        gtk_menu_shell_append(GTK_MENU_SHELL(menubar), menu_probe);
+    }
     // Only a small *minimum* so the window stays resizable and the
     // window+menubar+titlebar don't overflow the screen (a size_request
     // at the full size both pinned the window non-resizable and made it
@@ -538,7 +544,7 @@ static unsigned long am_ui_gtk_build_shell(aobject *this, Am_Ui_Window_data *dat
         | GDK_POINTER_MOTION_MASK | GDK_SCROLL_MASK | GDK_STRUCTURE_MASK
         | GDK_EXPOSURE_MASK);
 
-    gtk_box_pack_start(GTK_BOX(vbox), menubar, FALSE, FALSE, 0);
+    if (menubar != NULL) gtk_box_pack_start(GTK_BOX(vbox), menubar, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(vbox), da,      TRUE,  TRUE,  0);
     gtk_container_add(GTK_CONTAINER(win), vbox);
 
@@ -605,7 +611,8 @@ static unsigned long am_ui_gtk_build_shell(aobject *this, Am_Ui_Window_data *dat
 
     // Lock in the menu bar's realized height, then drop the probe item so the
     // drawing area's position/size stays put when the real menus are installed.
-    {
+    // Skipped entirely for no_menu windows (no bar was created).
+    if (menubar != NULL) {
         int mbh = gtk_widget_get_allocated_height(menubar);
         if (mbh > 1) gtk_widget_set_size_request(menubar, -1, mbh);
         gtk_widget_destroy(menu_probe);
@@ -679,7 +686,7 @@ function_result Am_Ui_Window_open_0(aobject *const this,
     __increase_reference_count(this);
     if (screen != NULL)        __increase_reference_count(screen);
     if (windowManager != NULL) __increase_reference_count(windowManager);
-    (void) properties;
+    int no_menu = (properties == NULL || !properties->hasMenu) ? 1 : 0;
 
     Am_Ui_Window_data *data = win_data(this);
     if (data == NULL) goto __exit;
@@ -696,7 +703,7 @@ function_result Am_Ui_Window_open_0(aobject *const this,
                 fprintf(stderr, "[am-ui/linux-gtk] SDL video init failed: %s\n", SDL_GetError());
             }
         }
-        unsigned long xid = am_ui_gtk_build_shell(this, data, "amStudio", (int) x, (int) y, (int) width, (int) height);
+        unsigned long xid = am_ui_gtk_build_shell(this, data, "am-ui", (int) x, (int) y, (int) width, (int) height, no_menu);
         if (xid == 0) goto __exit;
         data->window = SDL_CreateWindowFrom((const void *) xid);
     }
@@ -709,7 +716,7 @@ function_result Am_Ui_Window_open_0(aobject *const this,
     Uint32 flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI;
 
     data->window = SDL_CreateWindow(
-        "amStudio",                  // title; setTitleNative overwrites later
+        "am-ui",                  // title; setTitleNative overwrites later
         sdl_x, sdl_y,
         (int) width, (int) height,
         flags

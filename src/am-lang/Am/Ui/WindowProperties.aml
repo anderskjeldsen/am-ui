@@ -5,5 +5,11 @@ namespace Am.Ui
         import Am.Lang
 
         var borderless: Bool
+        // Opt in to a menu bar. Only windows that actually install a menu
+        // (via setMenuStrip) should set this — e.g. the main IDE window.
+        // On the GTK (linux) backend a menu bar reserves height at the top
+        // of the window, so a menu-less window (splash, dialogs) with this
+        // false stays clean. Defaults to false: no menu bar.
+        var hasMenu: Bool
     }
 }

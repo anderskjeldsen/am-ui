@@ -504,7 +504,7 @@ static unsigned long am_ui_gtk_build_shell(aobject *this, Am_Ui_Window_data *dat
     }
 
     GtkWidget *win     = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-    gtk_window_set_title(GTK_WINDOW(win), title ? title : "amStudio");
+    gtk_window_set_title(GTK_WINDOW(win), title ? title : "am-ui");
     gtk_window_set_default_size(GTK_WINDOW(win), lw, lh);
 
     // Decide whether this is a "fill the screen" window (the IDE main
@@ -720,7 +720,7 @@ function_result Am_Ui_Window_open_0(aobject *const this,
                 fprintf(stderr, "[am-ui/linux-gtk] SDL video init failed: %s\n", SDL_GetError());
             }
         }
-        unsigned long xid = am_ui_gtk_build_shell(this, data, "amStudio", (int) x, (int) y, (int) width, (int) height);
+        unsigned long xid = am_ui_gtk_build_shell(this, data, "am-ui", (int) x, (int) y, (int) width, (int) height);
         if (xid == 0) goto __exit;
         data->window = SDL_CreateWindowFrom((const void *) xid);
     }
@@ -733,7 +733,7 @@ function_result Am_Ui_Window_open_0(aobject *const this,
     Uint32 flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI;
 
     data->window = SDL_CreateWindow(
-        "amStudio",                  // title; setTitleNative overwrites later
+        "am-ui",                  // title; setTitleNative overwrites later
         sdl_x, sdl_y,
         (int) width, (int) height,
         flags
