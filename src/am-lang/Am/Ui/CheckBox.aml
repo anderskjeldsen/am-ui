@@ -101,10 +101,13 @@ namespace Am.Ui
             var checkBoxSize = this.getCheckBoxSize()
             var spacing = 4S
             
-            // Position label to the right of checkbox
-            var labelX = this.margin.left + this.borderWidths.left + this.padding.left + checkBoxSize + spacing
+            // Position label to the right of checkbox. The label is
+            // painted manually from paint(), whose local origin is the
+            // border box (paintAll consumed the margin) — so these
+            // coords must NOT include margin.
+            var labelX = this.borderWidths.left + this.padding.left + checkBoxSize + spacing
             var labelHeight = label.minHeight()
-            var labelY = this.margin.top + this.borderWidths.top + this.padding.top + (checkBoxSize - labelHeight) / 2S
+            var labelY = this.borderWidths.top + this.padding.top + (checkBoxSize - labelHeight) / 2S
             var labelWidth = this.innerWidth() - checkBoxSize - spacing
             
             label.layout(labelX, labelY, labelWidth.toUShort(), labelHeight.toUShort())
@@ -114,8 +117,9 @@ namespace Am.Ui
             base.paint(graphics)
 
             var checkBoxSize = this.getCheckBoxSize()
-            var checkBoxX = this.margin.left + this.borderWidths.left + this.padding.left
-            var checkBoxY = this.margin.top + this.borderWidths.top + this.padding.top
+            // paint-local (0,0) is the border box — no margin here.
+            var checkBoxX = this.borderWidths.left + this.padding.left
+            var checkBoxY = this.borderWidths.top + this.padding.top
             
             // Adjust Y to center checkbox with text
             var label = this.ensureLabel()

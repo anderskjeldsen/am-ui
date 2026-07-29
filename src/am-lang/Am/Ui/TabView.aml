@@ -53,6 +53,10 @@ namespace Am.Ui
         // react to the change itself.
         var dirty: Bool = false
 
+        // When false, no close-x is drawn or hit-tested and the tab
+        // reserves no space for one (set by TabBar.tabsCloseable).
+        var closeable: Bool = true
+
         // Called by TabBar to wire up state changes. Return value is the
         // standard "consumed" flag — TabBar always returns true.
         var onActivate: (() => Bool)? = null
@@ -112,7 +116,10 @@ namespace Am.Ui
             if (labelW > this.labelMaxWidth) {
                 labelW = this.labelMaxWidth
             }
-            return TabView.PADDING_LEFT + labelW + TabView.LABEL_GAP + TabView.CLOSE_HIT_W + TabView.PADDING_RIGHT
+            if (this.closeable) {
+                return TabView.PADDING_LEFT + labelW + TabView.LABEL_GAP + TabView.CLOSE_HIT_W + TabView.PADDING_RIGHT
+            }
+            return TabView.PADDING_LEFT + labelW + TabView.PADDING_RIGHT
         }
 
         // Return either `this.label` unchanged (when it fits inside
@@ -231,7 +238,13 @@ namespace Am.Ui
             // Truncation budget is derived from the actual painted
             // width, not labelMaxWidth — if the bar shrinks a tab below
             // its preferred size we still want the label to fit.
-            var availableLabelArea = (((this.width.toShort() - TabView.PADDING_LEFT) - TabView.LABEL_GAP) - TabView.CLOSE_HIT_W) - TabView.PADDING_RIGHT
+            var availableLabelArea = this.width.toShort() - TabView.PADDING_LEFT - TabView.PADDING_RIGHT
+            if (this.closeable) {
+                // Reserve the label->close gap + close hit-rect only when
+                // a close-x is actually shown; otherwise the label owns
+                // the whole tab and never needs truncating.
+                availableLabelArea = availableLabelArea - TabView.LABEL_GAP - TabView.CLOSE_HIT_W
+            }
             var shown = prefix + this.truncateLabel(availableLabelArea - prefixW)
             graphics.drawString(shown, TabView.PADDING_LEFT, TabView.VERTICAL_PAD)
 
@@ -242,7 +255,9 @@ namespace Am.Ui
             // without needing a thick-line API. The hover gate keeps
             // inactive tabs visually quiet.
             if (this.hovered) {
-                this.paintCloseX(graphics)
+                if (this.closeable) {
+                    this.paintCloseX(graphics)
+                }
             }
 
             // Right-edge separator. Painted last so it sits on top of the
@@ -304,7 +319,7 @@ namespace Am.Ui
                 return false
             }
             if (type == MouseEventType.down && button == MouseButton.left && this.contains(x, y)) {
-                if (this.closeRectContains(x, y)) {
+                if (this.closeable && this.closeRectContains(x, y)) {
                     var cl = this.onClose
                     if (cl != null) {
                         return cl()

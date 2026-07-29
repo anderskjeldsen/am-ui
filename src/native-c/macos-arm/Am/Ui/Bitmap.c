@@ -87,6 +87,12 @@ function_result Am_Ui_Bitmap_createEmpty_0(aobject *const this, unsigned short w
     if (d != NULL && width > 0 && height > 0) {
         d->width = width;
         d->height = height;
+        // Mirror the size onto the AML-side width/height properties —
+        // callers (Label, BitmapView, …) read those, not the native struct.
+        // Without this they read 0 and drawBitmap() early-returns, so e.g.
+        // file-tree icons never paint. (Same fix as linux-x64/Bitmap.c.)
+        __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_width].nullable_value.value.ushort_value  = width;
+        __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_height].nullable_value.value.ushort_value = height;
         d->mask_enabled = false;
         // An "empty" Bitmap is the off-screen render target used by
         // Window.getOffscreen(). Create a TARGET-access texture bound
@@ -205,6 +211,8 @@ function_result Am_Ui_Bitmap_createFromImage_0(aobject *const this, aobject *ima
         if (d->surface != NULL) {
             d->width = (Uint16) d->surface->w;
             d->height = (Uint16) d->surface->h;
+            __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_width].nullable_value.value.ushort_value  = (unsigned short) d->surface->w;
+            __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_height].nullable_value.value.ushort_value = (unsigned short) d->surface->h;
         }
         d->mask_enabled = false;
         d->is_render_target = false;
@@ -233,6 +241,8 @@ function_result Am_Ui_Bitmap_createFromImageWithMask_0(aobject *const this, aobj
         if (d->surface != NULL) {
             d->width = (Uint16) d->surface->w;
             d->height = (Uint16) d->surface->h;
+            __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_width].nullable_value.value.ushort_value  = (unsigned short) d->surface->w;
+            __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_height].nullable_value.value.ushort_value = (unsigned short) d->surface->h;
         }
         // The surface already carries per-pixel alpha; flag mask
         // so LayerGraphics turns on BLEND when it uploads.

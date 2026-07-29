@@ -79,6 +79,12 @@ namespace Am.Ui
         var secondaryTrailingGlyph: String? = null
         var secondaryTrailingPen: UByte = 1UB
         var secondaryTrailingClickListener: ((view: View) => Bool)? = null
+        // Bitmap variant of the secondary trailing affordance, mirroring
+        // `trailingBitmap` for the primary slot. When set it takes
+        // precedence over `secondaryTrailingGlyph` for both paint and
+        // hit-testing. Git sidebar uses this for the "-" (discard) icon
+        // on tracked rows.
+        var secondaryTrailingBitmap: Bitmap? = null
 
         // Always-visible badge glyph painted at the far right of the
         // row (further right than `trailingGlyph`, which only paints
@@ -246,8 +252,12 @@ namespace Am.Ui
             // Text sits inside the padding so vertical padding pushes
             // the glyphs down off the top edge — gives the hover bg
             // its visible breathing room above + below the text.
-            var textX = this.margin.left + this.borderWidths.left + this.padding.left
-            var textY = this.margin.top + this.borderWidths.top + this.padding.top
+            // NOTE: paint-local (0,0) is the border box — paintAll
+            // already translated past the margin — so margin must NOT
+            // be re-added here (it double-counted and pushed glyphs
+            // toward/past the clip's bottom-right).
+            var textX = this.borderWidths.left + this.padding.left
+            var textY = this.borderWidths.top + this.padding.top
 
             // Leading bitmap (always visible, sits at the very left
             // edge before any text glyph). When both bitmap and glyph
@@ -263,8 +273,11 @@ namespace Am.Ui
                 // top-aligned in a taller row reads as floating high. Centre
                 // within (height - margins - borders) so it sits on the row's
                 // visual middle next to the text.
+                // height is the outer box, so margins come OUT of the
+                // content height — but the icon's y starts at the
+                // border box (post-margin paint origin), no margin.top.
                 var contentH = this.height.toShort() - this.margin.top - this.margin.bottom - this.borderWidths.top - this.borderWidths.bottom
-                var iconY = this.margin.top + this.borderWidths.top + (contentH - lbh) / 2S
+                var iconY = this.borderWidths.top + (contentH - lbh) / 2S
                 graphics.drawBitmap(this.leadingBitmap, textX, iconY, lbw, lbh)
                 textX = textX + lbw + this.leadingGap
             }
@@ -306,7 +319,7 @@ namespace Am.Ui
                 var bh = this.trailingBitmap.height.toShort()
                 // Centre vertically in the row, same as the leading bitmap.
                 var tContentH = this.height.toShort() - this.margin.top - this.margin.bottom - this.borderWidths.top - this.borderWidths.bottom
-                var btY = this.margin.top + this.borderWidths.top + (tContentH - bh) / 2S
+                var btY = this.borderWidths.top + (tContentH - bh) / 2S
                 if (this.trailingHovered && this.trailingHoverBackgroundPen != 0UB) {
                     var pad = this.trailingHoverBackgroundPad
                     graphics.setForegroundPen(this.trailingHoverBackgroundPen)
@@ -325,7 +338,14 @@ namespace Am.Ui
                 graphics.setForegroundPen(this.trailingPen)
                 graphics.drawString(this.trailingGlyph, tx, textY)
             }
-            if (this.hovered && this.secondaryTrailingGlyph != null) {
+            if (this.hovered && this.secondaryTrailingBitmap != null) {
+                var sbx = this.secondaryTrailingGlyphX(graphics)
+                var sbw = this.secondaryTrailingBitmap.width.toShort()
+                var sbh = this.secondaryTrailingBitmap.height.toShort()
+                var sContentH = this.height.toShort() - this.margin.top - this.margin.bottom - this.borderWidths.top - this.borderWidths.bottom
+                var sbY = this.borderWidths.top + (sContentH - sbh) / 2S
+                graphics.drawBitmap(this.secondaryTrailingBitmap, sbx, sbY, sbw, sbh)
+            } else if (this.hovered && this.secondaryTrailingGlyph != null) {
                 var sx = this.secondaryTrailingGlyphX(graphics)
                 graphics.setForegroundPen(this.secondaryTrailingPen)
                 graphics.drawString(this.secondaryTrailingGlyph, sx, textY)
@@ -337,23 +357,31 @@ namespace Am.Ui
         // BADGE_GAP between the two so they don't blur into one blob.
         // Returns -1 when there's no secondary glyph configured.
         private fun secondaryTrailingGlyphX(graphics: Graphics): Short {
-            if (this.secondaryTrailingGlyph == null) {
+            if (this.secondaryTrailingGlyph == null && this.secondaryTrailingBitmap == null) {
                 return -1S
+            }
+            // Bitmap width wins when a bitmap is set (paint prefers it).
+            var secW: Short = 0S
+            if (this.secondaryTrailingBitmap != null) {
+                secW = this.secondaryTrailingBitmap.width.toShort()
+            } else {
+                secW = graphics.calculateStringWidth(this.secondaryTrailingGlyph).toShort()
             }
             var primaryX = this.trailingGlyphX(graphics)
             if (primaryX < 0S) {
                 // No primary trailing — secondary takes its slot.
-                var glyphW = graphics.calculateStringWidth(this.secondaryTrailingGlyph).toShort()
-                var rightInset = this.margin.right + this.borderWidths.right + this.padding.right
+                // Paint-space: local (0,0) is the border box (paintAll
+                // consumed the margin), so BOTH margins come off the
+                // outer width before the border/padding inset.
+                var rightInset = this.margin.left + this.margin.right + this.borderWidths.right + this.padding.right
                 var rightEdge = this.width.toShort() - rightInset
                 if (this.badgeGlyph != null) {
                     var badgeW = graphics.calculateStringWidth(this.badgeGlyph).toShort()
                     rightEdge = (rightEdge - badgeW) - Label.BADGE_GAP
                 }
-                return rightEdge - glyphW
+                return (rightEdge - this.trailingRightPad) - secW
             }
-            var glyphW2 = graphics.calculateStringWidth(this.secondaryTrailingGlyph).toShort()
-            return (primaryX - Label.BADGE_GAP) - glyphW2
+            return (primaryX - Label.BADGE_GAP) - secW
         }
 
         // Mouse-side mirror of secondaryTrailingGlyphX. Routes through
@@ -361,7 +389,7 @@ namespace Am.Ui
         // helpers so onMouseEvent can hit-test without a Graphics in
         // hand.
         private fun secondaryTrailingGlyphXFromWindow(): Short {
-            if (this.secondaryTrailingGlyph == null) {
+            if (this.secondaryTrailingGlyph == null && this.secondaryTrailingBitmap == null) {
                 return -1S
             }
             var vc = this.getViewContext()
@@ -370,19 +398,23 @@ namespace Am.Ui
             }
             var win = vc.getWindow()
             var f = this.getUsedFont()
+            var secW: Short = 0S
+            if (this.secondaryTrailingBitmap != null) {
+                secW = this.secondaryTrailingBitmap.width.toShort()
+            } else {
+                secW = win.calculateStringWidth(f, this.secondaryTrailingGlyph).toShort()
+            }
             var primaryX = this.trailingGlyphXFromWindow()
             if (primaryX < 0S) {
-                var glyphW = win.calculateStringWidth(f, this.secondaryTrailingGlyph).toShort()
                 var rightInset = this.margin.right + this.borderWidths.right + this.padding.right
                 var rightEdge = this.width.toShort() - rightInset
                 if (this.badgeGlyph != null) {
                     var badgeW = win.calculateStringWidth(f, this.badgeGlyph).toShort()
                     rightEdge = (rightEdge - badgeW) - Label.BADGE_GAP
                 }
-                return rightEdge - glyphW
+                return (rightEdge - this.trailingRightPad) - secW
             }
-            var glyphW2 = win.calculateStringWidth(f, this.secondaryTrailingGlyph).toShort()
-            return (primaryX - Label.BADGE_GAP) - glyphW2
+            return (primaryX - Label.BADGE_GAP) - secW
         }
 
         // X coordinate where the leading glyph ENDS (the click zone
@@ -424,7 +456,10 @@ namespace Am.Ui
                 return -1S
             }
             var glyphW = graphics.calculateStringWidth(this.badgeGlyph).toShort()
-            var rightInset = this.margin.right + this.borderWidths.right + this.padding.right
+            // Paint-space (border-box origin): both margins come off
+            // the outer width. The FromWindow twin keeps the single
+            // margin.right — event coords are outer-box relative.
+            var rightInset = this.margin.left + this.margin.right + this.borderWidths.right + this.padding.right
             return (this.width.toShort() - rightInset) - glyphW
         }
 
@@ -460,7 +495,9 @@ namespace Am.Ui
             } else {
                 glyphW = graphics.calculateStringWidth(this.trailingGlyph).toShort()
             }
-            var rightInset = this.margin.right + this.borderWidths.right + this.padding.right
+            // Paint-space (border-box origin): both margins come off
+            // the outer width; see badgeGlyphX.
+            var rightInset = this.margin.left + this.margin.right + this.borderWidths.right + this.padding.right
             var rightEdge = this.width.toShort() - rightInset
             if (this.badgeGlyph != null) {
                 var badgeW = graphics.calculateStringWidth(this.badgeGlyph).toShort()
@@ -568,7 +605,7 @@ namespace Am.Ui
                 // hit zone is from this glyph's x up to the primary
                 // trailing glyph's x (so a click on the primary still
                 // routes to the primary).
-                if (this.hovered && this.secondaryTrailingGlyph != null) {
+                if (this.hovered && (this.secondaryTrailingGlyph != null || this.secondaryTrailingBitmap != null)) {
                     var sx = this.secondaryTrailingGlyphXFromWindow()
                     var sRight = this.trailingGlyphXFromWindow()
                     if (sRight < 0S) {

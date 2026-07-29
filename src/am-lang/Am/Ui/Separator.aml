@@ -36,8 +36,9 @@ namespace Am.Ui
 
             var innerW = this.innerWidth()
             var innerH = this.innerHeight()
-            var x = this.margin.left + this.borderWidths.left + this.padding.left
-            var y = this.margin.top + this.borderWidths.top + this.padding.top
+            // paint-local (0,0) is the border box — no margin here.
+            var x = this.borderWidths.left + this.padding.left
+            var y = this.borderWidths.top + this.padding.top
 
             graphics.setForegroundPen(this.separatorPen)
 

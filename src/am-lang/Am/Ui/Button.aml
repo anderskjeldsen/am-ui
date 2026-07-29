@@ -118,8 +118,11 @@ namespace Am.Ui
         override fun layout(x: Short, y: Short, width: UShort, height: UShort) {
             base.layout(x, y, width, height)
             var label = this.ensureLabel()
-            var lx = ((this.innerWidth() / 2S) - (label.minWidth() / 2S)) + this.margin.left + this.borderWidths.left + this.padding.left
-            var ly = ((this.innerHeight() / 2S) - (label.minHeight() / 2S)) + this.margin.top + this.borderWidths.top + this.padding.top
+            // The label is painted manually from paint(), whose local
+            // origin is the border box (paintAll consumed the margin)
+            // — so its position must NOT include margin.
+            var lx = ((this.innerWidth() / 2S) - (label.minWidth() / 2S)) + this.borderWidths.left + this.padding.left
+            var ly = ((this.innerHeight() / 2S) - (label.minHeight() / 2S)) + this.borderWidths.top + this.padding.top
             label.layout(lx, ly, label.minWidth().toUShort(), label.minHeight().toUShort())            
         }
 

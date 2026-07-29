@@ -49,6 +49,9 @@ namespace Am.Ui
         var arrowEnabledPen: UByte       = 2UB
         var arrowDisabledPen: UByte      = 8UB
 
+        // When false, tabs render and behave as non-closeable (no X).
+        var tabsCloseable: Bool = true
+
         var tabSelectListener: ((id: String) => Bool)? = null
         var tabCloseListener:  ((id: String) => Bool)? = null
 
@@ -88,6 +91,7 @@ namespace Am.Ui
             tab.closeXPen             = this.tabCloseXPen
             tab.separatorPen          = this.tabSeparatorPen
             tab.font                  = this.font
+            tab.closeable             = this.tabsCloseable
             // Capture `id` (not `tab.tabId`) so the closure doesn't dereference
             // a potentially-freed TabView during late event delivery.
             var capturedId = id
@@ -138,6 +142,14 @@ namespace Am.Ui
             if (cl != null) {
                 cl(id)
             }
+            // The tabs to the right shift left into the closed tab's
+            // space — recompute their rects before repainting, or the
+            // strip redraws them at their stale positions and the old
+            // pixels linger (closing the ACTIVE tab masked this via the
+            // select-listener's window.layout(); closing an inactive
+            // one has no such rescue). Same layout-then-poke pattern
+            // as scrollBy.
+            this.layoutChildren()
             this.requestStripRepaint()
         }
 

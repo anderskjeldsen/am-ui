@@ -43,6 +43,13 @@ namespace Am.Ui
         var fillBackground: Bool = false
         var backgroundPen: UByte = 0UB
 
+        // When true the buffer can't be mutated — every edit primitive
+        // (insertChar / insertNewLine / backspace / delete / cut / paste)
+        // becomes a no-op, so the view is a navigable+selectable but
+        // read-only display. Caret movement, selection and copy still
+        // work. Used e.g. for the HEAD side of a side-by-side diff.
+        var readOnly: Bool = false
+
         // Scrollbar pens. Defaults match the historical "host pens"
         // colours so untouched code keeps rendering the same way;
         // themed callers swap these for editor-appropriate greys.
@@ -1035,6 +1042,7 @@ namespace Am.Ui
         }
 
         private fun insertChar(c: UShort) {
+            if (this.readOnly) { return }
             var line = this.currentLine()
             // Skip-closer hook: if the char the user just typed
             // matches the next char in the buffer AND the subclass
@@ -1084,6 +1092,7 @@ namespace Am.Ui
         }
 
         private fun insertNewLine() {
+            if (this.readOnly) { return }
             this.pushUndo()
             var oldCursorLine = this.cursorLine
             var line = this.currentLine()
@@ -1327,6 +1336,7 @@ namespace Am.Ui
         }
 
         private fun backspace() {
+            if (this.readOnly) { return }
             var hadChange = false
             if (this.cursorCol > 0 || this.cursorLine > 0) {
                 hadChange = true
@@ -2423,6 +2433,7 @@ namespace Am.Ui
         // fuse the start row's prefix with the end row's suffix into
         // one row, then drop everything strictly between.
         fun deleteSelection() {
+            if (this.readOnly) { return }
             if (!this.hasSelection()) {
                 return
             }
@@ -2490,6 +2501,7 @@ namespace Am.Ui
         // and mirrors VS Code / JetBrains behaviour). Pushes a single
         // undo entry so Ctrl+Z restores the buffer AND the cursor.
         private fun cutSelectionOrLine() {
+            if (this.readOnly) { return }
             var vc = this.getViewContext()
             if (vc == null) {
                 return
@@ -2554,6 +2566,7 @@ namespace Am.Ui
         // line's leading whitespace, compounding into a pyramid
         // slope; a pasted `(` would auto-pair an extra `)`).
         private fun pasteAtCursor() {
+            if (this.readOnly) { return }
             var vc = this.getViewContext()
             if (vc == null) {
                 return

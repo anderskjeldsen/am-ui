@@ -7,8 +7,15 @@ namespace Am.Ui
         import Am.Collections
 
         override fun layoutChildren() {
-            var x = 0S
-            var y = 0S
+            // Child positions are relative to this stack's outer box
+            // (ViewGroup.paintAll's child pass translates by the raw
+            // x, y) — start past the stack's own margin + border +
+            // padding, mirroring VStack.layoutChildren. Previously the
+            // children started at (0,0), which both ignored the
+            // stack's margin AND left all the padding slack on the
+            // right/bottom edge.
+            var x = this.margin.left + this.borderWidths.left + this.padding.left
+            var y = this.margin.top + this.borderWidths.top + this.padding.top
 
             var width = this.innerWidth()
             var minWidth = this.innerMinWidth()

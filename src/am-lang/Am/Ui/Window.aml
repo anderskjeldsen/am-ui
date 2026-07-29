@@ -81,14 +81,18 @@ namespace Am.Ui
         private var pendingTasks: List<Runnable> = new List<Runnable>()
 
         // Queue `task` to run on the main thread. Safe to call
-        // from a worker thread. Also wakes the main loop via
-        // requestRepaint so any handleInput wait breaks promptly.
+        // from a worker thread. Wakes the main loop via forceWake —
+        // NOT requestRepaint: its dedupe skips the native wake
+        // message whenever a repaint is already pending, and on
+        // AmigaOS handleInput then stays asleep in Wait() until the
+        // next user input (the git sidebar's async status sat at
+        // "(loading…)" until the mouse moved).
         fun postToMainThread(task: Runnable) {
             if (task == null) {
                 return
             }
             this.pendingTasks.add(task)
-            this.requestRepaint()
+            this.forceWake()
         }
 
         // Drain the pending-tasks queue. Called from the main
@@ -600,6 +604,10 @@ namespace Am.Ui
             this.width = width
             this.height = height
             this.layout()
+            // Re-layout alone repaints only the tracked dirty regions;
+            // the area newly exposed by growing the window (and the
+            // background fill) must be redrawn too, or it stays blank.
+            this.requestFullRepaint()
         }
 
         fun layout() {

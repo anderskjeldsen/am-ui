@@ -251,14 +251,20 @@ namespace Am.Ui
             graphics.setBackgroundPen(this.backgroundPen)
             graphics.setForegroundPen(this.textPen)
 
-            var textX = this.margin.left + this.borderWidths.left + this.padding.left
+            // paint() runs post-margin: View.paintAll already
+            // translated to (x + margin.left, y + margin.top) and
+            // clipped to the border box, so local (0,0) IS the border
+            // box corner. Content offsets must NOT re-add margin —
+            // doing so shifted the glyphs down past the clip and
+            // cropped the last line(s).
+            var textX = this.borderWidths.left + this.padding.left
             // Each line gets a (fontHeight + lineSpacing)-tall slot
             // with the glyphs centred — half the spacing above the
             // baseline, half below — so the gap reads symmetrically
             // both between lines AND above the first / below the
             // last (matching the contentH reservation in minHeight).
             var stride = this.fontHeight() + this.lineSpacing
-            var y = this.margin.top + this.borderWidths.top + this.padding.top + (this.lineSpacing / 2S)
+            var y = this.borderWidths.top + this.padding.top + (this.lineSpacing / 2S)
 
             var i = 0
             while (i < this.cachedLines.getSize()) {

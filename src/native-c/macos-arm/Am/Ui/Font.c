@@ -193,14 +193,18 @@ function_result Am_Ui_Font__native_init_0(aobject *const this)
         fprintf(stderr, "[am-ui/macos-arm] no host font matched '%s'; drawString will paint nothing\n", requested ? requested : "(null)");
         goto __exit;
     }
-    // Scale up tiny Amiga-pixel sizes for modern displays. AmIde asks
-    // for Topaz/8, which is microscopic on Retina; map small sizes
-    // through a fudge factor and enforce a sensible floor. Anything ≥
-    // 14 the caller asked for is honoured verbatim.
+    // Retina legibility floor. Anything the caller asks for at >= 14 is
+    // honoured verbatim; smaller sizes are lifted to a 13px floor so
+    // Topaz/8 (microscopic on Retina) stays readable.
+    //
+    // This MUST stay monotonic: the previous rule doubled every sub-14
+    // size (`px*2-2`, so 13 -> 24) while leaving 14+ untouched, which
+    // INVERTED ordering — a markdown body at 11 rendered bigger (20)
+    // than an H3 heading at 15 (15). A plain floor keeps "larger request
+    // never renders smaller" intact, and the per-platform config
+    // (config/fonts.json) is now where size choices live, so no fudge
+    // factor is needed here.
     int px = (size > 0) ? (int) size : 13;
-    if (px < 14) {
-        px = px * 2 - 2;  // 8 → 14, 10 → 18, 12 → 22
-    }
     if (px < 13) px = 13;
 
     TTF_Font *f = TTF_OpenFont(path, px);

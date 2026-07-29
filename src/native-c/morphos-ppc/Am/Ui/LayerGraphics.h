@@ -15,6 +15,12 @@ struct _Am_Ui_LayerGraphics_data {
     struct Region *clip_region;
     struct RastPort *rastport;
     struct Layer *layer;
+    // ViewPort of the bound window's screen. setForegroundColor /
+    // setBackgroundColor program the scratch pens (255 fg / 254 bg)
+    // into its colormap via SetRGB32 so pen-based primitives
+    // (Text, Draw) render the requested colour too. NULL when the
+    // target is an off-screen RenderableBitmap.
+    struct ViewPort *screen_vp;
     ULONG fg_color;
     ULONG bg_color;
     BOOL  fg_color_active;

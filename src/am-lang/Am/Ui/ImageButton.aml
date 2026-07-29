@@ -296,11 +296,10 @@ namespace Am.Ui
                 graphics.drawLine(x2, y1, x2, y2)
             }
 
-            // Centre the icon in the inner rect. Inner-rect coords
-            // start at margin+border+padding, sized by innerWidth/
-            // innerHeight. paint() draws relative to the View's own
-            // origin (already translated by the parent), so we offset
-            // by the chrome insets to land inside the padded area.
+            // Centre the icon in the inner rect (sized by innerWidth/
+            // innerHeight). paint() draws relative to the border box —
+            // paintAll already translated past the margin — so only
+            // border + padding remain to reach the padded area.
             var iw = this.resolvedIconWidth()
             var ih = this.resolvedIconHeight()
             if (iw <= 0S || ih <= 0S || this.image == null) {
@@ -308,10 +307,12 @@ namespace Am.Ui
             }
             var innerW = this.innerWidth()
             var innerH = this.innerHeight()
+            // paint-local (0,0) is the border box (paintAll consumed
+            // the margin) — offset by border + padding only.
             var ix = ((innerW - iw) / 2S)
-                + this.margin.left + this.borderWidths.left + this.padding.left
+                + this.borderWidths.left + this.padding.left
             var iy = ((innerH - ih) / 2S)
-                + this.margin.top + this.borderWidths.top + this.padding.top
+                + this.borderWidths.top + this.padding.top
                 + pressDy
             var renderImg = this.image
             var tinted = this.ensureTintedImage()

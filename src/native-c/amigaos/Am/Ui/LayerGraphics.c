@@ -18,6 +18,7 @@
 #include <graphics/rastport.h>
 #include <graphics/rpattr.h>
 #include <graphics/scale.h>
+#include <graphics/view.h>
 #include <graphics/text.h>
 #include <cybergraphx/cybergraphics.h>
 
@@ -37,6 +38,16 @@ short lg_translated_y(aobject *g, short y) {
     short ty = __unwrap(g)->object_properties.class_object_properties.properties[Am_Ui_Graphics_P_yOffset].nullable_value.value.short_value;
     return ty + y;
 }
+
+// Screen ViewPort of the (single) app screen — cached the first time a
+// window graphics binds. The off-screen double-buffer's LayerGraphics
+// reuses it so colour-mode text/lines can program the scratch pens
+// (SetRGB32 lives on the ViewPort, and the offscreen bitmap shares the
+// screen's colormap as a friend bitmap). Avoids threading a Window
+// reference through RenderableBitmap. The IDE only ever opens one
+// screen; if that ever changes, bind_window_target keeps this pointing
+// at the most-recently-bound window's screen.
+static struct ViewPort *g_screen_vp = NULL;
 
 static Am_Ui_LayerGraphics_data *get_layer_graphics_data(aobject *this)
 {
@@ -63,6 +74,7 @@ static void clear_target(Am_Ui_LayerGraphics_data *data)
     if (data == NULL) return;
     data->rastport = NULL;
     data->layer = NULL;
+    data->screen_vp = NULL;
 }
 
 static void bind_renderable_bitmap_target(aobject *this)
@@ -87,6 +99,12 @@ static void bind_renderable_bitmap_target(aobject *this)
 
     data->rastport = &rbData->rastport;
     data->layer = rbData->layer;
+    // The IDE paints every view into this off-screen buffer, so the
+    // scratch-pen colour scheme (pens for Text/Draw) must work here.
+    // The offscreen bitmap is a friend of the screen bitmap → shares
+    // its colormap, so the screen's ViewPort (cached when the window
+    // graphics bound) is the right one to program.
+    data->screen_vp = g_screen_vp;
 }
 
 static void bind_window_target(aobject *this)
@@ -111,6 +129,12 @@ static void bind_window_target(aobject *this)
 
     data->rastport = windowData->window->RPort;
     data->layer = windowData->window->WLayer;
+    data->screen_vp = NULL;
+    if (windowData->window->WScreen != NULL) {
+        data->screen_vp = &windowData->window->WScreen->ViewPort;
+        // Cache for the off-screen buffer's LayerGraphics (single-screen app).
+        g_screen_vp = data->screen_vp;
+    }
 }
 
 static void apply_clip_rect(aobject *this, struct Am_Ui_ClipRect *clipRect)
@@ -248,29 +272,47 @@ __exit: ;
     return __result;
 }
 
-// Stash a direct 24-bit ARGB on the graphics instance and flag
-// "colour mode" — subsequent fillRect / eraseRect calls notice
-// the flag and route through CGFX's FillPixelArray, which
-// takes the ARGB straight and skips the screen's colormap.
-// This is how we pick from more than the IDE's 16 reserved
-// palette pens (the colormap on a TrueColor RTG screen doesn't
-// extend past the system-pens table, so SetRGB32 + SetAPen
-// with an index like 255 just aliases to whatever pen sits at
-// the colormap's end — the "all my colours come out the same"
-// symptom). drawLine / drawString aren't routed here; callers
-// that need a coloured line currently still go through pens.
+// Direct-colour mode. Two cooperating mechanisms:
 //
-// Alpha is dropped — the AmigaOS palette has no alpha
-// channel — and the value is masked to 24 bits so a 0xFFRRGGBB
-// passed from JS doesn't sign-extend.
+//  1. The 24-bit ARGB is stashed on the instance and flagged
+//     active — fillRect / eraseRect route through CGFX's
+//     FillPixelArray, which takes the ARGB straight and skips
+//     the colormap entirely.
+//  2. The SCRATCH PEN: the colour is also programmed into the
+//     screen colormap at a dedicated index — 255 for the
+//     foreground, 254 for the background (separate indices so
+//     the two setters can't clobber each other) — and SetAPen /
+//     SetBPen select it. That makes the pen-only primitives
+//     (Text, Draw) render the requested colour too; before this,
+//     drawString / drawLine used whatever pen the IDE chrome
+//     last set (the sprite pixler's status line changed colour
+//     with unrelated UI state, its grid came out white).
+//
+// On a truecolor RTG screen pen drawing resolves the colormap at
+// draw time, so reprogramming the scratch pen doesn't repaint
+// earlier pixels. Alpha is dropped — the AmigaOS palette has no
+// alpha channel — and the value is masked to 24 bits so a
+// 0xFFRRGGBB passed from JS doesn't sign-extend.
+#define AM_UI_SCRATCH_PEN_FG 255
+#define AM_UI_SCRATCH_PEN_BG 254
+
 function_result Am_Ui_LayerGraphics_setForegroundColor_0(aobject * const this, unsigned int argb)
 {
     function_result __result = { .has_return_value = false };
     bool __returning = false;
     Am_Ui_LayerGraphics_data *data = get_layer_graphics_data(this);
+    struct RastPort *rp = get_rp(this);
     if (data != NULL) {
         data->fg_color = argb & 0xFFFFFFUL;
         data->fg_color_active = TRUE;
+        if (data->screen_vp != NULL) {
+            ULONG r = (data->fg_color >> 16) & 0xFF;
+            ULONG g = (data->fg_color >> 8) & 0xFF;
+            ULONG b = data->fg_color & 0xFF;
+            SetRGB32(data->screen_vp, AM_UI_SCRATCH_PEN_FG,
+                r * 0x01010101UL, g * 0x01010101UL, b * 0x01010101UL);
+            if (rp != NULL) SetAPen(rp, AM_UI_SCRATCH_PEN_FG);
+        }
     }
 __exit: ;
     return __result;
@@ -281,9 +323,18 @@ function_result Am_Ui_LayerGraphics_setBackgroundColor_0(aobject * const this, u
     function_result __result = { .has_return_value = false };
     bool __returning = false;
     Am_Ui_LayerGraphics_data *data = get_layer_graphics_data(this);
+    struct RastPort *rp = get_rp(this);
     if (data != NULL) {
         data->bg_color = argb & 0xFFFFFFUL;
         data->bg_color_active = TRUE;
+        if (data->screen_vp != NULL) {
+            ULONG r = (data->bg_color >> 16) & 0xFF;
+            ULONG g = (data->bg_color >> 8) & 0xFF;
+            ULONG b = data->bg_color & 0xFF;
+            SetRGB32(data->screen_vp, AM_UI_SCRATCH_PEN_BG,
+                r * 0x01010101UL, g * 0x01010101UL, b * 0x01010101UL);
+            if (rp != NULL) SetBPen(rp, AM_UI_SCRATCH_PEN_BG);
+        }
     }
 __exit: ;
     return __result;
@@ -297,6 +348,10 @@ function_result Am_Ui_LayerGraphics_drawLine_0(aobject * const this, short x, sh
     short tx1 = lg_translated_x(this, x), ty1 = lg_translated_y(this, y);
     short tx2 = lg_translated_x(this, x2), ty2 = lg_translated_y(this, y2);
     if (rp == NULL) goto __exit;
+    // In colour mode setForegroundColor already SetAPen'd the scratch
+    // pen (255) programmed to the requested RGB, so the plain pen path
+    // renders the correct colour — no separate direct-colour branch is
+    // needed for lines (the sprite pixler's grid draws through here).
     Move(rp, tx1, ty1);
     Draw(rp, tx2, ty2);
 __exit: ;
@@ -358,6 +413,7 @@ function_result Am_Ui_LayerGraphics_drawString_0(aobject * const this, aobject *
     if (text != NULL) {
         __increase_reference_count(text);
     }
+    Am_Ui_LayerGraphics_data *data = get_layer_graphics_data(this);
     struct RastPort *rp = get_rp(this);
     if (rp == NULL || text == NULL) goto __exit;
     {
@@ -368,8 +424,43 @@ function_result Am_Ui_LayerGraphics_drawString_0(aobject * const this, aobject *
         short tx = lg_translated_x(this, x);
         short ty = lg_translated_y(this, y + baseline);
         (void)ysize;
-        Move(rp, tx, ty);
-        Text(rp, sh->string_value, sh->length);
+        // Colour-mode text has TWO independent needs, and they must NOT
+        // share a gate:
+        //
+        //  * DRAW MODE — JAM2 fills every glyph cell with the B-pen,
+        //    which is leaked chrome state (the pixler's status line grew
+        //    a button-highlight band behind its text). Forcing JAM1
+        //    (transparent glyph background — colour callers fill their
+        //    own bg) kills the band. This needs NO viewport, so it is
+        //    applied whenever the caller is in colour mode. That is the
+        //    actual fix for the "coords panel gets the Ref background".
+        //
+        //  * FOREGROUND COLOUR — Text() draws glyphs in the A-pen. To get
+        //    the exact requested RGB we select the scratch pen (255) that
+        //    setForegroundColor programmed via SetRGB32. That DOES need a
+        //    viewport; without one we leave whatever A-pen is current
+        //    (the glyph colour may be off, but there is still no band).
+        //
+        // An explicit setBackgroundColor opts back into JAM2 with the bg
+        // scratch pen (254) — only meaningful when a viewport is present.
+        if (data != NULL && data->fg_color_active) {
+            UBYTE oldDrMd = rp->DrawMode;
+            if (data->bg_color_active && data->screen_vp != NULL) {
+                SetBPen(rp, AM_UI_SCRATCH_PEN_BG);
+                SetDrMd(rp, JAM2);
+            } else {
+                SetDrMd(rp, JAM1);
+            }
+            if (data->screen_vp != NULL) {
+                SetAPen(rp, AM_UI_SCRATCH_PEN_FG);
+            }
+            Move(rp, tx, ty);
+            Text(rp, sh->string_value, sh->length);
+            SetDrMd(rp, oldDrMd);
+        } else {
+            Move(rp, tx, ty);
+            Text(rp, sh->string_value, sh->length);
+        }
     }
 __exit: ;
     if (text != NULL) {
