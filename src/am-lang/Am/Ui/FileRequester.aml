@@ -1,0 +1,15 @@
+namespace Am.Ui
+{
+    #implementationPlatforms "libc", "amigaos", "amigaos-sim", "morphos-ppc", "macos-arm", "linux-x64", "linux-ppc32"
+    native class FileRequester {
+        import Am.Lang
+
+        // Pop a modal ASL / NSOpenPanel file requester (single file,
+        // no directories). Returns the absolute path of the chosen
+        // file, or null on cancel. `title` shows in the requester
+        // header; `initialPath` seeds the starting directory (pass
+        // null for the platform default). `parent` may be null — the
+        // requester then opens on the default public screen.
+        static native fun requestFile(title: String, initialPath: String?, parent: Window?): String?
+    }
+}

@@ -191,9 +191,18 @@ function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHO
 	bool borderless = (properties != NULL) ? properties->borderless : false;
 	// WFLG_RMBTRAP is intentionally NOT set: Intuition needs the right
 	// mouse button to pop up the menu strip when one is installed.
+	//
+	// WFLG_REPORTMOUSE is REQUIRED for drag interactions (draw-on-drag
+	// in the sprite editor, scrollbar-thumb drag, window drag). Without
+	// it Intuition only reports the pointer position via IDCMP_INTUITICKS
+	// — and Intuition SUPPRESSES intuiticks while a mouse button is held,
+	// so a press-and-drag delivered exactly one event (the SELECTDOWN)
+	// and no moves. With REPORTMOUSE we get an IDCMP_MOUSEMOVE per pixel
+	// of motion, including during button-hold. The move handler below
+	// coalesces (dispatches only when MouseX/Y actually changed).
 	ULONG window_flags = borderless
-		? (WFLG_ACTIVATE | WFLG_BORDERLESS | WFLG_SMART_REFRESH)
-		: (WFLG_SIZEGADGET | WFLG_ACTIVATE | WFLG_DRAGBAR | WFLG_DEPTHGADGET | WFLG_CLOSEGADGET | WFLG_SMART_REFRESH | WFLG_SIZEBBOTTOM);
+		? (WFLG_ACTIVATE | WFLG_BORDERLESS | WFLG_SMART_REFRESH | WFLG_REPORTMOUSE)
+		: (WFLG_SIZEGADGET | WFLG_ACTIVATE | WFLG_DRAGBAR | WFLG_DEPTHGADGET | WFLG_CLOSEGADGET | WFLG_SMART_REFRESH | WFLG_SIZEBBOTTOM | WFLG_REPORTMOUSE);
 
 	SysBase = *((struct ExecBase **)4UL);
 	if (IntuitionBase == NULL) {
@@ -258,7 +267,7 @@ function_result Am_Ui_Window_open_0(aobject * const this, SHORT x, SHORT y, USHO
 		// suppress events that fire during menu interaction (stale
 		// hover, phantom clicks when the menu closes). Replying to
 		// MENUVERIFY with msg->Code = MENUHOT lets the menu open.
-		WA_IDCMP, IDCMP_CLOSEWINDOW | IDCMP_GADGETUP | MENUPICK | MOUSEBUTTONS | REFRESHWINDOW | IDCMP_INTUITICKS | IDCMP_NEWSIZE | IDCMP_MOUSEBUTTONS | IDCMP_RAWKEY | IDCMP_EXTENDEDMOUSE | IDCMP_MENUVERIFY,
+		WA_IDCMP, IDCMP_CLOSEWINDOW | IDCMP_GADGETUP | MENUPICK | MOUSEBUTTONS | REFRESHWINDOW | IDCMP_INTUITICKS | IDCMP_NEWSIZE | IDCMP_MOUSEBUTTONS | IDCMP_MOUSEMOVE | IDCMP_RAWKEY | IDCMP_EXTENDEDMOUSE | IDCMP_MENUVERIFY,
 		WA_Flags, window_flags,
 		WA_Borderless, borderless ? TRUE : FALSE,
 		WA_Gadgets, 0, // (ULONG) data->context_gadget,
