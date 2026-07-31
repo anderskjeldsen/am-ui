@@ -771,6 +771,21 @@ namespace Am.Ui
             return this.keyboardFocus
         }
 
+        // Give the focused view one animation tick. Called by the
+        // application's main loop every iteration (which the OS wakes
+        // ~10x/sec via INTUITICKS while the window is active, and more
+        // often on input). A focused widget with a time-based animation
+        // (e.g. the editor caret blink) uses this to requestRepaint()
+        // ONLY when its visible state changes — instead of re-arming a
+        // repaint on every paint, which pins the CPU redrawing at the
+        // frame rate even though the caret only flips ~twice a second.
+        fun tickFocusedView() {
+            var kf = this.keyboardFocus
+            if (kf != null) {
+                kf.onIdleTick()
+            }
+        }
+
         fun onKeyboardEvent(type: KeyboardEventType, keyCode: UShort, keyChar: UShort) {
             var kf = this.keyboardFocus
             if (kf != null) {

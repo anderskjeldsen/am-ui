@@ -14,6 +14,23 @@ namespace Am.Ui
         // sits on the right backdrop.
         var backgroundColor: UInt? = null
         var textColor: UInt?       = null
+        // Layout flex controls (used by the status-bar footer):
+        //
+        //  shrinkable — this label yields space in a growX row. minWidth()
+        //    reports only a small floor (an ellipsis-worth) so an HStack
+        //    can hand it LESS than its full text width, and paint()
+        //    truncates the rendered text with "..." to whatever width it
+        //    actually got. Used for the branch/file label so a long path
+        //    can't push the fixed status elements (tabs, Ln/Col) off the
+        //    row.
+        //
+        //  minContentWidth — a floor (in px) on the text portion of
+        //    minWidth(). Lets a label RESERVE a fixed width for its
+        //    worst-case text (e.g. "Ln 99999, Col 9999") so its size
+        //    doesn't change as the text grows/shrinks — no re-flow of the
+        //    row, and the text never clips. Ignored when shrinkable.
+        var shrinkable: Bool = false
+        var minContentWidth: Short = 0S
         // Mouse-over support. Set hoverEnabled = true and pick a contrasting
         // bg pen to get the row to fill itself with that pen while the
         // mouse is over it. Disabled by default so plain Labels keep
@@ -178,7 +195,19 @@ namespace Am.Ui
         override fun minWidth(): Short {
             var font = this.getUsedFont()
             var win = this.getViewContext().getWindow()
-            var textW = win.calculateStringWidth(font, this.text).toShort()
+            // Shrinkable labels report only an ellipsis-worth so a
+            // growX row can squeeze them; paint() truncates to fit.
+            var textW: Short = 0S
+            if (this.shrinkable) {
+                textW = win.calculateStringWidth(font, "...").toShort()
+            } else {
+                textW = win.calculateStringWidth(font, this.text).toShort()
+                // Reserve a fixed width for the worst-case text so the
+                // label doesn't re-flow (or clip) as the text changes.
+                if (textW < this.minContentWidth) {
+                    textW = this.minContentWidth
+                }
+            }
             var leadW = 0S
             if (this.leadingBitmap != null) {
                 leadW = leadW + this.leadingBitmap.width.toShort() + this.leadingGap
@@ -195,6 +224,42 @@ namespace Am.Ui
             // invisible until you hover it (the hover bg is anchored
             // at x=0 and is visible up to the clipped width).
             return textW + leadW + this.padding.left + this.padding.right + this.margin.left + this.margin.right + this.borderWidths.left + this.borderWidths.right
+        }
+
+        // Truncate `s` with a trailing "..." so it fits within `avail`
+        // pixels using the graphics' current font (paint() sets it just
+        // above). Returns `s` unchanged when it already fits. Mirrors
+        // TabView.truncateLabel; only used on shrinkable labels.
+        private fun truncateToWidth(graphics: Graphics, s: String, avail: Short): String {
+            if (s.isEmpty() || avail <= 0S) {
+                return s
+            }
+            var fullW = graphics.calculateStringWidth(s).toShort()
+            if (fullW <= avail) {
+                return s
+            }
+            var ellipsis = "..."
+            var elW = graphics.calculateStringWidth(ellipsis).toShort()
+            if (elW >= avail) {
+                return ellipsis
+            }
+            var budget = avail - elW
+            var len = s.getLength()
+            var lastFit = 0
+            var i = 1
+            while (i <= len) {
+                var prefix = s.substring(0UI, i.toUInt())
+                var w = graphics.calculateStringWidth(prefix).toShort()
+                if (w > budget) {
+                    break
+                }
+                lastFit = i
+                i = i + 1
+            }
+            if (lastFit == 0) {
+                return ellipsis
+            }
+            return s.substring(0UI, lastFit.toUInt()) + ellipsis
         }
 
         override fun paint(graphics: Graphics) {
@@ -292,7 +357,20 @@ namespace Am.Ui
                 graphics.setForegroundPen(this.textPen)
             }
 
-            graphics.drawString(this.text, textX, textY)
+            if (this.shrinkable) {
+                // Fit the text into whatever width the row actually gave
+                // us, with a trailing "..." — (0,0) here is the border
+                // box (paintAll already translated past the margin), so
+                // the text's right limit excludes only the right border
+                // + padding.
+                var borderBoxW = this.width.toShort() - (this.margin.left + this.margin.right)
+                var rightLimit = borderBoxW - (this.borderWidths.right + this.padding.right)
+                var avail = rightLimit - textX
+                var fitted = this.truncateToWidth(graphics, this.text, avail)
+                graphics.drawString(fitted, textX, textY)
+            } else {
+                graphics.drawString(this.text, textX, textY)
+            }
 
             // Always-visible badge at the far right (e.g. "U" for
             // untracked rows). Painted before the hover trailing

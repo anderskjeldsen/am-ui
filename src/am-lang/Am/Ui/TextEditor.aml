@@ -353,6 +353,22 @@ namespace Am.Ui
         // paint to a partial one — leaving any line that wasn't in
         // the new dirty range showing stale post-scroll content.
         private var pendingFullRepaint: Bool = false
+        // The caret-blink phase the last paint actually drew (true =
+        // caret visible). onIdleTick compares the live phase against
+        // this and only requests a repaint when they differ, so the
+        // blink costs one line-repaint per flip (~2/sec) instead of one
+        // per frame.
+        private var lastPaintedCursorVisible: Bool = false
+        // The view dimensions the last paint rendered against. A layout
+        // pass can size the editor small, paint it, then grow it to its
+        // final height on a second pass — without the old per-paint
+        // self-repaint, the rows exposed by the growth would stay blank
+        // until the caret visited them (each cursor move partial-paints
+        // only its own line). Tracking the painted size lets paint()
+        // force a full render whenever width/height changed since the
+        // last cycle. -1 forces the very first paint full.
+        private var lastPaintWidth: Int = -1
+        private var lastPaintHeight: Int = -1
         // Pending scroll: shift the rows starting at pendingScrollLineFrom
         // by pendingScrollDy pixels (positive = down, negative = up).
         // pendingScrollLineFrom == -1 means no scroll queued.
@@ -1793,7 +1809,12 @@ namespace Am.Ui
             // pendingFullRepaint sticks across markDirty calls so a
             // post-scroll auto-repeated cursor move can't silently
             // demote the next paint to partial.
-            var forceFull = graphics.shouldRepaintAll() || this.pendingFullRepaint || this.dirtyLineFrom < 0
+            // A size change since the last paint invalidates the whole
+            // surface — the rows the growth exposed were never rendered.
+            var curW = this.width.toInt()
+            var curH = this.height.toInt()
+            var sizeChanged = curW != this.lastPaintWidth || curH != this.lastPaintHeight
+            var forceFull = graphics.shouldRepaintAll() || this.pendingFullRepaint || this.dirtyLineFrom < 0 || sizeChanged
             if (this.useOffscreen) {
                 this.renderViaOffscreen(graphics)
             } else if (forceFull) {
@@ -1818,18 +1839,35 @@ namespace Am.Ui
             this.dirtyLineTo = -1
             this.pendingScrollLineFrom = -1
             this.pendingScrollDy = 0S
+            this.lastPaintWidth = curW
+            this.lastPaintHeight = curH
 
-            // Self-drive the cursor blink while we hold focus. Without
-            // this, the cursor would render whatever phase the last
-            // paint happened to catch and stay frozen until something
-            // else (typing, scroll) triggered a refresh. Same self-
-            // driving pattern as TextField's spinnerMode — Window.paint
-            // resets repaintRequested at the start of each cycle, so
-            // requesting from inside paint correctly queues the next
-            // frame instead of being swallowed by an already-set flag.
+            // Record the caret phase this paint rendered. The blink is
+            // NOT self-driven from here — re-requesting a repaint on
+            // every paint pins the CPU redrawing the caret line + the
+            // scrollbar at the frame rate (~25 fps on a 68k via the
+            // WaitTOF-throttled loop) even though the caret only flips
+            // ~twice a second. Instead onIdleTick() (driven by the main
+            // loop's ~10 Hz INTUITICKS wake) requests a repaint only
+            // when the phase actually changes vs. what we last drew.
             if (this.isEditorFocused()) {
-                this.markCursorLineDirty()
-                this.requestRepaint()
+                this.lastPaintedCursorVisible = TextEditor.isCursorVisibleNow()
+            }
+        }
+
+        // Advance the caret blink. Called once per main-loop iteration
+        // on the focused view. Cheap: a clock read + a compare; only
+        // when the visible phase differs from what the last paint drew
+        // do we dirty the caret line and ask for a repaint. This turns
+        // the editor's idle cost from "repaint every frame" into
+        // "repaint twice a second".
+        override fun onIdleTick() {
+            if (!this.isEditorFocused()) {
+                return
+            }
+            var phase = TextEditor.isCursorVisibleNow()
+            if (phase != this.lastPaintedCursorVisible) {
+                this.requestCaretLineRepaint()
             }
         }
 
@@ -1850,6 +1888,32 @@ namespace Am.Ui
         // either draw the caret (visible half) or not (hidden half).
         private fun markCursorLineDirty() {
             this.markDirtyLine(this.cursorLine)
+        }
+
+        // Invalidate ONLY the caret's line — both the render (dirty line
+        // range) and the blit region (a sub-rect). Using the no-arg
+        // requestRepaint() here would report the whole editor rect as
+        // dirty, so even though we re-render one line the offscreen→
+        // screen blit would still copy the entire editor every blink.
+        // Feeding requestRepaint the line's own rect makes both the
+        // paint clip (View.paintAll narrows to the dirty sub-rect) and
+        // the flush bounds (View.reportPaintedBounds) just that line.
+        // No-op when the caret line is scrolled out of view — there's
+        // nothing on screen to toggle.
+        private fun requestCaretLineRepaint() {
+            var lineHeight = this.getLineHeight()
+            var y = ((this.cursorLine - this.scrollLine) * lineHeight.toInt()).toShort()
+            if (y < 0S || y >= this.height.toShort()) {
+                return
+            }
+            this.markCursorLineDirty()
+            // Slightly over-cover: the caret extends ~1px above/below the
+            // glyph row, so start one row up and add a row of height to
+            // stay safely within the blit rect on every font.
+            var top = y - 1S
+            if (top < 0S) { top = 0S }
+            var h = lineHeight + 2S
+            this.requestRepaint(0S, top, this.width.toShort(), h)
         }
 
         // True when this editor currently holds the window's keyboard

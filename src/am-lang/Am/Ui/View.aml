@@ -235,6 +235,17 @@ namespace Am.Ui
             this.viewContext = null
         }
 
+        // Called once per main-loop iteration on the window's
+        // keyboard-focus view (see Window.tickFocusedView). Lets a
+        // focused widget advance a time-based animation — e.g. a caret
+        // blink — WITHOUT self-driving a repaint on every paint. The
+        // default is a no-op; an override should be cheap (it runs on
+        // every tick) and only call requestRepaint() when the visible
+        // state actually changes.
+        open fun onIdleTick() {
+
+        }
+
         open fun paint(graphics: Graphics) {
 
         }
