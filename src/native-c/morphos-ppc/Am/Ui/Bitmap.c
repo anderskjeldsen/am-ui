@@ -162,100 +162,100 @@ function_result Am_Ui_Bitmap_createFromImage_0(aobject * const this,
 {
     function_result __result = { .has_return_value = false };
     bool __returning = false;
-    printf("[Bitmap.createFromImage] step 01: enter (this=%p, image=%p)\n", (void *)this, (void *)image);
+    // printf("[Bitmap.createFromImage] step 01: enter (this=%p, image=%p)\n", (void *)this, (void *)image);
     fflush(stdout);
 
     if (this != NULL) {
-        printf("[Bitmap.createFromImage] step 02: increase this ref\n");
+        // printf("[Bitmap.createFromImage] step 02: increase this ref\n");
         fflush(stdout);
         __increase_reference_count(this);
     }
     if (image != NULL) {
-        printf("[Bitmap.createFromImage] step 03: increase image ref\n");
+        // printf("[Bitmap.createFromImage] step 03: increase image ref\n");
         fflush(stdout);
         __increase_reference_count(image);
     }
 
-    printf("[Bitmap.createFromImage] step 04: fetch bitmap native data\n");
+    // printf("[Bitmap.createFromImage] step 04: fetch bitmap native data\n");
     fflush(stdout);
     Am_Ui_Bitmap_data *data =
         (Am_Ui_Bitmap_data *)__unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
     if (data == NULL) {
-        printf("[Bitmap.createFromImage] step 05: data is NULL -> throw\n");
+        // printf("[Bitmap.createFromImage] step 05: data is NULL -> throw\n");
         fflush(stdout);
         __throw_simple_exception("Bitmap not initialized",
                                  "in Am_Ui_Bitmap_f_createFromImage_0", &__result);
         goto __exit;
 
     }
-    printf("[Bitmap.createFromImage] step 05: data OK (%p)\n", (void *)data);
+    // printf("[Bitmap.createFromImage] step 05: data OK (%p)\n", (void *)data);
     fflush(stdout);
 
     if (image == NULL) {
-        printf("[Bitmap.createFromImage] step 06: image is NULL -> throw\n");
+        // printf("[Bitmap.createFromImage] step 06: image is NULL -> throw\n");
         fflush(stdout);
         __throw_simple_exception("Image argument is NULL",
                                  "in Am_Ui_Bitmap_f_createFromImage_0", &__result);
         goto __exit;
     }
-    printf("[Bitmap.createFromImage] step 06: image OK\n");
+    // printf("[Bitmap.createFromImage] step 06: image OK\n");
     fflush(stdout);
 
     // One AmLang Bitmap maps to exactly one native BitMap.
     // Do not replace an existing native bitmap once created.
     if (data->bitmap != NULL) {
-        printf("[Bitmap.createFromImage] step 07: bitmap already exists (%p) -> throw\n", (void *)data->bitmap);
+        // printf("[Bitmap.createFromImage] step 07: bitmap already exists (%p) -> throw\n", (void *)data->bitmap);
         fflush(stdout);
         __throw_simple_exception("Bitmap already has a native BitMap",
                                  "in Am_Ui_Bitmap_f_createFromImage_0", &__result);
         goto __exit;
     }
-    printf("[Bitmap.createFromImage] step 07: bitmap slot is empty\n");
+    // printf("[Bitmap.createFromImage] step 07: bitmap slot is empty\n");
     fflush(stdout);
 
     {
-        printf("[Bitmap.createFromImage] step 08: read image dimensions/pixfmt\n");
+        // printf("[Bitmap.createFromImage] step 08: read image dimensions/pixfmt\n");
         fflush(stdout);
         unsigned short width  = __unwrap(image)->object_properties.class_object_properties.properties[Am_Imaging_Image_P_width].nullable_value.value.ushort_value;
         unsigned short height = __unwrap(image)->object_properties.class_object_properties.properties[Am_Imaging_Image_P_height].nullable_value.value.ushort_value;
         int pixFmt = __unwrap(image)->object_properties.class_object_properties.properties[Am_Imaging_Image_P_pixelFormat].nullable_value.value.int_value;
-        printf("[Bitmap.createFromImage] step 09: image width=%u height=%u pixFmt=%d\n", width, height, pixFmt);
+        // printf("[Bitmap.createFromImage] step 09: image width=%u height=%u pixFmt=%d\n", width, height, pixFmt);
         fflush(stdout);
 
-        printf("[Bitmap.createFromImage] step 10: allocate native bitmap\n");
+        // printf("[Bitmap.createFromImage] step 10: allocate native bitmap\n");
         fflush(stdout);
         data->bitmap = alloc_truecolor_bitmap(width, height, get_friend_bitmap(window));
         if (data->bitmap == NULL) {
-            printf("[Bitmap.createFromImage] step 11: alloc_truecolor_bitmap failed -> throw\n");
+            // printf("[Bitmap.createFromImage] step 11: alloc_truecolor_bitmap failed -> throw\n");
             fflush(stdout);
             __throw_simple_exception("AllocBitMap failed in createFromImage",
                                      "in Am_Ui_Bitmap_f_createFromImage_0", &__result);
             goto __exit;
         }
-        printf("[Bitmap.createFromImage] step 11: native bitmap allocated (%p)\n", (void *)data->bitmap);
+        // printf("[Bitmap.createFromImage] step 11: native bitmap allocated (%p)\n", (void *)data->bitmap);
         fflush(stdout);
 
-        printf("[Bitmap.createFromImage] step 12: init RastPort and bind BitMap\n");
+        // printf("[Bitmap.createFromImage] step 12: init RastPort and bind BitMap\n");
         fflush(stdout);
         struct RastPort rp;
         InitRastPort(&rp);
         rp.BitMap = data->bitmap;
 
         if (pixFmt == 2) { /* Am.Imaging.PixelFormat.ARGB = 2 */
-            printf("[Bitmap.createFromImage] step 13: ARGB path\n");
+            // printf("[Bitmap.createFromImage] step 13: ARGB path\n");
             fflush(stdout);
             aobject *pixelColorsObj =
                 __unwrap(image)->object_properties.class_object_properties.properties[Am_Imaging_Image_P_pixelColors].nullable_value.value.object_value;
-            printf("[Bitmap.createFromImage] step 14: pixelColors object=%p\n", (void *)pixelColorsObj);
+            // printf("[Bitmap.createFromImage] step 14: pixelColors object=%p\n", (void *)pixelColorsObj);
             fflush(stdout);
 
             if (pixelColorsObj != NULL) {
-                printf("[Bitmap.createFromImage] step 15: resolve pixel array\n");
+                // printf("[Bitmap.createFromImage] step 15: resolve pixel array\n");
                 fflush(stdout);
                 // Array layout: aobject header | array_holder | element data
                 array_holder *ah = (array_holder *)&pixelColorsObj[1];
                 unsigned int *pixels = (unsigned int *)(void *)&ah[1];
-                printf("[Bitmap.createFromImage] step 16: WritePixelArray begin (pixels=%p, bpr=%u)\n", (void *)pixels, width * 4);
+                // printf("[Bitmap.createFromImage] step 16: WritePixelArray begin (pixels=%p, bpr=%u)\n", (void *)pixels, width * 4);
                 fflush(stdout);
 
                 WritePixelArray(
@@ -267,41 +267,41 @@ function_result Am_Ui_Bitmap_createFromImage_0(aobject * const this,
                     width, height,      /* width, height */
                     RECTFMT_ARGB        /* pixel format: 0xAARRGGBB */
                 );
-                printf("[Bitmap.createFromImage] step 17: WritePixelArray done\n");
+                // printf("[Bitmap.createFromImage] step 17: WritePixelArray done\n");
                 fflush(stdout);
             } else {
-                printf("[Bitmap.createFromImage] step 15: pixelColors is NULL (skip WritePixelArray)\n");
+                // printf("[Bitmap.createFromImage] step 15: pixelColors is NULL (skip WritePixelArray)\n");
                 fflush(stdout);
             }
         } else {
-            printf("[Bitmap.createFromImage] step 13: non-ARGB path (pixFmt=%d), leave bitmap cleared\n", pixFmt);
+            // printf("[Bitmap.createFromImage] step 13: non-ARGB path (pixFmt=%d), leave bitmap cleared\n", pixFmt);
             fflush(stdout);
         }
         /* Indexed images: not yet implemented — bitmap remains cleared */
 
-        printf("[Bitmap.createFromImage] step 18: write AML bitmap properties\n");
+        // printf("[Bitmap.createFromImage] step 18: write AML bitmap properties\n");
         fflush(stdout);
         __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_width].nullable_value.value.ushort_value   = width;
         __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_height].nullable_value.value.ushort_value  = height;
         __unwrap(this)->object_properties.class_object_properties.properties[Am_Ui_Bitmap_P_pixelFormat].nullable_value.value.int_value = 1; /* BitmapPixelFormat.ZRGB */
-        printf("[Bitmap.createFromImage] step 19: function body complete\n");
+        // printf("[Bitmap.createFromImage] step 19: function body complete\n");
         fflush(stdout);
     }
 
 __exit: ;
-    printf("[Bitmap.createFromImage] step 20: exit (image=%p, this=%p)\n", (void *)image, (void *)this);
+    // printf("[Bitmap.createFromImage] step 20: exit (image=%p, this=%p)\n", (void *)image, (void *)this);
     fflush(stdout);
     if (image != NULL) {
-        printf("[Bitmap.createFromImage] step 21: decrease image ref\n");
+        // printf("[Bitmap.createFromImage] step 21: decrease image ref\n");
         fflush(stdout);
         __decrease_reference_count(image);
     }
     if (this != NULL) {
-        printf("[Bitmap.createFromImage] step 22: decrease this ref\n");
+        // printf("[Bitmap.createFromImage] step 22: decrease this ref\n");
         fflush(stdout);
         __decrease_reference_count(this);
     }
-    printf("[Bitmap.createFromImage] step 23: return\n");
+    // printf("[Bitmap.createFromImage] step 23: return\n");
     fflush(stdout);
     return __result;
 }
@@ -390,7 +390,7 @@ function_result Am_Ui_Bitmap_createFromImageWithMask_0(aobject * const this,
                      * as the no-mask factory). No exception — better
                      * to render the icon as an opaque square than to
                      * lose the whole panel. */
-                    printf("[Bitmap.createFromImageWithMask] mask AllocBitMap failed; opaque fallback\n");
+                    // printf("[Bitmap.createFromImageWithMask] mask AllocBitMap failed; opaque fallback\n");
                     fflush(stdout);
                 } else {
                     UBYTE *maskPlane = (UBYTE *)data->mask->Planes[0];

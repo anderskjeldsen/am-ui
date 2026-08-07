@@ -29,7 +29,7 @@ function_result Am_Ui_Screen__native_init_0(aobject * const this)
 	function_result __result = { .has_return_value = 0 };
 	char __returning = 0;
 	__increase_reference_count(this);
-	printf("TODO: implement native function Am_Ui_Screen__native_init_0\n");
+	// printf("TODO: implement native function Am_Ui_Screen__native_init_0\n");
 __exit:
 	__decrease_reference_count(this);
 	return __result;
@@ -127,15 +127,15 @@ function_result Am_Ui_Screen_open_0(aobject * const this, int width, int height,
 		}
 	}
 
-	printf("Screen open: %dx%dx%d id=0x%lx title=%s pens=%s colors=%u\n", width, height, depth,
-		(unsigned long) displayId, title_cstr != NULL ? title_cstr : "(none)",
-		pens_ptr != NULL ? "custom" : "default", color_count);
+	// printf("Screen open: %dx%dx%d id=0x%lx title=%s pens=%s colors=%u\n", width, height, depth,
+		// (unsigned long) displayId, title_cstr != NULL ? title_cstr : "(none)",
+		// pens_ptr != NULL ? "custom" : "default", color_count);
 	if (pens_ptr != NULL) {
-		printf("  SA_Pens: ");
+		// printf("  SA_Pens: ");
 		for (int i = 0; pens_ptr[i] != (UWORD) ~0; i++) {
-			printf("%d=%u ", i, (unsigned) pens_ptr[i]);
+			// printf("%d=%u ", i, (unsigned) pens_ptr[i]);
 		}
-		printf("\n");
+		// printf("\n");
 	}
 
 	// Passing SA_Pens=NULL is NOT the same as omitting the tag — Intuition
@@ -184,7 +184,7 @@ function_result Am_Ui_Screen_open_0(aobject * const this, int width, int height,
 		// the open-time table already landed.
 		if (colors32 != NULL) {
 			LoadRGB32(&screen->ViewPort, colors32);
-			printf("Screen open: LoadRGB32 applied %u colors\n", color_count);
+			// printf("Screen open: LoadRGB32 applied %u colors\n", color_count);
 		}
 
 		// On Picasso96 the bar can be drawn before SA_Colors32 reaches the
@@ -196,25 +196,25 @@ function_result Am_Ui_Screen_open_0(aobject * const this, int width, int height,
 
 		struct DrawInfo * dri = GetScreenDrawInfo(screen);
 		if (dri != NULL) {
-			printf("  Screen DRI: version=%u numPens=%u depth=%u barHeight=%d ",
-				(unsigned) dri->dri_Version, (unsigned) dri->dri_NumPens,
-				(unsigned) dri->dri_Depth, (int) screen->BarHeight);
-			printf("pens: ");
+			// printf("  Screen DRI: version=%u numPens=%u depth=%u barHeight=%d ",
+				// (unsigned) dri->dri_Version, (unsigned) dri->dri_NumPens,
+				// (unsigned) dri->dri_Depth, (int) screen->BarHeight);
+			// printf("pens: ");
 			for (int i = 0; i < dri->dri_NumPens; i++) {
-				printf("%d=%u ", i, (unsigned) dri->dri_Pens[i]);
+				// printf("%d=%u ", i, (unsigned) dri->dri_Pens[i]);
 			}
-			printf("\n");
+			// printf("\n");
 			FreeScreenDrawInfo(screen, dri);
 		} else {
-			printf("  Screen DRI: NULL\n");
+			// printf("  Screen DRI: NULL\n");
 		}
 
 		// Log Workbench's BarHeight so we can see whether our screen's
 		// bar font / chrome height matches.
 		struct Screen * wb = LockPubScreen("Workbench");
 		if (wb != NULL) {
-			printf("  WB BarHeight=%d (ours=%d)\n",
-				(int) wb->BarHeight, (int) screen->BarHeight);
+			// printf("  WB BarHeight=%d (ours=%d)\n",
+				// (int) wb->BarHeight, (int) screen->BarHeight);
 			UnlockPubScreen(NULL, wb);
 		}
 	}
@@ -355,7 +355,7 @@ function_result Am_Ui_Screen_fillDefaultScreenMode_0(aobject * mode)
 
 	struct Screen * pub = LockPubScreen(NULL);
 	if (pub == NULL) {
-		printf("fillDefaultScreenMode: LockPubScreen returned NULL\n");
+		// printf("fillDefaultScreenMode: LockPubScreen returned NULL\n");
 		goto __exit;
 	}
 
@@ -371,7 +371,7 @@ function_result Am_Ui_Screen_fillDefaultScreenMode_0(aobject * mode)
 	__unwrap(mode)->object_properties.class_object_properties.properties[Am_Ui_ScreenMode_P_depth].nullable_value.value.int_value     = depth;
 	__unwrap(mode)->object_properties.class_object_properties.properties[Am_Ui_ScreenMode_P_displayId].nullable_value.value.int_value = (int) modeId;
 
-	printf("fillDefaultScreenMode: %dx%dx%d id=0x%lx\n", width, height, depth, (unsigned long) modeId);
+	// printf("fillDefaultScreenMode: %dx%dx%d id=0x%lx\n", width, height, depth, (unsigned long) modeId);
 
 __exit: ;
 	if (mode != NULL) {
@@ -393,7 +393,7 @@ function_result Am_Ui_Screen_setColor_0(aobject * const this, int index, unsigne
 		goto __exit;
 	}
 
-	printf("Screen setColor: pen=%d rgb=%02x%02x%02x\n", index, (unsigned) r, (unsigned) g, (unsigned) b);
+	// printf("Screen setColor: pen=%d rgb=%02x%02x%02x\n", index, (unsigned) r, (unsigned) g, (unsigned) b);
 	SetRGB32(&data->screen->ViewPort, (ULONG) index,
 		((ULONG) r) * 0x01010101UL,
 		((ULONG) g) * 0x01010101UL,
@@ -433,7 +433,7 @@ function_result Am_Ui_Screen_fillHostPaletteColors_0(aobject * out, int count)
 		pub = LockPubScreen(NULL);
 	}
 	if (pub == NULL) {
-		printf("Screen fillHostPaletteColors: LockPubScreen returned NULL\n");
+		// printf("Screen fillHostPaletteColors: LockPubScreen returned NULL\n");
 		goto __exit;
 	}
 
@@ -448,19 +448,19 @@ function_result Am_Ui_Screen_fillHostPaletteColors_0(aobject * out, int count)
 	// it.
 	struct DrawInfo * pubDri = GetScreenDrawInfo(pub);
 	if (pubDri != NULL) {
-		printf("Screen fillHostPaletteColors: host DRI version=%u numPens=%u depth=%u ",
-			(unsigned) pubDri->dri_Version, (unsigned) pubDri->dri_NumPens,
-			(unsigned) pubDri->dri_Depth);
-		printf("pens:");
+		// printf("Screen fillHostPaletteColors: host DRI version=%u numPens=%u depth=%u ",
+			// (unsigned) pubDri->dri_Version, (unsigned) pubDri->dri_NumPens,
+			// (unsigned) pubDri->dri_Depth);
+		// printf("pens:");
 		int d = 0;
 		while (d < pubDri->dri_NumPens) {
-			printf(" %d=%u", d, (unsigned) pubDri->dri_Pens[d]);
+			// printf(" %d=%u", d, (unsigned) pubDri->dri_Pens[d]);
 			d = d + 1;
 		}
-		printf("\n");
+		// printf("\n");
 		FreeScreenDrawInfo(pub, pubDri);
 	} else {
-		printf("Screen fillHostPaletteColors: host DRI = NULL\n");
+		// printf("Screen fillHostPaletteColors: host DRI = NULL\n");
 	}
 
 	UnlockPubScreen(NULL, pub);
@@ -473,10 +473,10 @@ function_result Am_Ui_Screen_fillHostPaletteColors_0(aobject * out, int count)
 		unsigned int g = (channels[i * 3 + 1] >> 24) & 0xFF;
 		unsigned int b = (channels[i * 3 + 2] >> 24) & 0xFF;
 		dst[i] = (r << 16) | (g << 8) | b;
-		printf("  host pen %d: r=%02x g=%02x b=%02x\n", i, r, g, b);
+		// printf("  host pen %d: r=%02x g=%02x b=%02x\n", i, r, g, b);
 		i = i + 1;
 	}
-	printf("Screen fillHostPaletteColors: read %d host pens\n", count);
+	// printf("Screen fillHostPaletteColors: read %d host pens\n", count);
 
 __exit: ;
 	if (out != NULL) {
@@ -517,13 +517,13 @@ function_result Am_Ui_Screen_fillHostDrawInfoPens_0(aobject * out, int count)
 		pub = LockPubScreen(NULL);
 	}
 	if (pub == NULL) {
-		printf("Screen fillHostDrawInfoPens: LockPubScreen returned NULL\n");
+		// printf("Screen fillHostDrawInfoPens: LockPubScreen returned NULL\n");
 		goto __exit;
 	}
 
 	struct DrawInfo * dri = GetScreenDrawInfo(pub);
 	if (dri == NULL) {
-		printf("Screen fillHostDrawInfoPens: GetScreenDrawInfo returned NULL\n");
+		// printf("Screen fillHostDrawInfoPens: GetScreenDrawInfo returned NULL\n");
 		UnlockPubScreen(NULL, pub);
 		goto __exit;
 	}
@@ -545,7 +545,7 @@ function_result Am_Ui_Screen_fillHostDrawInfoPens_0(aobject * out, int count)
 
 	FreeScreenDrawInfo(pub, dri);
 	UnlockPubScreen(NULL, pub);
-	printf("Screen fillHostDrawInfoPens: copied %d host DRI pens\n", count);
+	// printf("Screen fillHostDrawInfoPens: copied %d host DRI pens\n", count);
 
 __exit: ;
 	if (out != NULL) {
@@ -561,8 +561,8 @@ function_result Am_Ui_Screen_copyHostPens_0(aobject * const this, int count)
 
 	Am_Ui_Screen_data * const data = (Am_Ui_Screen_data * const) __unwrap(this)->object_properties.class_object_properties.object_data.value.custom_value;
 	if (data == NULL || data->screen == NULL || count <= 0) {
-		printf("Screen copyHostPens: bailing (data=%p screen=%p count=%d)\n",
-			(void *)data, data ? (void *)data->screen : NULL, count);
+		// printf("Screen copyHostPens: bailing (data=%p screen=%p count=%d)\n",
+			// (void *)data, data ? (void *)data->screen : NULL, count);
 		goto __exit;
 	}
 	if (count > 32) {
@@ -583,21 +583,21 @@ function_result Am_Ui_Screen_copyHostPens_0(aobject * const this, int count)
 		pub = LockPubScreen(NULL);
 	}
 	if (pub == NULL) {
-		printf("Screen copyHostPens: LockPubScreen returned NULL\n");
+		// printf("Screen copyHostPens: LockPubScreen returned NULL\n");
 		goto __exit;
 	}
 
 	if (pub == data->screen) {
 		// We've ended up locking ourselves — nothing to copy. Log and
 		// bail rather than no-op the SetRGB32 calls below.
-		printf("Screen copyHostPens: pub screen IS our own screen (%p) — skipping\n", (void *)pub);
+		// printf("Screen copyHostPens: pub screen IS our own screen (%p) — skipping\n", (void *)pub);
 		UnlockPubScreen(NULL, pub);
 		goto __exit;
 	}
 
-	printf("Screen copyHostPens: pub=%p our=%p depth=%d count=%d\n",
-		(void *)pub, (void *)data->screen,
-		(int)GetBitMapAttr(pub->RastPort.BitMap, BMA_DEPTH), count);
+	// printf("Screen copyHostPens: pub=%p our=%p depth=%d count=%d\n",
+		// (void *)pub, (void *)data->screen,
+		// (int)GetBitMapAttr(pub->RastPort.BitMap, BMA_DEPTH), count);
 
 	// GetRGB32 emits three ULONG channel values per pen; 32 pens = 96
 	// ULONGs = 384 bytes on the stack.
@@ -607,11 +607,11 @@ function_result Am_Ui_Screen_copyHostPens_0(aobject * const this, int count)
 
 	int i = 0;
 	while (i < count) {
-		printf("  pen %d: r=%08lx g=%08lx b=%08lx\n",
-			i,
-			(unsigned long) channels[i * 3 + 0],
-			(unsigned long) channels[i * 3 + 1],
-			(unsigned long) channels[i * 3 + 2]);
+		// printf("  pen %d: r=%08lx g=%08lx b=%08lx\n",
+			// i,
+			// (unsigned long) channels[i * 3 + 0],
+			// (unsigned long) channels[i * 3 + 1],
+			// (unsigned long) channels[i * 3 + 2]);
 		SetRGB32(&data->screen->ViewPort, (ULONG) i,
 			channels[i * 3 + 0],
 			channels[i * 3 + 1],

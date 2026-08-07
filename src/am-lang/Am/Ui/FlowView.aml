@@ -1,0 +1,100 @@
+
+namespace Am.Ui
+{
+    // Flow / wrap layout: places children left-to-right at their natural
+    // (minWidth x minHeight) size, wrapping to the next row when the next
+    // child would overflow the available inner width. A row's height is the
+    // tallest child in that row. Think of it as an HStack that folds onto
+    // new lines — useful for a grid of cards that reflows with the width.
+    //
+    // hSpacing = horizontal gap between items in a row.
+    // vSpacing = vertical gap between rows.
+    //
+    // Height depends on width (how many items fit per row), which the normal
+    // "measure then layout" order can't express up front. This is solved the
+    // same way ScrollView already expects (see ScrollView.layoutChildren):
+    // layoutChildren computes the wrapped total height at the ACTUAL width
+    // and caches it, and minHeight() returns that cached value. So dropping a
+    // FlowView into a ScrollView gives correct scrolling — the ScrollView
+    // lays the child out, then re-reads minHeight to size the scroll range.
+    class FlowView(var hSpacing: Short, var vSpacing: Short) : ViewGroup {
+        import Am.Lang
+        import Am.Collections
+
+        // Total content height (incl. this view's own padding/margin/border)
+        // computed by the last layoutChildren pass. 0 until the first layout,
+        // where minHeight() falls back to a one-item-per-row estimate so the
+        // ScrollView still reserves enough room before the real value lands.
+        private var computedHeight: Short = 0S
+
+        override fun layoutChildren() {
+            var left0 = this.margin.left + this.borderWidths.left + this.padding.left
+            var top0  = this.margin.top  + this.borderWidths.top  + this.padding.top
+            var avail = this.innerWidth()
+            if (avail < 1S) {
+                avail = 1S
+            }
+            // x, y are offsets relative to (left0, top0); rowHeight tracks the
+            // tallest item placed in the current row.
+            var x = 0S
+            var y = 0S
+            var rowHeight = 0S
+            var firstInRow = true
+            each(this.getChildren(), c) {
+                var cw = c.minWidth()
+                var chh = c.minHeight()
+                if (!firstInRow && (x + cw) > avail) {
+                    x = 0S
+                    y = y + rowHeight + this.vSpacing
+                    rowHeight = 0S
+                    firstInRow = true
+                }
+                var px = left0 + x
+                var py = top0 + y
+                c.layout(px, py, cw.toUShort(), chh.toUShort())
+                x = x + cw + this.hSpacing
+                if (chh > rowHeight) {
+                    rowHeight = chh
+                }
+                firstInRow = false
+            }
+            this.computedHeight = y + rowHeight
+                + this.padding.top + this.padding.bottom
+                + this.margin.top + this.margin.bottom
+                + this.borderWidths.top + this.borderWidths.bottom
+        }
+
+        override fun minHeight(): Short {
+            if (this.computedHeight > 0S) {
+                return this.computedHeight
+            }
+            // Pre-first-layout fallback: one item per row (safe overestimate).
+            var h = 0S
+            var first = true
+            each(this.getChildren(), c) {
+                if (!first) {
+                    h = h + this.vSpacing
+                }
+                first = false
+                h = h + c.minHeight()
+            }
+            return h + this.padding.top + this.padding.bottom
+                + this.margin.top + this.margin.bottom
+                + this.borderWidths.top + this.borderWidths.bottom
+        }
+
+        override fun minWidth(): Short {
+            // Widest single child, so at least one column always fits.
+            var w = 0S
+            each(this.getChildren(), c) {
+                var cw = c.minWidth()
+                if (cw > w) {
+                    w = cw
+                }
+            }
+            return w + this.padding.left + this.padding.right
+                + this.margin.left + this.margin.right
+                + this.borderWidths.left + this.borderWidths.right
+        }
+    }
+}
